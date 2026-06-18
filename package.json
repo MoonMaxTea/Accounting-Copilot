@@ -5,6 +5,8 @@
   "scripts": {
     "test": "pnpm -r test",
     "build": "pnpm -r build",
+    "app:dev": "pnpm --filter @asd/desktop-app tauri dev",
+    "app:build": "pnpm --filter @asd/desktop-app tauri build",
     "pack:build": "bash scripts/pack-build.sh",
     "validate:registry": "bash scripts/validate-registry.sh"
   },
