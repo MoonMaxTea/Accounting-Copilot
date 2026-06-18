@@ -1,0 +1,30 @@
+{
+  "name": "@asd/pack-builder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "pack-builder": "./dist/cli.js",
+    "validate-registry": "./dist/validate-registry.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node dist/cli.js",
+    "validate:registry": "node dist/validate-registry.js"
+  },
+  "dependencies": {
+    "@asd/shared-types": "workspace:*",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.9.1",
+    "commander": "^13.1.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}

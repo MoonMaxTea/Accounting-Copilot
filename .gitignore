@@ -33,3 +33,6 @@ Thumbs.db
 
 # User-local (dev)
 content/
+
+# Git worktrees
+.worktrees/

@@ -1,0 +1,13 @@
+- id: IFRS 11
+  title: Joint Arrangements
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs11/
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 11 - Joint Arrangements.md
+- id: IAS 31
+  title: Interests in Joint Ventures
+  framework: IAS
+  status: legacy
+  superseded_by: IFRS 11
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias31/
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 31 - Interests In Joint Ventures.md
