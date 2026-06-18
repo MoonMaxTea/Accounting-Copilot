@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "content_version": "2026.06.18",
+  "vault_repo": "https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap",
+  "vault_commit": "25e99ff",
+  "built_at": "2026-06-18T12:00:00Z",
+  "standards": [
+    {
+      "id": "IFRS 11",
+      "title": "Joint Arrangements",
+      "title_zh": "合营安排",
+      "framework": "IFRS",
+      "status": "current",
+      "legacy_label": null,
+      "effective_from": null,
+      "effective_until": null,
+      "superseded_by": null,
+      "supersedes": [],
+      "official_url": "https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2024/issued/ifrs11.html",
+      "official_url_note": "IFRS Foundation 官网；以官网最新版为准",
+      "pack_path": "current/IFRS/IFRS 11 - Joint Arrangements.md",
+      "tags": ["合营", "共同控制", "IFRS11"]
+    },
+    {
+      "id": "IAS 31",
+      "title": "Interests in Joint Ventures",
+      "title_zh": "合营企业中的权益（已废止）",
+      "framework": "IAS",
+      "status": "legacy",
+      "legacy_label": "旧准则",
+      "effective_from": null,
+      "effective_until": "2013-01-01",
+      "superseded_by": "IFRS 11",
+      "supersedes": [],
+      "official_url": "https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2023/issued/ias31.html",
+      "official_url_note": "准则已废止；官网可能仅保留历史版本",
+      "pack_path": "archive/IAS/IAS 31 - Interests In Joint Ventures.md",
+      "tags": ["合营", "旧准则"]
+    },
+    {
+      "id": "ASC 740",
+      "title": "Income Taxes",
+      "framework": "ASC",
+      "status": "current",
+      "legacy_label": null,
+      "effective_from": null,
+      "effective_until": null,
+      "superseded_by": null,
+      "supersedes": [],
+      "official_url": "https://asc.fasb.org/740/showallinone",
+      "official_url_note": "FASB Codification 通常需登录 FASB 账号",
+      "pack_path": "current/ASC/ASC 740 - Income Taxes.md",
+      "tags": ["所得税", "ASC740", "DTA"]
+    }
+  ],
+  "counts": {
+    "current": { "ifrs": 19, "ias": 22, "asc": 88 },
+    "legacy": { "ifrs": 0, "ias": 1, "asc": 0 }
+  }
+}

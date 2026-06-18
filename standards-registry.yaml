@@ -1,0 +1,915 @@
+# 准则注册表 — 由 Vault 知识库自动生成骨架（Phase 0）
+# 生成后请人工核验 official_url；legacy 条目请手动添加。
+#
+# Vault 源仓库: https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap
+
+- id: IFRS 1
+  title: 首次采用
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs1/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 1 - 首次采用.md
+- id: IFRS 10
+  title: Consolidated Financial Statements
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs10/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 10 - Consolidated Financial Statements.md
+- id: IFRS 11
+  title: Joint Arrangements
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs11/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 11 - Joint Arrangements.md
+- id: IFRS 12
+  title: Disclosure Of Interests In Other Entities
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs12/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 12 - Disclosure Of Interests In Other Entities.md
+- id: IFRS 13
+  title: Fair Value Measurement
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs13/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 13 - Fair Value Measurement.md
+- id: IFRS 14
+  title: 管制递延账户
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs14/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 14 - 管制递延账户.md
+- id: IFRS 15
+  title: Revenue From Contracts With Customers
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs15/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 15 - Revenue From Contracts With Customers.md
+- id: IFRS 16
+  title: Leases
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs16/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 16 - Leases.md
+- id: IFRS 17
+  title: 保险合同
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs17/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 17 - 保险合同.md
+- id: IFRS 18
+  title: Presentation And Disclosure In Financial Statements
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs18/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 18 - Presentation And Disclosure In Financial Statements.md
+- id: IFRS 19
+  title: 无公共受托责任子公司
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs19/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 19 - 无公共受托责任子公司.md
+- id: IFRS 2
+  title: Share Based Payment
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs2/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 2 - Share Based Payment.md
+- id: IFRS 3
+  title: Business Combinations
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs3/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 3 - Business Combinations.md
+- id: IFRS 4
+  title: 保险合同（旧）
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs4/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 4 - 保险合同（旧）.md
+- id: IFRS 5
+  title: Non Current Assets Held For Sale And Discontinued Operations
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs5/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 5 - Non Current Assets Held For Sale And Discontinued Operations.md
+- id: IFRS 6
+  title: 矿产资源勘探与评价
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs6/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 6 - 矿产资源勘探与评价.md
+- id: IFRS 7
+  title: Financial Instruments Disclosures
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs7/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 7 - Financial Instruments Disclosures.md
+- id: IFRS 8
+  title: Operating Segments
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs8/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 8 - Operating Segments.md
+- id: IFRS 9
+  title: Financial Instruments
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs9/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IFRS准则/IFRS 9 - Financial Instruments.md
+- id: IAS 1
+  title: Presentation Of Financial Statements
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias1/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 1 - Presentation Of Financial Statements.md
+- id: IAS 10
+  title: Events After The Reporting Period
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias10/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 10 - Events After The Reporting Period.md
+- id: IAS 12
+  title: Income Taxes
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias12/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 12 - Income Taxes.md
+- id: IAS 16
+  title: Property Plant And Equipment
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias16/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 16 - Property Plant And Equipment.md
+- id: IAS 19
+  title: Employee Benefits
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias19/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 19 - Employee Benefits.md
+- id: IAS 2
+  title: Inventories
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias2/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 2 - Inventories.md
+- id: IAS 20
+  title: Accounting For Government Grants And Disclosure Of Government Assistance
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias20/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 20 - Accounting For Government Grants And Disclosure Of Government Assistance.md
+- id: IAS 21
+  title: The Effects Of Changes In Foreign Exchange Rates
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias21/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 21 - The Effects Of Changes In Foreign Exchange Rates.md
+- id: IAS 23
+  title: Borrowing Costs
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias23/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 23 - Borrowing Costs.md
+- id: IAS 24
+  title: Related Party Disclosures
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias24/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 24 - Related Party Disclosures.md
+- id: IAS 27
+  title: Separate Financial Statements
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias27/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 27 - Separate Financial Statements.md
+- id: IAS 28
+  title: Investments In Associates And Joint Ventures
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias28/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 28 - Investments In Associates And Joint Ventures.md
+- id: IAS 32
+  title: Financial Instruments Presentation
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias32/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 32 - Financial Instruments Presentation.md
+- id: IAS 33
+  title: Earnings Per Share
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias33/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 33 - Earnings Per Share.md
+- id: IAS 34
+  title: Interim Financial Reporting
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias34/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 34 - Interim Financial Reporting.md
+- id: IAS 36
+  title: Impairment Of Assets
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias36/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 36 - Impairment Of Assets.md
+- id: IAS 37
+  title: Provisions Contingent Liabilities And Contingent Assets
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias37/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 37 - Provisions Contingent Liabilities And Contingent Assets.md
+- id: IAS 38
+  title: Intangible Assets
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias38/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 38 - Intangible Assets.md
+- id: IAS 39
+  title: Financial Instruments Recognition And Measurement
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias39/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 39 - Financial Instruments Recognition And Measurement.md
+- id: IAS 40
+  title: Investment Property
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias40/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 40 - Investment Property.md
+- id: IAS 41
+  title: Agriculture
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias41/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 41 - Agriculture.md
+- id: IAS 7
+  title: Statement Of Cash Flows
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias7/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 7 - Statement Of Cash Flows.md
+- id: IAS 8
+  title: Accounting Policies Changes In Estimates And Errors
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ias8/
+  official_url_note: IFRS Foundation 官网；URL 需人工核验
+  vault_path: 03 - 知识库/IFRS/IAS准则/IAS 8 - Accounting Policies Changes In Estimates And Errors.md
+- id: ASC 105
+  title: Generally Accepted Accounting Principles
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/105/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 105 - Generally Accepted Accounting Principles.md
+- id: ASC 205
+  title: Presentation of Financial Statements
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/205/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 205 - Presentation of Financial Statements.md
+- id: ASC 210
+  title: Balance Sheet
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/210/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 210 - Balance Sheet.md
+- id: ASC 220
+  title: Income Statement—Reporting Comprehensive Income
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/220/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 220 - Income Statement—Reporting Comprehensive Income.md
+- id: ASC 225
+  title: Income Statement
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/225/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 225 - Income Statement.md
+- id: ASC 230
+  title: Statement of Cash Flows
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/230/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 230 - Statement of Cash Flows.md
+- id: ASC 235
+  title: Notes to Financial Statements
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/235/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 235 - Notes to Financial Statements.md
+- id: ASC 250
+  title: Accounting Changes and Error Corrections
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/250/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 250 - Accounting Changes and Error Corrections.md
+- id: ASC 255
+  title: Changing Prices
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/255/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 255 - Changing Prices.md
+- id: ASC 260
+  title: Earnings Per Share
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/260/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 260 - Earnings Per Share.md
+- id: ASC 270
+  title: Interim Reporting
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/270/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 270 - Interim Reporting.md
+- id: ASC 272
+  title: Limited Liability Entities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/272/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 272 - Limited Liability Entities.md
+- id: ASC 274
+  title: Personal Financial Statements
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/274/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 274 - Personal Financial Statements.md
+- id: ASC 275
+  title: Risks and Uncertainties
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/275/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 275 - Risks and Uncertainties.md
+- id: ASC 280
+  title: Segment Reporting
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/280/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 280 - Segment Reporting.md
+- id: ASC 310
+  title: Receivables
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/310/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 310 - Receivables.md
+- id: ASC 320
+  title: Investments—Debt and Equity Securities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/320/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 320 - Investments—Debt and Equity Securities.md
+- id: ASC 321
+  title: Investments—Equity Securities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/321/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 321 - Investments—Equity Securities.md
+- id: ASC 323
+  title: Investments—Equity Method and Joint Ventures
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/323/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 323 - Investments—Equity Method and Joint Ventures.md
+- id: ASC 325
+  title: Investments—Other
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/325/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 325 - Investments—Other.md
+- id: ASC 326
+  title: Financial Instruments—Credit Losses
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/326/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 326 - Financial Instruments—Credit Losses.md
+- id: ASC 330
+  title: Inventory
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/330/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 330 - Inventory.md
+- id: ASC 340
+  title: Other Assets and Deferred Costs
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/340/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 340 - Other Assets and Deferred Costs.md
+- id: ASC 350
+  title: Intangibles—Goodwill and Other
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/350/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 350 - Intangibles—Goodwill and Other.md
+- id: ASC 360
+  title: Property Plant and Equipment
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/360/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 360 - Property Plant and Equipment.md
+- id: ASC 405
+  title: Liabilities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/405/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 405 - Liabilities.md
+- id: ASC 410
+  title: Asset Retirement and Environmental Obligations
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/410/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 410 - Asset Retirement and Environmental Obligations.md
+- id: ASC 420
+  title: Exit or Disposal Cost Obligations
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/420/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 420 - Exit or Disposal Cost Obligations.md
+- id: ASC 430
+  title: Deferred Revenue
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/430/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 430 - Deferred Revenue.md
+- id: ASC 440
+  title: Commitments
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/440/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 440 - Commitments.md
+- id: ASC 450
+  title: Contingencies
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/450/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 450 - Contingencies.md
+- id: ASC 460
+  title: Guarantees
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/460/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 460 - Guarantees.md
+- id: ASC 470
+  title: Debt
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/470/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 470 - Debt.md
+- id: ASC 480
+  title: Distinguishing Liabilities From Equity
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/480/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 480 - Distinguishing Liabilities From Equity.md
+- id: ASC 505
+  title: Equity
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/505/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 505 - Equity.md
+- id: ASC 605
+  title: Revenue Recognition
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/605/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 605 - Revenue Recognition.md
+- id: ASC 606
+  title: Revenue From Contracts With Customers
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/606/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 606 - Revenue From Contracts With Customers.md
+- id: ASC 610
+  title: Other Income
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/610/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 610 - Other Income.md
+- id: ASC 710
+  title: Compensation—General
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/710/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 710 - Compensation—General.md
+- id: ASC 712
+  title: Compensation—Nonretirement Postemployment Benefits
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/712/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 712 - Compensation—Nonretirement Postemployment Benefits.md
+- id: ASC 715
+  title: Compensation—Retirement Benefits
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/715/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 715 - Compensation—Retirement Benefits.md
+- id: ASC 718
+  title: Compensation—Stock Compensation
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/718/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 718 - Compensation—Stock Compensation.md
+- id: ASC 720
+  title: Other Expenses
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/720/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 720 - Other Expenses.md
+- id: ASC 730
+  title: Research and Development
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/730/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 730 - Research and Development.md
+- id: ASC 740
+  title: Income Taxes
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/740/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 740 - Income Taxes.md
+- id: ASC 805
+  title: Business Combinations
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/805/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 805 - Business Combinations.md
+- id: ASC 808
+  title: Collaborative Arrangements
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/808/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 808 - Collaborative Arrangements.md
+- id: ASC 810
+  title: Consolidation
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/810/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 810 - Consolidation.md
+- id: ASC 815
+  title: Derivatives and Hedging
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/815/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 815 - Derivatives and Hedging.md
+- id: ASC 820
+  title: Fair Value Measurement
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/820/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 820 - Fair Value Measurement.md
+- id: ASC 825
+  title: Financial Instruments
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/825/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 825 - Financial Instruments.md
+- id: ASC 830
+  title: Foreign Currency Matters
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/830/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 830 - Foreign Currency Matters.md
+- id: ASC 835
+  title: Interest
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/835/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 835 - Interest.md
+- id: ASC 842
+  title: Leases
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/842/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 842 - Leases.md
+- id: ASC 848
+  title: Reference Rate Reform
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/848/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 848 - Reference Rate Reform.md
+- id: ASC 850
+  title: Related Party Disclosures
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/850/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 850 - Related Party Disclosures.md
+- id: ASC 855
+  title: Subsequent Events
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/855/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 855 - Subsequent Events.md
+- id: ASC 860
+  title: Transfers and Servicing
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/860/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 860 - Transfers and Servicing.md
+- id: ASC 905
+  title: Agriculture
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/905/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 905 - Agriculture.md
+- id: ASC 908
+  title: Airlines
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/908/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 908 - Airlines.md
+- id: ASC 910
+  title: Contractors—Construction
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/910/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 910 - Contractors—Construction.md
+- id: ASC 912
+  title: Contractors—Federal Government
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/912/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 912 - Contractors—Federal Government.md
+- id: ASC 915
+  title: Development Stage Entities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/915/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 915 - Development Stage Entities.md
+- id: ASC 920
+  title: Entertainment—Broadcasters
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/920/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 920 - Entertainment—Broadcasters.md
+- id: ASC 922
+  title: Entertainment—Cable Television
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/922/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 922 - Entertainment—Cable Television.md
+- id: ASC 924
+  title: Entertainment—Casinos
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/924/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 924 - Entertainment—Casinos.md
+- id: ASC 926
+  title: Entertainment—Films
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/926/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 926 - Entertainment—Films.md
+- id: ASC 928
+  title: Entertainment—Music
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/928/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 928 - Entertainment—Music.md
+- id: ASC 930
+  title: Extractive Activities—Mining
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/930/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 930 - Extractive Activities—Mining.md
+- id: ASC 932
+  title: Extractive Activities—Oil and Gas
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/932/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 932 - Extractive Activities—Oil and Gas.md
+- id: ASC 940
+  title: Financial Services—Brokers and Dealers
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/940/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 940 - Financial Services—Brokers and Dealers.md
+- id: ASC 942
+  title: Financial Services—Depository and Lending
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/942/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 942 - Financial Services—Depository and Lending.md
+- id: ASC 944
+  title: Financial Services—Insurance
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/944/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 944 - Financial Services—Insurance.md
+- id: ASC 946
+  title: Financial Services—Investment Companies
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/946/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 946 - Financial Services—Investment Companies.md
+- id: ASC 948
+  title: Financial Services—Mortgage Banking
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/948/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 948 - Financial Services—Mortgage Banking.md
+- id: ASC 950
+  title: Financial Services—Title Plant
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/950/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 950 - Financial Services—Title Plant.md
+- id: ASC 952
+  title: Franchisors
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/952/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 952 - Franchisors.md
+- id: ASC 954
+  title: Health Care Entities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/954/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 954 - Health Care Entities.md
+- id: ASC 958
+  title: Not-for-Profit Entities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/958/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 958 - Not-for-Profit Entities.md
+- id: ASC 960
+  title: Plan Accounting—Defined Benefit Pension Plans
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/960/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 960 - Plan Accounting—Defined Benefit Pension Plans.md
+- id: ASC 962
+  title: Plan Accounting—Defined Contribution Pension Plans
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/962/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 962 - Plan Accounting—Defined Contribution Pension Plans.md
+- id: ASC 965
+  title: Plan Accounting—Health and Welfare Benefit Plans
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/965/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 965 - Plan Accounting—Health and Welfare Benefit Plans.md
+- id: ASC 970
+  title: Real Estate—General
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/970/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 970 - Real Estate—General.md
+- id: ASC 972
+  title: Real Estate—Common Interest Realty Associations
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/972/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 972 - Real Estate—Common Interest Realty Associations.md
+- id: ASC 974
+  title: Real Estate—Real Estate Investment Trusts
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/974/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 974 - Real Estate—Real Estate Investment Trusts.md
+- id: ASC 978
+  title: Real Estate—Time-Sharing Activities
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/978/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 978 - Real Estate—Time-Sharing Activities.md
+- id: ASC 980
+  title: Regulated Operations
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/980/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 980 - Regulated Operations.md
+- id: ASC 985
+  title: Software
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/985/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号；URL 需人工核验
+  vault_path: 03 - 知识库/US GAAP/ASC准则/ASC 985 - Software.md

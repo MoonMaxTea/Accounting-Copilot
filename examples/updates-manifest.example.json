@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-18T12:00:00Z",
+  "content": {
+    "latest_version": "2026.06.18",
+    "release_tag": "content-2026.06.18",
+    "pack_url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/content-2026.06.18/standards-pack-2026.06.18.zip",
+    "pack_sha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+    "pack_size_bytes": 52428800,
+    "min_app_version": "1.0.0",
+    "release_notes": "- 同步 Vault commit 25e99ff\n- IAS 12 段落索引更新\n- 新增 registry 旧准则 IAS 31（archive）",
+    "vault_commit": "25e99ff"
+  },
+  "app": {
+    "latest_version": "1.0.0",
+    "release_tag": "app-v1.0.0",
+    "min_content_version": "2026.06.01",
+    "platforms": {
+      "windows-x86_64": {
+        "url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/app-v1.0.0/YourApp_1.0.0_x64-setup.exe",
+        "signature": "BASE64_TAURI_UPDATER_SIGNATURE"
+      },
+      "darwin-aarch64": {
+        "url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/app-v1.0.0/YourApp_1.0.0_aarch64.dmg",
+        "signature": "BASE64_TAURI_UPDATER_SIGNATURE"
+      }
+    },
+    "release_notes": "- 首次发布\n- 准则浏览、Evidence 分屏、AI 写项目文档"
+  }
+}

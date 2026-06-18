@@ -1,0 +1,36 @@
+{
+  "content_version": "2026.06.18",
+  "vault_repo": "https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap",
+  "vault_commit": "25e99ff",
+  "built_at": "2026-06-18T12:00:00Z",
+  "pack_builder_version": "0.1.0",
+  "counts": {
+    "current": {
+      "ifrs": 19,
+      "ias": 22,
+      "asc": 88
+    },
+    "legacy": {
+      "ifrs": 0,
+      "ias": 1,
+      "asc": 0
+    },
+    "total_files": 130,
+    "paragraph_index_entries": 8420
+  },
+  "writing_spec": {
+    "files": [
+      "writing-spec/项目编写说明.md",
+      "writing-spec/SKILL.md"
+    ],
+    "vault_sources": [
+      "02 - 项目/项目编写说明.md",
+      ".cursor/skills/writing-accounting-standards-notes/SKILL.md"
+    ]
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "registry_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "index_paragraphs_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
