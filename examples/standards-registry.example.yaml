@@ -1,0 +1,94 @@
+# standards-registry.yaml — 示例片段
+# 完整文件需覆盖 Vault 内全部 130 条准则；此处仅示意字段用法。
+#
+# 构建命令（规划）：pnpm pack-builder --vault /path/to/vault --registry ./standards-registry.yaml
+
+# ── IFRS 现行 ──────────────────────────────────────────────
+
+- id: IFRS 11
+  title: Joint Arrangements
+  title_zh: 合营安排
+  framework: IFRS
+  status: current
+  official_url: https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2024/issued/ifrs11.html
+  official_url_note: IFRS Foundation 官网；以官网最新版为准
+  vault_path: "03 - 知识库/IFRS/IFRS准则/IFRS 11 - Joint Arrangements.md"
+  tags: [合营, 共同控制, IFRS11]
+
+- id: IFRS 18
+  title: Presentation and Disclosure in Financial Statements
+  title_zh: 财务报表列报与披露
+  framework: IFRS
+  status: current
+  effective_from: "2025-01-01"
+  official_url: https://www.ifrs.org/issued-standards/list-of-standards/ifrs-18-presentation-and-disclosure-in-financial-statements/
+  vault_path: "03 - 知识库/IFRS/IFRS准则/IFRS 18 - Presentation And Disclosure In Financial Statements.md"
+  supersedes:
+    - IAS 1@legacy-presentation  # 示例：若将来将 IAS 1 部分条文标 legacy
+
+# ── IAS 现行 ──────────────────────────────────────────────
+
+- id: IAS 28
+  title: Investments in Associates and Joint Ventures
+  title_zh: 联营和合营企业中的投资
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2024/issued/ias28.html
+  vault_path: "03 - 知识库/IFRS/IAS准则/IAS 28 - Investments In Associates And Joint Ventures.md"
+  tags: [联营, 权益法, IAS28]
+
+- id: IAS 12
+  title: Income Taxes
+  title_zh: 所得税
+  framework: IAS
+  status: current
+  official_url: https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2024/issued/ias12.html
+  vault_path: "03 - 知识库/IFRS/IAS准则/IAS 12 - Income Taxes.md"
+  tags: [所得税, 递延所得税, IAS12]
+
+# ── IAS 旧准则（archive）──────────────────────────────────
+
+- id: IAS 31
+  title: Interests in Joint Ventures
+  title_zh: 合营企业中的权益（已废止）
+  framework: IAS
+  status: legacy
+  legacy_label: 旧准则
+  effective_until: "2013-01-01"
+  superseded_by: IFRS 11
+  official_url: https://www.ifrs.org/content/dam/ifrs/publications/html-standards/english/2023/issued/ias31.html
+  official_url_note: 准则已废止；官网可能仅保留历史版本
+  vault_path: "03 - 知识库/IFRS/IAS准则/IAS 31 - Interests In Joint Ventures.md"  # 若 Vault 尚未收录，构建时报错提醒补充
+  tags: [合营, 旧准则]
+
+# ── ASC 现行 ──────────────────────────────────────────────
+
+- id: ASC 740
+  title: Income Taxes
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/740/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号
+  vault_path: "03 - 知识库/US GAAP/ASC准则/ASC 740 - Income Taxes.md"
+  tags: [所得税, ASC740, DTA]
+
+- id: ASC 810
+  title: Consolidation
+  framework: ASC
+  status: current
+  official_url: https://asc.fasb.org/810/showallinone
+  official_url_note: FASB Codification 通常需登录 FASB 账号
+  vault_path: "03 - 知识库/US GAAP/ASC准则/ASC 810 - Consolidation.md"
+  tags: [合并, 控制, ASC810]
+
+# ── ASC 旧准则示例（若某 Topic 被大幅替换且需留档）────────
+
+# - id: ASC 605@legacy
+#   title: Revenue Recognition (superseded by ASC 606)
+#   framework: ASC
+#   status: legacy
+#   legacy_label: 旧准则
+#   effective_until: "2017-12-15"
+#   superseded_by: ASC 606
+#   official_url: https://asc.fasb.org/605/showallinone
+#   vault_path: "03 - 知识库/US GAAP/ASC准则/ASC 605 - Revenue Recognition.md"

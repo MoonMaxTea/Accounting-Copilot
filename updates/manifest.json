@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-18T00:00:00Z",
+  "content": null,
+  "app": null,
+  "_comment": "Phase 4 首次 content/app Release 后由 CI 填充。示例见 examples/updates-manifest.example.json"
+}

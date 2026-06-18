@@ -1,0 +1,7 @@
+# Placeholder — Phase 4
+
+构建 standards-pack 并发布 GitHub Release。
+
+触发：`workflow_dispatch`、每周定时。
+
+详见 docs/DESIGN.md §七。

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+target/
+*.log
+
+# Tauri
+src-tauri/target/
+
+# Content pack build artifacts
+build/
+.output/
+standards-pack-*.zip
+
+# Vault clone (pack-builder)
+.tmp/
+vault/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets
+.env
+.env.local
+*.pem
+
+# User-local (dev)
+content/
