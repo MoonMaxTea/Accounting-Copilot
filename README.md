@@ -31,7 +31,7 @@
 ├── standards-registry.yaml
 ├── updates/manifest.json
 ├── examples/
-├── tools/pack-builder/     # Phase 0 待实现
+├── tools/pack-builder/     # ✅ Phase 0 已实现
 ├── src/                    # Phase 1 待实现
 ├── src-tauri/
 └── writing-spec/           # 构建时从 Vault 同步
@@ -41,7 +41,7 @@
 
 | Phase | 状态 |
 |-------|------|
-| 0 — 仓库 + registry + pack-builder | 🚧 进行中 |
+| 0 — 仓库 + registry + pack-builder | ✅ pack-builder 已完成（12 项测试通过） |
 | 1 — Tauri + 准则浏览 | 待开始 |
 | 2 — Evidence 分屏 | 待开始 |
 | 3 — AI 写文档 | 待开始 |

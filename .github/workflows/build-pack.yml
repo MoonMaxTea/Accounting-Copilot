@@ -1,7 +1,61 @@
-# Placeholder — Phase 4
+name: Build Content Pack
 
-构建 standards-pack 并发布 GitHub Release。
+on:
+  workflow_dispatch:
+    inputs:
+      vault_ref:
+        description: Vault git ref
+        required: false
+        default: master
+  schedule:
+    - cron: '0 6 * * 1'
 
-触发：`workflow_dispatch`、每周定时。
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-详见 docs/DESIGN.md §七。
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Clone Vault
+        run: git clone --depth 1 --branch "${{ inputs.vault_ref || 'master' }}" https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap /tmp/vault
+
+      - name: Validate registry
+        run: pnpm validate:registry -- --vault /tmp/vault --registry standards-registry.yaml
+
+      - name: Build content pack
+        id: build
+        run: |
+          VERSION=$(date -u +%Y.%m.%d)
+          mkdir -p build
+          pnpm pack:build -- --vault /tmp/vault --registry standards-registry.yaml --output "build/standards-pack-${VERSION}.zip"
+          SHA256=$(sha256sum "build/standards-pack-${VERSION}.zip" | awk '{print $1}')
+          SIZE=$(stat -c%s "build/standards-pack-${VERSION}.zip")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "size=${SIZE}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: content-${{ steps.build.outputs.version }}
+          name: Content Pack ${{ steps.build.outputs.version }}
+          files: build/standards-pack-*.zip
+          body: |
+            Standards content pack built from Vault @ ${{ inputs.vault_ref || 'master' }}.
+            SHA256: ${{ steps.build.outputs.sha256 }}
+            Size: ${{ steps.build.outputs.size }} bytes

@@ -1,0 +1,12 @@
+- id: IFRS 11
+  title: Joint Arrangements
+  framework: IFRS
+  status: current
+  official_url: https://example.com/ifrs11
+  vault_path: 03 - 知识库/a.md
+- id: IFRS 11
+  title: Duplicate
+  framework: IFRS
+  status: current
+  official_url: https://example.com/dup
+  vault_path: 03 - 知识库/b.md
