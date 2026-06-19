@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build shared workspace packages
+        run: pnpm --filter @asd/shared-types build
+
       - name: Run tests
         run: pnpm test
 
