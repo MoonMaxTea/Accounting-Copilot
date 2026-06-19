@@ -153,6 +153,12 @@ pub struct CitationTarget {
     pub snippet_en: String,
     pub status: String,
     pub resolved: bool,
+    #[serde(default = "default_paragraph_resolved")]
+    pub paragraph_resolved: bool,
+}
+
+fn default_paragraph_resolved() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize)]

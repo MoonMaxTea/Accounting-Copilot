@@ -232,12 +232,20 @@ export function EvidencePage({
           snippet_en: "",
           status: "current",
           resolved: false,
+          paragraph_resolved: false,
         });
         setHighlight(null);
         showToast(`未找到引用：${citation}`, "info");
         return;
       }
+
       setCitationTarget(target);
+      if (target.paragraph_resolved === false) {
+        setHighlight(null);
+        showToast(`未找到 ${citation} 对应段落，已打开 ${target.standard_id} 全文`, "info");
+        return;
+      }
+
       setHighlight({
         char_start: target.char_start,
         char_end: target.char_end,

@@ -36,6 +36,12 @@ function citationFromLinkLabel(label: string): string | null {
   return parsed ? label.trim() : null;
 }
 
+function isParagraphResolved(scanResults: CitationScanResult[], citation: string): boolean {
+  const normalized = citation.trim();
+  const match = scanResults.find((item) => item.citation === normalized);
+  return match?.target?.paragraph_resolved !== false;
+}
+
 function isResolved(scanResults: CitationScanResult[], citation: string): boolean {
   const normalized = citation.trim();
   return scanResults.some(
@@ -51,12 +57,14 @@ function citationTarget(scanResults: CitationScanResult[], citation: string): Ci
 function CitationLink({
   citation,
   resolved,
+  paragraphResolved,
   scanResults,
   onCitationClick,
   children,
 }: {
   citation: string;
   resolved: boolean;
+  paragraphResolved: boolean;
   scanResults: CitationScanResult[];
   onCitationClick: (citation: string) => void;
   children: ReactNode;
@@ -80,9 +88,11 @@ function CitationLink({
         }}
         className={[
           "inline rounded px-0.5 font-medium underline decoration-2 underline-offset-2",
-          resolved
-            ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
-            : "text-amber-800 decoration-amber-400 hover:bg-amber-50",
+          !resolved
+            ? "text-amber-800 decoration-amber-400 hover:bg-amber-50"
+            : paragraphResolved
+              ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
+              : "text-violet-700 decoration-violet-400 hover:bg-violet-50",
         ].join(" ")}
       >
         {children}
@@ -96,7 +106,9 @@ function CitationLink({
                 ? `${preview.slice(0, 180)}…`
                 : preview
               : resolved
-                ? "悬停预览暂不可用，点击可在右侧打开段落。"
+                ? paragraphResolved
+                  ? "悬停预览暂不可用，点击可在右侧打开段落。"
+                  : "未定位到具体段落，点击可在右侧打开准则全文。"
                 : "未在本地 pack 中找到此引用。"}
           </span>
         </span>
@@ -136,6 +148,7 @@ export function NotePanel({
             <CitationLink
               citation={citation}
               resolved={isResolved(scanResults, citation)}
+              paragraphResolved={isParagraphResolved(scanResults, citation)}
               scanResults={scanResults}
               onCitationClick={onCitationClick}
             >

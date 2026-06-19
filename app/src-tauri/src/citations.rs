@@ -70,7 +70,11 @@ pub fn resolve_citation(content_dir: &Path, citation: &str) -> Result<Option<Cit
         return Ok(Some(target));
     }
 
-    resolve_via_body_search(content_dir, citation, &standard_id, &paragraph)
+    if let Some(target) = resolve_via_body_search(content_dir, citation, &standard_id, &paragraph)? {
+        return Ok(Some(target));
+    }
+
+    resolve_standard_fallback(content_dir, citation, &standard_id, &paragraph)
 }
 
 fn resolve_from_index(
@@ -103,6 +107,7 @@ fn resolve_from_index(
         snippet_en: entry.snippet_en.clone(),
         status: entry.status.clone(),
         resolved: true,
+        paragraph_resolved: true,
     }))
 }
 
@@ -138,6 +143,36 @@ fn resolve_via_body_search(
         snippet_en,
         status: record.status.clone(),
         resolved: true,
+        paragraph_resolved: true,
+    }))
+}
+
+fn resolve_standard_fallback(
+    content_dir: &Path,
+    citation: &str,
+    standard_id: &str,
+    paragraph: &str,
+) -> Result<Option<CitationTarget>, String> {
+    let registry = load_registry(content_dir)?;
+    let Some(record) = registry
+        .standards
+        .iter()
+        .find(|entry| entry.id.eq_ignore_ascii_case(standard_id))
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(CitationTarget {
+        citation: citation.trim().to_string(),
+        standard_id: record.id.clone(),
+        paragraph: paragraph.to_string(),
+        pack_path: record.pack_path.clone(),
+        char_start: 0,
+        char_end: 0,
+        snippet_en: String::new(),
+        status: record.status.clone(),
+        resolved: true,
+        paragraph_resolved: false,
     }))
 }
 
@@ -278,5 +313,32 @@ mod tests {
         assert_eq!(resolved.standard_id, "IFRS 11");
         assert!(resolved.char_start > 0);
         assert!(resolved.snippet_en.contains("Joint control"));
+    }
+
+    #[test]
+    fn falls_back_to_standard_when_paragraph_missing() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(temp.path().join("index")).expect("mkdir");
+        fs::create_dir_all(temp.path().join("current/IAS")).expect("mkdir standards");
+        fs::write(temp.path().join("index/paragraphs.json"), r#"{"entries":[]}"#)
+            .expect("write paragraphs");
+        fs::write(
+            temp.path().join("registry.json"),
+            r#"{"schema_version":1,"content_version":"2026.06.19","standards":[{"id":"IAS 12","title":"Income Taxes","framework":"IAS","status":"current","official_url":"https://example.com","pack_path":"current/IAS/ias12.md"}]}"#,
+        )
+        .expect("write registry");
+        fs::write(
+            temp.path().join("current/IAS/ias12.md"),
+            "# IAS 12\n\nIncome tax standard body.",
+        )
+        .expect("write body");
+
+        let resolved = resolve_citation(temp.path(), "IAS 12 §27")
+            .expect("resolve")
+            .expect("target");
+        assert_eq!(resolved.standard_id, "IAS 12");
+        assert!(resolved.resolved);
+        assert!(!resolved.paragraph_resolved);
+        assert_eq!(resolved.char_start, 0);
     }
 }

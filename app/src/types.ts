@@ -153,6 +153,7 @@ export interface CitationTarget {
   snippet_en: string;
   status: string;
   resolved: boolean;
+  paragraph_resolved?: boolean;
 }
 
 export interface CitationScanResult {

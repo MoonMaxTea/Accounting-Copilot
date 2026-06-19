@@ -108,6 +108,8 @@ export function EvidenceStandardPanel({
     paragraph: target.paragraph,
   };
 
+  const isStandardFallback = target.paragraph_resolved === false;
+
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-5 py-3">
@@ -122,7 +124,8 @@ export function EvidenceStandardPanel({
               )}
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              引用：{target.citation} · 段落 {activeHighlight.paragraph}
+              引用：{target.citation}
+              {activeHighlight.paragraph ? ` · 段落 ${activeHighlight.paragraph}` : ""}
             </p>
           </div>
           {detail && (
@@ -135,6 +138,12 @@ export function EvidenceStandardPanel({
             </button>
           )}
         </div>
+
+        {isStandardFallback && (
+          <div className="mt-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-950">
+            未定位到「{target.citation}」对应段落，已退格展示 <strong>{target.standard_id}</strong> 全文。后续可在 AI 写笔记时改用 pack 能识别的引用格式。
+          </div>
+        )}
 
         {(detail?.status ?? target.status) === "legacy" && (
           <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -154,7 +163,7 @@ export function EvidenceStandardPanel({
           </div>
         )}
 
-        {activeHighlight.snippet_en && (
+        {activeHighlight.snippet_en && !isStandardFallback && (
           <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
             匹配片段：{activeHighlight.snippet_en}
           </p>
