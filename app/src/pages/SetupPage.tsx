@@ -156,6 +156,11 @@ export function SetupPage({
         <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">
           <p className="font-medium text-slate-800">After installation</p>
           <p className="mt-1">
+            When the download finishes, the app opens the <strong>Standards</strong> tab automatically.
+            Use the top navigation for <strong>Workbench</strong> and <strong>Standards</strong>, and the
+            gear icon for <strong>Settings</strong>.
+          </p>
+          <p className="mt-1">
             Step 2: In Settings, choose a folder to use as your project workspace.
           </p>
           <p className="mt-1">Step 3: add your AI provider and API key (optional).</p>

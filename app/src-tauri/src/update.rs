@@ -109,15 +109,33 @@ fn should_fallback_to_github_api(status: StatusCode) -> bool {
 }
 
 /// Parses `https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`.
+/// The git ref may contain slashes, e.g. `cursor/phase4-auto-update-1b98`.
 fn parse_raw_github_url(url: &str) -> Option<(String, String, String, String)> {
     let remainder = url
         .trim()
         .strip_prefix("https://raw.githubusercontent.com/")?;
-    let mut parts = remainder.splitn(4, '/');
-    let owner = parts.next()?.to_string();
-    let repo = parts.next()?.to_string();
-    let git_ref = parts.next()?.to_string();
-    let file_path = parts.next()?.to_string();
+    let mut segments: Vec<&str> = remainder.split('/').collect();
+    if segments.len() < 4 {
+        return None;
+    }
+
+    let owner = segments.remove(0).to_string();
+    let repo = segments.remove(0).to_string();
+    let joined = segments.join("/");
+
+    if let Some(pos) = joined.find("updates/") {
+        let git_ref = joined[..pos].trim_end_matches('/').to_string();
+        let file_path = joined[pos..].to_string();
+        if !git_ref.is_empty() && !file_path.is_empty() {
+            return Some((owner, repo, git_ref, file_path));
+        }
+    }
+
+    let git_ref = segments.first()?.to_string();
+    let file_path = segments[1..].join("/");
+    if file_path.is_empty() {
+        return None;
+    }
     Some((owner, repo, git_ref, file_path))
 }
 
@@ -482,6 +500,12 @@ pub fn app_version(app: &AppHandle) -> String {
 pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String> {
     let config = config::load_config(app)?;
     let current = current_content_version(app)?;
+    let pack_info = pack::get_pack_info(app)?;
+    let effective_current = if pack_info.loaded {
+        current.as_deref()
+    } else {
+        None
+    };
     let running_app_version = app_version(app);
     let checked_at_secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -519,13 +543,17 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         status = "error".to_string();
         message = Some("更新清单中尚未发布准则库版本，请稍后再试或联系管理员。".to_string());
     } else if let Some(content) = manifest.content {
-        if is_content_version_newer(&content.latest_version, current.as_deref()) {
+        if is_content_version_newer(&content.latest_version, effective_current) {
             if app_meets_min_version(&running_app_version, content.min_app_version.as_deref()) {
                 status = "content_available".to_string();
                 message = Some(format!(
                     "发现新准则库版本 {}（当前 {}）。",
                     content.latest_version,
-                    current.as_deref().unwrap_or("未导入")
+                    if pack_info.loaded {
+                        current.as_deref().unwrap_or("未记录")
+                    } else {
+                        "未导入"
+                    }
                 ));
                 available = Some(content);
             } else {
@@ -539,7 +567,11 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         } else {
             message = Some(format!(
                 "准则库已是最新版本（{}）。",
-                current.as_deref().unwrap_or("未记录")
+                if pack_info.loaded {
+                    current.as_deref().unwrap_or("未记录")
+                } else {
+                    "未导入"
+                }
             ));
         }
     }
@@ -789,6 +821,16 @@ mod tests {
         assert_eq!(parsed.0, "MoonMaxTea");
         assert_eq!(parsed.1, "Accounting-standards-Desktop");
         assert_eq!(parsed.2, "main");
+        assert_eq!(parsed.3, "updates/manifest.json");
+    }
+
+    #[test]
+    fn parses_raw_github_manifest_url_with_branch_slash() {
+        let parsed = parse_raw_github_url(
+            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/cursor/phase4-auto-update-1b98/updates/manifest.json",
+        )
+        .expect("should parse");
+        assert_eq!(parsed.2, "cursor/phase4-auto-update-1b98");
         assert_eq!(parsed.3, "updates/manifest.json");
     }
 
