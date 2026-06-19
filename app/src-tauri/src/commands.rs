@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use tauri::AppHandle;
 
+use crate::ai;
 use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, scan_citations};
-use crate::config::{self};
+use crate::config::{self, AiConfig};
 use crate::db;
 use crate::models::{
-    AppConfigResponse, CitationScanResult, CitationTarget, PackInfo, ProjectFileEntry,
-    SearchHit, StandardDetail, StandardSummary,
+    AppConfigResponse, CitationScanResult, CitationTarget, GenerateProjectResult, PackInfo,
+    ProjectFileEntry, SearchHit, StandardDetail, StandardSummary,
 };
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
 use crate::projects;
@@ -78,6 +79,82 @@ pub async fn pick_projects_dir(app: AppHandle) -> Result<AppConfigResponse, Stri
         .to_string();
 
     save_projects_dir(app, folder)
+}
+
+#[tauri::command]
+pub fn save_ai_config(app: AppHandle, ai: AiConfig) -> Result<AppConfigResponse, String> {
+    let mut config = config::load_config(&app)?;
+    config.ai = ai;
+    config::save_config(&app, &config)?;
+    get_config(app)
+}
+
+#[tauri::command]
+pub async fn generate_project_document(
+    app: AppHandle,
+    question: String,
+    facts: Option<String>,
+) -> Result<GenerateProjectResult, String> {
+    let projects_root = config::ensure_projects_dir(&app)?;
+    let content_dir = content_dir(&app)?;
+    let config = config::load_config(&app)?;
+    ai::generate_and_save_project(
+        &projects_root,
+        &content_dir,
+        &config.ai,
+        &question,
+        facts.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub fn reveal_project_file(app: AppHandle, path: String) -> Result<(), String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let validated = config::validate_project_path(&root, PathBuf::from(path).as_path())?;
+    let Some(parent) = validated.parent() else {
+        return Err("无法定位文件所在文件夹".to_string());
+    };
+
+    open_path_in_file_manager(parent)
+}
+
+fn open_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err("当前平台暂不支持打开文件夹".to_string())
+}
+
+#[tauri::command]
+pub fn reveal_projects_dir(app: AppHandle) -> Result<(), String> {
+    let root = config::ensure_projects_dir(&app)?;
+    open_path_in_file_manager(&root)
 }
 
 #[tauri::command]

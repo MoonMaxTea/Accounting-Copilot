@@ -5,6 +5,7 @@ mod db;
 mod models;
 mod pack;
 pub mod projects;
+mod ai;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +19,10 @@ pub fn run() {
             commands::get_config,
             commands::save_projects_dir,
             commands::pick_projects_dir,
+            commands::save_ai_config,
+            commands::generate_project_document,
+            commands::reveal_project_file,
+            commands::reveal_projects_dir,
             commands::list_project_files,
             commands::search_project_files,
             commands::read_project_file,

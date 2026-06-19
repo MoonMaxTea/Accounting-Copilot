@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfigResponse,
+  AiConfig,
   CitationScanResult,
   CitationTarget,
+  GenerateProjectResult,
   PackInfo,
   ProjectFileEntry,
   SearchHit,
@@ -28,6 +30,28 @@ export function getConfig(): Promise<AppConfigResponse> {
 
 export function saveProjectsDir(projectsDir: string): Promise<AppConfigResponse> {
   return invoke<AppConfigResponse>("save_projects_dir", { projectsDir });
+}
+
+export function saveAiConfig(ai: AiConfig): Promise<AppConfigResponse> {
+  return invoke<AppConfigResponse>("save_ai_config", { ai });
+}
+
+export function generateProjectDocument(
+  question: string,
+  facts: string | null,
+): Promise<GenerateProjectResult> {
+  return invoke<GenerateProjectResult>("generate_project_document", {
+    question,
+    facts,
+  });
+}
+
+export function revealProjectFile(path: string): Promise<void> {
+  return invoke<void>("reveal_project_file", { path });
+}
+
+export function revealProjectsDir(): Promise<void> {
+  return invoke<void>("reveal_projects_dir");
 }
 
 export function pickProjectsDir(): Promise<AppConfigResponse> {

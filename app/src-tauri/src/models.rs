@@ -121,6 +121,22 @@ pub struct CitationScanResult {
     pub target: Option<CitationTarget>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectValidationReport {
+    pub citations: Vec<CitationScanResult>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GenerateProjectResult {
+    pub project_name: String,
+    pub file_path: String,
+    pub relative_path: String,
+    pub title: String,
+    pub content: String,
+    pub validation: ProjectValidationReport,
+}
+
 impl From<&StandardRecord> for StandardSummary {
     fn from(record: &StandardRecord) -> Self {
         Self {

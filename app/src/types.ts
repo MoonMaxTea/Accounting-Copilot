@@ -43,7 +43,7 @@ export interface SearchHit {
 }
 
 export type FrameworkFilter = "ALL" | "IFRS" | "IAS" | "ASC";
-export type AppTab = "standards" | "evidence" | "settings";
+export type AppTab = "standards" | "evidence" | "projects" | "settings";
 
 export interface AiConfig {
   provider: string | null;
@@ -103,4 +103,18 @@ export interface CitationHighlight {
   char_end: number;
   snippet_en: string;
   paragraph: string;
+}
+
+export interface ProjectValidationReport {
+  citations: CitationScanResult[];
+  warnings: string[];
+}
+
+export interface GenerateProjectResult {
+  project_name: string;
+  file_path: string;
+  relative_path: string;
+  title: string;
+  content: string;
+  validation: ProjectValidationReport;
 }

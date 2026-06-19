@@ -13,14 +13,14 @@ struct ParagraphsFile {
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct ParagraphRecord {
-    standard_id: String,
-    paragraph: String,
+    pub(crate) standard_id: String,
+    pub(crate) paragraph: String,
     paragraph_normalized: String,
     pack_path: String,
     char_start: u64,
     char_end: u64,
     snippet_en: String,
-    status: String,
+    pub(crate) status: String,
 }
 
 pub fn count_paragraphs(content_dir: &Path) -> Result<usize, String> {

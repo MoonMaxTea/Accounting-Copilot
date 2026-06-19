@@ -4,11 +4,13 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
+import { ProjectsPage } from "./pages/ProjectsPage";
 import type { AppTab, PackInfo } from "./types";
 
 function App() {
   const [packInfo, setPackInfo] = useState<PackInfo | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("standards");
+  const [evidenceFilePath, setEvidenceFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,11 @@ function App() {
     } finally {
       setImporting(false);
     }
+  };
+
+  const openInEvidence = (filePath: string) => {
+    setEvidenceFilePath(filePath);
+    setActiveTab("evidence");
   };
 
   if (loading) {
@@ -90,6 +97,18 @@ function App() {
               </button>
               <button
                 type="button"
+                onClick={() => setActiveTab("projects")}
+                className={[
+                  "rounded-full px-4 py-2 text-sm font-medium",
+                  activeTab === "projects"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+              >
+                项目
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab("settings")}
                 className={[
                   "rounded-full px-4 py-2 text-sm font-medium",
@@ -120,7 +139,13 @@ function App() {
               <StandardsPage />
             </div>
             <div className={activeTab === "evidence" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
-              <EvidencePage />
+              <EvidencePage
+                initialFilePath={evidenceFilePath}
+                onInitialFilePathConsumed={() => setEvidenceFilePath(null)}
+              />
+            </div>
+            <div className={activeTab === "projects" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
+              <ProjectsPage onOpenInEvidence={openInEvidence} />
             </div>
           </>
         )}

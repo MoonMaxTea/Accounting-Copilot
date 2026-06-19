@@ -45,7 +45,7 @@ export function ProjectFileTree({
     <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">项目笔记</h2>
-        <p className="mt-1 text-xs text-slate-500">按最近修改排序</p>
+        <p className="mt-1 text-xs text-slate-500">按最近修改排序 · 点击在 Evidence 中打开</p>
       </header>
       <ul className="min-h-0 flex-1 overflow-auto p-2">
         {files.map((entry) => {

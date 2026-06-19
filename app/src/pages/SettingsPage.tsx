@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { getAppVersion, getConfig, pickAndImportContentPack, pickProjectsDir } from "../api";
-import type { PackInfo } from "../types";
+import {
+  getAppVersion,
+  getConfig,
+  pickAndImportContentPack,
+  pickProjectsDir,
+  saveAiConfig,
+} from "../api";
+import type { AiConfig, PackInfo } from "../types";
 
 interface SettingsPageProps {
   packInfo: PackInfo;
@@ -10,14 +16,24 @@ interface SettingsPageProps {
 export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [appVersion, setAppVersion] = useState("0.1.0");
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
+  const [aiConfig, setAiConfig] = useState<AiConfig>({
+    provider: "openai",
+    api_key: null,
+    model: "gpt-4o",
+    allow_legacy_citations: false,
+  });
   const [importing, setImporting] = useState(false);
   const [pickingProjectsDir, setPickingProjectsDir] = useState(false);
+  const [savingAi, setSavingAi] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getAppVersion().then(setAppVersion).catch(() => undefined);
     getConfig()
-      .then((config) => setProjectsDir(config.projects_dir))
+      .then((config) => {
+        setProjectsDir(config.projects_dir);
+        setAiConfig(config.ai);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -49,6 +65,20 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       }
     } finally {
       setPickingProjectsDir(false);
+    }
+  };
+
+  const handleSaveAiConfig = async () => {
+    setSavingAi(true);
+    setMessage(null);
+    try {
+      const config = await saveAiConfig(aiConfig);
+      setAiConfig(config.ai);
+      setMessage("AI 设置已保存。");
+    } catch (caught: unknown) {
+      setMessage(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setSavingAi(false);
     }
   };
 
@@ -95,6 +125,65 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         >
           {pickingProjectsDir ? "正在选择…" : "选择项目文件夹"}
         </button>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">AI 写作</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          API Key 仅保存在本机 <code className="rounded bg-slate-100 px-1.5 py-0.5">config.json</code> 中，不会上传。
+        </p>
+        <div className="mt-4 space-y-4">
+          <label className="block space-y-2 text-sm">
+            <span className="font-medium text-slate-800">OpenAI API Key</span>
+            <input
+              type="password"
+              value={aiConfig.api_key ?? ""}
+              onChange={(event) =>
+                setAiConfig((current) => ({
+                  ...current,
+                  api_key: event.target.value || null,
+                }))
+              }
+              placeholder="sk-..."
+              className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            />
+          </label>
+          <label className="block space-y-2 text-sm">
+            <span className="font-medium text-slate-800">模型</span>
+            <input
+              type="text"
+              value={aiConfig.model ?? "gpt-4o"}
+              onChange={(event) =>
+                setAiConfig((current) => ({
+                  ...current,
+                  model: event.target.value || "gpt-4o",
+                }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={aiConfig.allow_legacy_citations}
+              onChange={(event) =>
+                setAiConfig((current) => ({
+                  ...current,
+                  allow_legacy_citations: event.target.checked,
+                }))
+              }
+            />
+            允许引用旧准则（legacy）
+          </label>
+          <button
+            type="button"
+            disabled={savingAi}
+            onClick={() => void handleSaveAiConfig()}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+          >
+            {savingAi ? "正在保存…" : "保存 AI 设置"}
+          </button>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

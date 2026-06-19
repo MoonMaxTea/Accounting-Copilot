@@ -18,7 +18,15 @@ import type {
   ProjectFileEntry,
 } from "../types";
 
-export function EvidencePage() {
+interface EvidencePageProps {
+  initialFilePath?: string | null;
+  onInitialFilePathConsumed?: () => void;
+}
+
+export function EvidencePage({
+  initialFilePath = null,
+  onInitialFilePathConsumed,
+}: EvidencePageProps) {
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [files, setFiles] = useState<ProjectFileEntry[]>([]);
   const [selected, setSelected] = useState<ProjectFileEntry | null>(null);
@@ -63,6 +71,17 @@ export function EvidencePage() {
   useEffect(() => {
     void refreshFiles(searchQuery);
   }, [refreshFiles, searchQuery]);
+
+  useEffect(() => {
+    if (!initialFilePath || files.length === 0) {
+      return;
+    }
+    const match = files.find((entry) => entry.path === initialFilePath);
+    if (match) {
+      setSelected(match);
+      onInitialFilePathConsumed?.();
+    }
+  }, [initialFilePath, files, onInitialFilePathConsumed]);
 
   useEffect(() => {
     if (!selected) {
