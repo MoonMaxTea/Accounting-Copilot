@@ -6,6 +6,7 @@ import {
   getPackInfo,
 } from "./api";
 import { IconSettings } from "./components/icons";
+import { Wordmark } from "./components/Wordmark";
 import { ToastProvider, useToast } from "./components/Toast";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -125,20 +126,21 @@ function AppShell() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
-        Starting Accounting Copilot…
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-paper text-brand-muted">
+        <Wordmark variant="hero" />
+        <p className="text-sm">Starting…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between gap-4 px-3 py-2 sm:px-4">
-          <div className="flex min-w-0 items-center gap-6">
-            <h1 className="shrink-0 text-title text-slate-900">Accounting Copilot</h1>
+    <div className="min-h-screen bg-brand-paper">
+      <header className="border-b border-brand-border bg-brand-surface">
+        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between gap-4 px-3 py-2.5 sm:px-4">
+          <div className="flex min-w-0 items-center gap-8">
+            <Wordmark variant="header" />
             {packInfo?.loaded && (
-              <nav className="flex items-center gap-1">
+              <nav className="flex items-center gap-1 border-l border-brand-border pl-6">
                 {MAIN_TABS.map((tab) => {
                   const active = activeTab === tab;
                   return (
@@ -148,12 +150,12 @@ function AppShell() {
                       onClick={() => setActiveTab(tab)}
                       className={[
                         "ui-focus-ring relative px-3 py-2 text-sm font-medium transition",
-                        active ? "text-slate-900" : "text-slate-500 hover:text-slate-800",
+                        active ? "text-brand-ink" : "text-brand-muted hover:text-brand-ink",
                       ].join(" ")}
                     >
                       {tabLabel(tab)}
                       {active && (
-                        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-slate-900" />
+                        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-brand-burgundy" />
                       )}
                     </button>
                   );
@@ -170,8 +172,8 @@ function AppShell() {
             className={[
               "ui-focus-ring rounded-lg p-2 transition",
               activeTab === "settings"
-                ? "bg-slate-900 text-white"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+                ? "bg-brand-navy text-white"
+                : "text-brand-muted hover:bg-brand-paper hover:text-brand-ink",
             ].join(" ")}
           >
             <IconSettings className="h-5 w-5" />

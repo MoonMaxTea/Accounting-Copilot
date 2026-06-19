@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getConfig, saveUpdateConfig } from "../api";
+import { Wordmark } from "../components/Wordmark";
 import type { UpdateConfig } from "../types";
 
 interface SetupPageProps {
@@ -68,8 +69,8 @@ export function SetupPage({
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col justify-center px-6">
       <div className="mb-8">
-        <p className="text-caption font-medium text-slate-500">Welcome to Accounting Copilot</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Get started in three steps</h1>
+        <Wordmark variant="hero" />
+        <h1 className="mt-6 text-xl font-semibold text-brand-ink">Get started in three steps</h1>
       </div>
 
       <ol className="mb-8 grid gap-3 sm:grid-cols-3">
@@ -79,8 +80,8 @@ export function SetupPage({
             className={[
               "rounded-lg border px-4 py-3",
               step.id === 1
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-500",
+                ? "border-brand-navy bg-brand-navy text-white"
+                : "border-brand-border bg-brand-surface text-brand-muted",
             ].join(" ")}
           >
             <p className="text-caption font-medium">Step {step.id}</p>
@@ -140,7 +141,7 @@ export function SetupPage({
             type="button"
             disabled={downloading}
             onClick={() => void handleDownload()}
-            className="ui-focus-ring rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="btn-primary ui-focus-ring rounded-lg px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
           >
             {downloading ? "Checking and downloading…" : "Download standards pack"}
           </button>

@@ -1,10 +1,22 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@theme {
+  --color-brand-navy: #1b2838;
+  --color-brand-navy-dark: #121a24;
+  --color-brand-steel: #3d5a73;
+  --color-brand-burgundy: #7a3044;
+  --color-brand-paper: #f5f6f8;
+  --color-brand-surface: #ffffff;
+  --color-brand-border: #d5dae0;
+  --color-brand-ink: #1a2332;
+  --color-brand-muted: #5c6778;
+}
+
 :root {
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
+  font-family: "Segoe UI", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--color-brand-ink);
+  background: var(--color-brand-paper);
 }
 
 body {
@@ -17,13 +29,26 @@ body {
 }
 
 .ui-focus-ring:focus-visible {
-  outline: 2px solid #0f172a;
+  outline: 2px solid var(--color-brand-navy);
   outline-offset: 2px;
 }
 
 .ui-selected-item {
-  border-left: 3px solid #0f172a;
+  border-left: 3px solid var(--color-brand-burgundy);
   background: #f8fafc;
+}
+
+.btn-primary {
+  background: var(--color-brand-navy);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--color-brand-navy-dark);
+}
+
+.btn-primary:disabled {
+  background: #94a3b8;
 }
 
 .text-title {
