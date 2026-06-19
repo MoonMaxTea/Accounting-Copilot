@@ -8,6 +8,7 @@ import {
   searchProjectFiles,
 } from "../api";
 import { ProjectFileTree } from "../components/ProjectFileTree";
+import { MarkdownPreview } from "../components/MarkdownPreview";
 import type { GenerateProjectResult, ProjectFileEntry } from "../types";
 
 interface ProjectsPageProps {
@@ -88,7 +89,7 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,260px)_minmax(0,1fr)] gap-3">
         <div className="flex min-h-0 flex-col gap-3">
           <label className="flex items-center gap-2 rounded-full bg-white px-4 py-2 ring-1 ring-slate-200">
             <span className="text-sm text-slate-500">🔍</span>
@@ -197,11 +198,9 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
                   </div>
                 )}
 
-                <div className="rounded-xl bg-white/80 px-4 py-3">
+                <div className="max-h-64 overflow-auto rounded-xl bg-white/80 px-4 py-3 ring-1 ring-emerald-100">
                   <p className="mb-2 font-medium text-slate-800">生成预览</p>
-                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-                    {result.content}
-                  </pre>
+                  <MarkdownPreview content={result.content} />
                 </div>
               </div>
             )}

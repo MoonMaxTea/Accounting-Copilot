@@ -196,7 +196,7 @@ export function EvidencePage({
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_minmax(0,1fr)] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <ProjectFileTree
           files={files}
           selectedPath={selected?.path ?? null}

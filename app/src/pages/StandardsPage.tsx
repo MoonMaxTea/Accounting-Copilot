@@ -100,7 +100,7 @@ export function StandardsPage() {
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3">
         <div className="min-h-0 overflow-auto">
           {loading ? (
             <p className="rounded-2xl bg-white p-6 text-sm text-slate-500">正在加载准则列表…</p>

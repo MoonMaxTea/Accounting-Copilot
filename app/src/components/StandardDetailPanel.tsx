@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { getStandard, openOfficialUrl } from "../api";
+import { MarkdownPreview } from "./MarkdownPreview";
 import type { StandardDetail, StandardSummary } from "../types";
 
 interface StandardDetailPanelProps {
@@ -117,13 +116,11 @@ export function StandardDetailPanel({
         )}
       </header>
 
-      <div className="flex-1 overflow-auto px-6 py-5">
+      <div className="flex-1 overflow-auto px-5 py-4 sm:px-6 sm:py-5">
         {loading && <p className="text-sm text-slate-500">正在加载正文…</p>}
         {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         {!loading && !error && detail && (
-          <div className="markdown-body prose prose-slate max-w-none text-slate-800">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{detail.body}</ReactMarkdown>
-          </div>
+          <MarkdownPreview content={detail.body} />
         )}
       </div>
     </section>

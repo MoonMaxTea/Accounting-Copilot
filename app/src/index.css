@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -15,19 +16,164 @@ body {
   min-height: 100vh;
 }
 
-markdown-body h1,
-markdown-body h2,
-markdown-body h3 {
-  margin-top: 1.25rem;
-  margin-bottom: 0.75rem;
+/* Cursor-style readable markdown preview */
+.markdown-preview {
+  --md-text: #1e293b;
+  --md-muted: #64748b;
+  --md-border: #e2e8f0;
+  --md-code-bg: #f1f5f9;
+  --md-quote-border: #cbd5e1;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  color: var(--md-text);
 }
 
-markdown-body p {
-  margin-bottom: 0.75rem;
-  line-height: 1.7;
+.markdown-preview :where(h1) {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
-markdown-body mark {
+.markdown-preview :where(h2) {
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--md-border);
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.markdown-preview :where(h3) {
+  margin-top: 1.35rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.markdown-preview :where(h4, h5, h6) {
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.markdown-preview :where(p) {
+  margin-top: 0;
+  margin-bottom: 0.9rem;
+}
+
+.markdown-preview :where(ul, ol) {
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+  padding-left: 1.35rem;
+}
+
+.markdown-preview :where(li) {
+  margin-bottom: 0.35rem;
+}
+
+.markdown-preview :where(li > p) {
+  margin-bottom: 0.35rem;
+}
+
+.markdown-preview :where(blockquote) {
+  margin: 1rem 0;
+  padding: 0.65rem 1rem;
+  border-left: 3px solid var(--md-quote-border);
+  background: #f8fafc;
+  color: var(--md-muted);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.markdown-preview :where(blockquote p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-preview :where(code):not(pre code) {
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.35rem;
+  background: var(--md-code-bg);
+  font-size: 0.84em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.markdown-preview :where(pre) {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--md-border);
+  background: #f8fafc;
+}
+
+.markdown-preview :where(pre code) {
+  padding: 0;
+  background: transparent;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.markdown-preview :where(table) {
+  display: block;
+  width: 100%;
+  margin: 1rem 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.markdown-preview :where(th, td) {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--md-border);
+  text-align: left;
+}
+
+.markdown-preview :where(th) {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.markdown-preview :where(tr:nth-child(even) td) {
+  background: #fafafa;
+}
+
+.markdown-preview :where(hr) {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid var(--md-border);
+}
+
+.markdown-preview :where(a) {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-preview :where(strong) {
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.markdown-preview :where(mark),
+.markdown-body mark {
   background: #fef08a;
   padding: 0 0.15rem;
+  border-radius: 0.15rem;
+}
+
+.markdown-preview-highlight {
+  display: block;
+  margin: 1rem 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.75rem;
+  background: #fef9c3;
+  box-shadow: inset 0 0 0 2px #facc15;
 }
