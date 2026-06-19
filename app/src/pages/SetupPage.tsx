@@ -154,8 +154,7 @@ export function SetupPage({
         <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">
           <p className="font-medium text-slate-800">After installation</p>
           <p className="mt-1">
-            Step 2: open Settings and choose your Obsidian{" "}
-            <strong>02 - Projects</strong> folder.
+            Step 2: In Settings, choose a folder to use as your project workspace.
           </p>
           <p className="mt-1">Step 3: add your AI provider and API key (optional).</p>
           {onOpenSettings && (

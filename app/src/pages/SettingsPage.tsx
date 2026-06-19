@@ -312,6 +312,10 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
               }
               className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
             />
+            <span className="block text-xs leading-5 text-slate-500">
+              If GitHub is slow or blocked in your region, enter a token below (the app uses
+              api.github.com) or point this URL to a mirror you can reach.
+            </span>
           </label>
           <label className="block space-y-2 text-sm">
             <span className="font-medium text-slate-800">GitHub access token (optional)</span>
@@ -347,8 +351,8 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">Projects folder</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Select the <strong>02 - Projects</strong> folder in your Obsidian Vault. The workbench
-          reads .md notes from this location.
+          Choose a folder to use as your project workspace. The workbench reads .md notes from
+          this location.
         </p>
         <dl className="mt-4 grid gap-3 text-sm text-slate-700">
           <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">

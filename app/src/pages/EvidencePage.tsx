@@ -461,8 +461,8 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
         <p className="text-caption font-medium text-amber-800">Step 2 · Choose project folder</p>
         <h2 className="mt-2 text-title">Project folder not configured</h2>
         <p className="mt-2 text-body">
-          Open Settings and choose the Obsidian <strong>02 - Projects</strong> folder. The
-          workbench reads project notes from there.
+          Open Settings and choose a folder to use as your project workspace. The workbench reads
+          project notes from there.
         </p>
         {onOpenSettings && (
           <button
