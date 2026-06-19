@@ -71,6 +71,13 @@ export function renameProjectFolder(
   return invoke<string>("rename_project_folder", { folderRelative, newName });
 }
 
+export function renameProjectFile(
+  filePath: string,
+  newName: string,
+): Promise<ProjectFileEntry> {
+  return invoke<ProjectFileEntry>("rename_project_file", { filePath, newName });
+}
+
 export function moveProjectFile(
   filePath: string,
   targetFolderRelative: string | null,

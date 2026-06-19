@@ -317,6 +317,71 @@ pub fn rename_project_folder(
         .map(|value| value.to_string_lossy().replace('\\', "/"))
 }
 
+pub fn rename_project_file(
+    projects_root: &Path,
+    file_path: &Path,
+    new_name: &str,
+) -> Result<ProjectFileEntry, String> {
+    let validated = crate::config::validate_project_path(projects_root, file_path)?;
+    if !validated.is_file() {
+        return Err("只能重命名 .md 项目笔记".to_string());
+    }
+
+    let safe_name = sanitize_project_name(new_name);
+    if safe_name.is_empty() {
+        return Err("项目名不能为空".to_string());
+    }
+
+    let Some(parent) = validated.parent() else {
+        return Err("无法定位文件所在文件夹".to_string());
+    };
+
+    let old_stem = validated
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("未命名");
+    let (date, suffix) = dated_filename_parts(old_stem);
+    let new_filename = match date {
+        Some(date) => build_filename(&safe_name, &date, suffix),
+        None => format!("{safe_name}.md"),
+    };
+    let new_path = parent.join(&new_filename);
+
+    let content = fs::read_to_string(&validated).map_err(|error| error.to_string())?;
+    let updated_content = ensure_heading_matches_name(&safe_name, &content);
+
+    if new_path == validated {
+        if updated_content != content {
+            fs::write(&validated, updated_content).map_err(|error| error.to_string())?;
+        }
+        return file_entry_from_path(projects_root, &validated);
+    }
+
+    if new_path.exists() {
+        return Err(format!("同名文件已存在: {new_filename}"));
+    }
+
+    fs::write(&validated, updated_content).map_err(|error| error.to_string())?;
+    fs::rename(&validated, &new_path).map_err(|error| error.to_string())?;
+    file_entry_from_path(projects_root, &new_path)
+}
+
+fn dated_filename_parts(stem: &str) -> (Option<String>, Option<u32>) {
+    let captures = regex::Regex::new(r"^(.+)-(\d{4}-\d{2}-\d{2})(?:-(\d+))?$")
+        .expect("valid regex")
+        .captures(stem);
+    let Some(captures) = captures else {
+        return (None, None);
+    };
+    let date = captures
+        .get(2)
+        .map(|value| value.as_str().to_string());
+    let suffix = captures
+        .get(3)
+        .and_then(|value| value.as_str().parse::<u32>().ok());
+    (date, suffix)
+}
+
 pub fn move_project_file(
     projects_root: &Path,
     file_path: &Path,
@@ -416,6 +481,21 @@ mod tests {
             }
             _ => panic!("expected folder"),
         }
+    }
+
+    #[test]
+    fn renames_project_file_and_updates_heading() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let note_path = temp.path().join("合营安排判断-2026-06-18.md");
+        fs::write(&note_path, "# 合营安排判断\n\n正文").expect("write");
+
+        let renamed = rename_project_file(temp.path(), &note_path, "合营安排结论")
+            .expect("rename");
+        assert!(renamed.relative_path.ends_with("合营安排结论-2026-06-18.md"));
+        assert_eq!(renamed.title, "合营安排结论");
+
+        let content = fs::read_to_string(temp.path().join(&renamed.relative_path)).expect("read");
+        assert!(content.starts_with("# 合营安排结论"));
     }
 
     #[test]

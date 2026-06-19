@@ -59,6 +59,24 @@ impl ProjectsUiState {
         self.order.retain(|_, paths| !paths.is_empty());
     }
 
+    pub fn migrate_path(&mut self, old_relative: &str, new_relative: &str) {
+        for pinned in &mut self.pinned {
+            if pinned == old_relative {
+                *pinned = new_relative.to_string();
+            }
+        }
+        if self.last_evidence_file.as_deref() == Some(old_relative) {
+            self.last_evidence_file = Some(new_relative.to_string());
+        }
+        for paths in self.order.values_mut() {
+            for path in paths.iter_mut() {
+                if path == old_relative {
+                    *path = new_relative.to_string();
+                }
+            }
+        }
+    }
+
     pub fn remove_folder_prefix(&mut self, folder_relative: &str) {
         let prefix = format!("{folder_relative}/");
         self.pinned

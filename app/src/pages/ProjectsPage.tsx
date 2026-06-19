@@ -11,6 +11,7 @@ import {
   moveProjectFileToTrash,
   purgeTrashItem,
   renameProjectFolder,
+  renameProjectFile,
   restoreTrashItem,
   revealProjectsDir,
   revealProjectFile,
@@ -240,6 +241,12 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
                 showToast(`已重命名为「${newName}」`);
                 await refreshSidebar(searchQuery);
                 return updated;
+              }}
+              onRenameFile={async (filePath, newName) => {
+                const renamed = await renameProjectFile(filePath, newName);
+                showToast(`已重命名为「${newName}」`);
+                await refreshSidebar(searchQuery);
+                return renamed;
               }}
               onMoveFile={async (filePath, targetFolderRelative) => {
                 await moveProjectFile(filePath, targetFolderRelative);

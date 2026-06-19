@@ -25,6 +25,7 @@ pub fn run() {
             commands::list_project_tree,
             commands::create_project_folder,
             commands::rename_project_folder,
+            commands::rename_project_file,
             commands::move_project_file,
             commands::count_project_folder_entries,
             commands::delete_project_folder,

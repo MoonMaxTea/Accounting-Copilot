@@ -141,6 +141,26 @@ pub fn rename_project_folder(
 }
 
 #[tauri::command]
+pub fn rename_project_file(
+    app: AppHandle,
+    file_path: String,
+    new_name: String,
+) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let validated = config::validate_project_path(&root, PathBuf::from(&file_path).as_path())?;
+    let old_relative = validated
+        .strip_prefix(&root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let entry = projects::rename_project_file(&root, validated.as_path(), &new_name)?;
+    config::update_projects_ui(&app, |ui| {
+        ui.migrate_path(&old_relative, &entry.relative_path);
+    })?;
+    Ok(entry)
+}
+
+#[tauri::command]
 pub fn move_project_file(
     app: AppHandle,
     file_path: String,

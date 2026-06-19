@@ -13,6 +13,7 @@ interface ProjectFolderTreeProps {
   onSelectFolder: (relativePath: string | null) => void;
   onCreateFolder: (parentRelative: string | null, name: string) => Promise<void>;
   onRenameFolder: (folderRelative: string, newName: string) => Promise<string>;
+  onRenameFile?: (filePath: string, newName: string) => Promise<ProjectFileEntry>;
   onMoveFile: (filePath: string, targetFolderRelative: string | null) => Promise<void>;
   onDeleteFolder?: (folderRelative: string) => Promise<void>;
   onMoveFileToTrash?: (filePath: string) => Promise<void>;
@@ -136,6 +137,7 @@ export function ProjectFolderTree({
   onSelectFolder,
   onCreateFolder,
   onRenameFolder,
+  onRenameFile,
   onMoveFile,
   onDeleteFolder,
   onMoveFileToTrash,
@@ -236,6 +238,22 @@ export function ProjectFolderTree({
       if (selectedFolderRelative === folderRelative) {
         onSelectFolder(null);
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRenameFileAt = async (filePath: string, currentTitle: string) => {
+    if (!onRenameFile) {
+      return;
+    }
+    const name = promptText("重命名项目", currentTitle);
+    if (!name) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await onRenameFile(filePath, name);
     } finally {
       setBusy(false);
     }
@@ -427,6 +445,18 @@ export function ProjectFolderTree({
         )}
         {contextMenu.kind === "file" && (
           <>
+            {onRenameFile && (
+              <button
+                type="button"
+                className={itemClass}
+                onClick={() => {
+                  setContextMenu(null);
+                  void handleRenameFileAt(contextMenu.filePath, contextMenu.fileTitle);
+                }}
+              >
+                重命名
+              </button>
+            )}
             {onMoveFileToTrash && (
               <button
                 type="button"

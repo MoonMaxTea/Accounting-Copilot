@@ -13,6 +13,7 @@ import {
   purgeTrashItem,
   readProjectFile,
   renameProjectFolder,
+  renameProjectFile,
   restoreTrashItem,
   saveProjectsChildOrder,
   saveProjectsUiState,
@@ -378,6 +379,15 @@ export function EvidencePage({
             showToast(`已重命名为「${newName}」`);
             await refreshSidebar(searchQuery);
             return updated;
+          }}
+          onRenameFile={async (filePath, newName) => {
+            const renamed = await renameProjectFile(filePath, newName);
+            showToast(`已重命名为「${newName}」`);
+            await refreshSidebar(searchQuery);
+            if (selected?.path === filePath) {
+              setSelected(renamed);
+            }
+            return renamed;
           }}
           onMoveFile={async (filePath, targetFolderRelative) => {
             const moved = await moveProjectFile(filePath, targetFolderRelative);
