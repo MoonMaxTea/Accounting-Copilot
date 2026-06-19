@@ -15,9 +15,9 @@ build/
 .output/
 standards-pack-*.zip
 
-# Vault clone (pack-builder)
+# Vault clone (pack-builder, repo root only)
+/vault/
 .tmp/
-vault/
 
 # OS / IDE
 .DS_Store
