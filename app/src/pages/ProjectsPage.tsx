@@ -269,7 +269,7 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
             />
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-500">
-            选中文件夹后，新建 AI 笔记会保存到该文件夹。拖拽笔记可归类，⋮⋮ 可排序。
+            选中文件夹后，新建 AI 笔记会保存到该文件夹。
             <button
               type="button"
               onClick={() => void revealProjectsDir()}

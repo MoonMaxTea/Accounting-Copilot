@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectFileEntry, ProjectTreeNode } from "../types";
 import { treeFileToEntry } from "../types";
 
@@ -25,6 +25,24 @@ interface ReorderPayload {
   relativePath: string;
   parentRelative: string | null;
 }
+
+type ContextMenuPayload =
+  | {
+      kind: "folder";
+      folderRelative: string;
+      folderName: string;
+    }
+  | {
+      kind: "file";
+      filePath: string;
+      fileTitle: string;
+      relativePath: string;
+    };
+
+type ContextMenuState = ContextMenuPayload & {
+  x: number;
+  y: number;
+};
 
 function formatModified(secs: number): string {
   if (!secs) {
@@ -97,6 +115,16 @@ function reorderRelativePaths(
   return next;
 }
 
+function openContextMenu(
+  event: React.MouseEvent,
+  menu: ContextMenuPayload,
+  setMenu: (value: ContextMenuState | null) => void,
+) {
+  event.preventDefault();
+  event.stopPropagation();
+  setMenu({ ...menu, x: event.clientX, y: event.clientY });
+}
+
 export function ProjectFolderTree({
   nodes,
   searchResults = null,
@@ -113,12 +141,14 @@ export function ProjectFolderTree({
   onMoveFileToTrash,
   onTogglePin,
   onReorder,
-  emptyMessage = "暂无项目笔记。可新建文件夹，或将 AI 生成的笔记保存到这里。",
+  emptyMessage = "暂无项目笔记",
 }: ProjectFolderTreeProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [dragOverFolder, setDragOverFolder] = useState<string | "__root__" | null>(null);
   const [dragOverReorder, setDragOverReorder] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const pinnedSet = useMemo(() => new Set(pinnedPaths), [pinnedPaths]);
   const pinnedNodes = useMemo(
@@ -126,19 +156,33 @@ export function ProjectFolderTree({
     [nodes, pinnedSet],
   );
 
-  const allFolderPaths = useMemo(() => {
-    const paths: string[] = [];
-    const walk = (items: ProjectTreeNode[]) => {
-      for (const item of items) {
-        if (item.kind === "folder") {
-          paths.push(item.relative_path);
-          walk(item.children);
-        }
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const closeMenu = () => setContextMenu(null);
+    const handlePointerDown = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      closeMenu();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
       }
     };
-    walk(nodes);
-    return paths;
-  }, [nodes]);
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
 
   const toggleExpanded = (relativePath: string) => {
     setExpanded((current) => ({
@@ -166,36 +210,59 @@ export function ProjectFolderTree({
     }
   };
 
-  const handleRenameFolder = async () => {
-    if (!selectedFolderRelative) {
-      window.alert("请先选择一个文件夹。");
-      return;
-    }
-    const currentName =
-      allFolderPaths.includes(selectedFolderRelative)
-        ? selectedFolderRelative.split("/").pop() ?? selectedFolderRelative
-        : selectedFolderRelative;
+  const handleRenameFolderAt = async (folderRelative: string, currentName: string) => {
     const name = promptText("重命名文件夹", currentName);
     if (!name) {
       return;
     }
     setBusy(true);
     try {
-      const updated = await onRenameFolder(selectedFolderRelative, name);
-      onSelectFolder(updated);
+      const updated = await onRenameFolder(folderRelative, name);
+      if (selectedFolderRelative === folderRelative) {
+        onSelectFolder(updated);
+      }
     } finally {
       setBusy(false);
     }
   };
 
-  const handleDeleteFolder = async () => {
-    if (!selectedFolderRelative || !onDeleteFolder) {
+  const handleDeleteFolderAt = async (folderRelative: string) => {
+    if (!onDeleteFolder) {
       return;
     }
     setBusy(true);
     try {
-      await onDeleteFolder(selectedFolderRelative);
-      onSelectFolder(null);
+      await onDeleteFolder(folderRelative);
+      if (selectedFolderRelative === folderRelative) {
+        onSelectFolder(null);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleMoveFileToTrashAt = async (filePath: string, fileTitle: string) => {
+    if (!onMoveFileToTrash) {
+      return;
+    }
+    if (!window.confirm(`将「${fileTitle}」移入废纸篓？`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await onMoveFileToTrash(filePath);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTogglePinAt = async (relativePath: string) => {
+    if (!onTogglePin) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await onTogglePin(relativePath);
     } finally {
       setBusy(false);
     }
@@ -273,8 +340,7 @@ export function ProjectFolderTree({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setBusy(true);
-          void onTogglePin(relativePath).finally(() => setBusy(false));
+          void handleTogglePinAt(relativePath);
         }}
         className={[
           "rounded px-1 text-xs",
@@ -299,10 +365,95 @@ export function ProjectFolderTree({
           event.dataTransfer.effectAllowed = "move";
         }}
         className="cursor-grab select-none px-1 text-xs text-slate-400"
-        title="拖拽排序"
       >
         ⋮⋮
       </span>
+    );
+  };
+
+  const renderContextMenu = () => {
+    if (!contextMenu) {
+      return null;
+    }
+
+    const itemClass =
+      "block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100";
+    const dangerClass =
+      "block w-full rounded-lg px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50";
+
+    return (
+      <div
+        ref={menuRef}
+        className="fixed z-50 min-w-[9rem] rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+        style={{ left: contextMenu.x, top: contextMenu.y }}
+      >
+        {contextMenu.kind === "folder" && (
+          <>
+            <button
+              type="button"
+              className={itemClass}
+              onClick={() => {
+                setContextMenu(null);
+                void handleRenameFolderAt(contextMenu.folderRelative, contextMenu.folderName);
+              }}
+            >
+              重命名
+            </button>
+            {onDeleteFolder && (
+              <button
+                type="button"
+                className={dangerClass}
+                onClick={() => {
+                  setContextMenu(null);
+                  void handleDeleteFolderAt(contextMenu.folderRelative);
+                }}
+              >
+                删除
+              </button>
+            )}
+            {onTogglePin && (
+              <button
+                type="button"
+                className={itemClass}
+                onClick={() => {
+                  setContextMenu(null);
+                  void handleTogglePinAt(contextMenu.folderRelative);
+                }}
+              >
+                {pinnedSet.has(contextMenu.folderRelative) ? "取消置顶" : "置顶"}
+              </button>
+            )}
+          </>
+        )}
+        {contextMenu.kind === "file" && (
+          <>
+            {onMoveFileToTrash && (
+              <button
+                type="button"
+                className={dangerClass}
+                onClick={() => {
+                  setContextMenu(null);
+                  void handleMoveFileToTrashAt(contextMenu.filePath, contextMenu.fileTitle);
+                }}
+              >
+                移入废纸篓
+              </button>
+            )}
+            {onTogglePin && (
+              <button
+                type="button"
+                className={itemClass}
+                onClick={() => {
+                  setContextMenu(null);
+                  void handleTogglePinAt(contextMenu.relativePath);
+                }}
+              >
+                {pinnedSet.has(contextMenu.relativePath) ? "取消置顶" : "置顶"}
+              </button>
+            )}
+          </>
+        )}
+      </div>
     );
   };
 
@@ -331,7 +482,21 @@ export function ProjectFolderTree({
         onDrop={(event) => void handleReorderDrop(parentRelative, siblings, node.relative_path, event)}
         className={reorderActive ? "rounded-lg ring-2 ring-blue-300" : ""}
       >
-        <div className="flex items-start gap-1">
+        <div
+          className="flex items-start gap-1"
+          onContextMenu={(event) =>
+            openContextMenu(
+              event,
+              {
+                kind: "file",
+                filePath: node.path,
+                fileTitle: node.title,
+                relativePath: node.relative_path,
+              },
+              setContextMenu,
+            )
+          }
+        >
           {renderReorderHandle(node.relative_path, parentRelative)}
           <button
             type="button"
@@ -356,22 +521,6 @@ export function ProjectFolderTree({
             </p>
           </button>
           {renderPinButton(node.relative_path)}
-          {onMoveFileToTrash && (
-            <button
-              type="button"
-              title="移入废纸篓"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (window.confirm(`将「${node.title}」移入废纸篓？`)) {
-                  setBusy(true);
-                  void onMoveFileToTrash(node.path).finally(() => setBusy(false));
-                }
-              }}
-              className="rounded px-1 text-xs text-slate-400 hover:text-red-600"
-            >
-              🗑
-            </button>
-          )}
         </div>
       </li>
     );
@@ -419,6 +568,17 @@ export function ProjectFolderTree({
             "flex items-start gap-1 rounded-lg",
             isDragOver ? "bg-blue-50 ring-2 ring-blue-300" : "",
           ].join(" ")}
+          onContextMenu={(event) =>
+            openContextMenu(
+              event,
+              {
+                kind: "folder",
+                folderRelative: node.relative_path,
+                folderName: node.name,
+              },
+              setContextMenu,
+            )
+          }
         >
           {renderReorderHandle(node.relative_path, parentRelative)}
           <button
@@ -457,7 +617,21 @@ export function ProjectFolderTree({
     if (node.kind === "file") {
       const entry = treeFileToEntry(node);
       return (
-        <li key={`pin-${node.path}`}>
+        <li
+          key={`pin-${node.path}`}
+          onContextMenu={(event) =>
+            openContextMenu(
+              event,
+              {
+                kind: "file",
+                filePath: node.path,
+                fileTitle: node.title,
+                relativePath: node.relative_path,
+              },
+              setContextMenu,
+            )
+          }
+        >
           <button
             type="button"
             onClick={() => onSelectFile(entry)}
@@ -471,7 +645,20 @@ export function ProjectFolderTree({
     }
 
     return (
-      <li key={`pin-${node.path}`}>
+      <li
+        key={`pin-${node.path}`}
+        onContextMenu={(event) =>
+          openContextMenu(
+            event,
+            {
+              kind: "folder",
+              folderRelative: node.relative_path,
+              folderName: node.name,
+            },
+            setContextMenu,
+          )
+        }
+      >
         <button
           type="button"
           onClick={() => onSelectFolder(node.relative_path)}
@@ -495,17 +682,12 @@ export function ProjectFolderTree({
   const showingSearch = searchResults !== null;
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <header className="border-b border-slate-200 px-3 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
+    <>
+      <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-200 px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-slate-900">项目笔记</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {showingSearch ? "搜索结果" : "文件夹 · 拖拽归类 · ⋮⋮ 排序"}
-            </p>
-          </div>
-          {!showingSearch && (
-            <div className="flex flex-wrap justify-end gap-1">
+            {!showingSearch && (
               <button
                 type="button"
                 disabled={busy}
@@ -515,101 +697,98 @@ export function ProjectFolderTree({
               >
                 + 文件夹
               </button>
-              <button
-                type="button"
-                disabled={busy || !selectedFolderRelative}
-                onClick={() => void handleRenameFolder()}
-                className="rounded-lg px-2 py-1 text-xs ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-40"
-              >
-                重命名
-              </button>
-              {onDeleteFolder && (
-                <button
-                  type="button"
-                  disabled={busy || !selectedFolderRelative}
-                  onClick={() => void handleDeleteFolder()}
-                  className="rounded-lg px-2 py-1 text-xs text-red-700 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-40"
-                >
-                  删除
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </header>
+            )}
+          </div>
+        </header>
 
-      <div
-        className={[
-          "min-h-0 flex-1 overflow-auto p-2",
-          dragOverFolder === "__root__" ? "bg-blue-50" : "",
-        ].join(" ")}
-        onDragOver={(event) => {
-          if (showingSearch) {
-            return;
-          }
-          if (event.dataTransfer.types.includes("text/project-reorder")) {
-            return;
-          }
-          event.preventDefault();
-          setDragOverFolder("__root__");
-        }}
-        onDragLeave={() => setDragOverFolder(null)}
-        onDrop={(event) => {
-          if (showingSearch) {
-            return;
-          }
-          void handleDropOnFolder(null, event);
-        }}
-      >
-        {showingSearch ? (
-          searchResults.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">没有匹配的项目笔记。</p>
-          ) : (
-            <ul className="space-y-1">
-              {searchResults.map((entry) => {
-                const active = entry.path === selectedPath;
-                return (
-                  <li key={entry.path}>
-                    <button
-                      type="button"
-                      onClick={() => onSelectFile(entry)}
-                      className={[
-                        "w-full rounded-lg px-2 py-2 text-left transition",
-                        active ? "bg-slate-900 text-white" : "hover:bg-slate-100",
-                      ].join(" ")}
+        <div
+          className={[
+            "min-h-0 flex-1 overflow-auto p-2",
+            dragOverFolder === "__root__" ? "bg-blue-50" : "",
+          ].join(" ")}
+          onDragOver={(event) => {
+            if (showingSearch) {
+              return;
+            }
+            if (event.dataTransfer.types.includes("text/project-reorder")) {
+              return;
+            }
+            event.preventDefault();
+            setDragOverFolder("__root__");
+          }}
+          onDragLeave={() => setDragOverFolder(null)}
+          onDrop={(event) => {
+            if (showingSearch) {
+              return;
+            }
+            void handleDropOnFolder(null, event);
+          }}
+        >
+          {showingSearch ? (
+            searchResults.length === 0 ? (
+              <p className="p-4 text-sm text-slate-500">没有匹配的项目笔记。</p>
+            ) : (
+              <ul className="space-y-1">
+                {searchResults.map((entry) => {
+                  const active = entry.path === selectedPath;
+                  return (
+                    <li
+                      key={entry.path}
+                      onContextMenu={(event) =>
+                        openContextMenu(
+                          event,
+                          {
+                            kind: "file",
+                            filePath: entry.path,
+                            fileTitle: entry.title,
+                            relativePath: entry.relative_path,
+                          },
+                          setContextMenu,
+                        )
+                      }
                     >
-                      <p className="truncate text-sm font-medium">{entry.title}</p>
-                      <p
+                      <button
+                        type="button"
+                        onClick={() => onSelectFile(entry)}
                         className={[
-                          "truncate text-xs",
-                          active ? "text-slate-300" : "text-slate-500",
+                          "w-full rounded-lg px-2 py-2 text-left transition",
+                          active ? "bg-slate-900 text-white" : "hover:bg-slate-100",
                         ].join(" ")}
                       >
-                        {entry.relative_path}
-                      </p>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )
-        ) : (
-          <>
-            {pinnedNodes.length > 0 && (
-              <div className="mb-3 rounded-xl bg-amber-50 px-2 py-2 ring-1 ring-amber-100">
-                <p className="px-2 pb-1 text-xs font-medium text-amber-900">置顶</p>
-                <ul className="space-y-1">{pinnedNodes.map(renderPinnedNode)}</ul>
-              </div>
-            )}
-            {nodes.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">{emptyMessage}</p>
-            ) : (
-              <ul className="space-y-1">{renderNodes(nodes)}</ul>
-            )}
-          </>
-        )}
-      </div>
-    </section>
+                        <p className="truncate text-sm font-medium">{entry.title}</p>
+                        <p
+                          className={[
+                            "truncate text-xs",
+                            active ? "text-slate-300" : "text-slate-500",
+                          ].join(" ")}
+                        >
+                          {entry.relative_path}
+                        </p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : (
+            <>
+              {pinnedNodes.length > 0 && (
+                <div className="mb-3 rounded-xl bg-amber-50 px-2 py-2 ring-1 ring-amber-100">
+                  <p className="px-2 pb-1 text-xs font-medium text-amber-900">置顶</p>
+                  <ul className="space-y-1">{pinnedNodes.map(renderPinnedNode)}</ul>
+                </div>
+              )}
+              {nodes.length === 0 ? (
+                <p className="p-4 text-sm text-slate-500">{emptyMessage}</p>
+              ) : (
+                <ul className="space-y-1">{renderNodes(nodes)}</ul>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+      {renderContextMenu()}
+    </>
   );
 }
 
