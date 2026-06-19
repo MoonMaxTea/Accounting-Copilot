@@ -4,8 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-VAULT_PATH="${1:-/tmp/vault}"
-REGISTRY_PATH="${2:-standards-registry.yaml}"
-
 pnpm --filter @asd/pack-builder build
-node tools/pack-builder/dist/validate-registry.js --vault "$VAULT_PATH" --registry "$REGISTRY_PATH"
+
+ARGS=("$@")
+if [ "${ARGS[0]:-}" = "--" ]; then
+  ARGS=("${ARGS[@]:1}")
+fi
+
+if [ "${#ARGS[@]}" -eq 0 ]; then
+  ARGS=(--vault /tmp/vault --registry standards-registry.yaml)
+fi
+
+node tools/pack-builder/dist/validate-registry.js "${ARGS[@]}"
