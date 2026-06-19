@@ -582,8 +582,11 @@ pub async fn check_content_updates(app: AppHandle) -> Result<UpdateCheckResult, 
 }
 
 #[tauri::command]
-pub async fn download_and_apply_content_update(app: AppHandle) -> Result<PackInfo, String> {
-    update::download_and_apply_content_update(&app).await
+pub async fn download_and_apply_content_update(
+    app: AppHandle,
+    on_progress: tauri::ipc::Channel<crate::models::ContentDownloadProgress>,
+) -> Result<PackInfo, String> {
+    update::download_and_apply_content_update(&app, Some(on_progress)).await
 }
 
 #[tauri::command]

@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { getConfig, saveUpdateConfig } from "../api";
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
 import { Wordmark } from "../components/Wordmark";
-import { useContentDownloadProgress } from "../hooks/useContentDownloadProgress";
-import type { UpdateConfig } from "../types";
+import type { ContentDownloadProgress, UpdateConfig } from "../types";
 
 interface SetupPageProps {
   onDownloadInitial: () => Promise<void>;
   downloading: boolean;
+  downloadProgress: ContentDownloadProgress | null;
   error: string | null;
   onOpenSettings?: () => void;
 }
@@ -31,13 +31,13 @@ const STEPS = [
 export function SetupPage({
   onDownloadInitial,
   downloading,
+  downloadProgress,
   error,
   onOpenSettings,
 }: SetupPageProps) {
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>(defaultUpdateConfig);
   const [savingToken, setSavingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
-  const downloadProgress = useContentDownloadProgress(downloading);
 
   useEffect(() => {
     getConfig()
@@ -148,7 +148,9 @@ export function SetupPage({
           >
             {downloading ? "Downloading…" : "Download standards pack"}
           </button>
-          {downloading && <ContentDownloadProgressBar progress={downloadProgress} />}
+          {downloading && (
+            <ContentDownloadProgressBar progress={downloadProgress} pending={!downloadProgress} />
+          )}
         </div>
 
         <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">

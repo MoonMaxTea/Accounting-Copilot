@@ -8,6 +8,7 @@ use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use tauri::ipc::Channel;
 use tauri::AppHandle;
 use tauri::Emitter;
 use tauri::Manager;
@@ -21,8 +22,18 @@ use crate::pack;
 const USER_AGENT: &str = "Accounting-Copilot/0.1.0";
 const CONTENT_DOWNLOAD_PROGRESS_EVENT: &str = "content-download-progress";
 
-fn emit_content_download_progress(app: &AppHandle, progress: ContentDownloadProgress) {
-    let _ = app.emit(CONTENT_DOWNLOAD_PROGRESS_EVENT, progress);
+struct DownloadProgressReporter<'a> {
+    app: &'a AppHandle,
+    channel: Option<&'a Channel<ContentDownloadProgress>>,
+}
+
+impl DownloadProgressReporter<'_> {
+    fn emit(&self, progress: ContentDownloadProgress) {
+        if let Some(channel) = self.channel {
+            let _ = channel.send(progress.clone());
+        }
+        let _ = self.app.emit(CONTENT_DOWNLOAD_PROGRESS_EVENT, progress);
+    }
 }
 
 fn build_http_client() -> Result<Client, String> {
@@ -549,7 +560,9 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
 pub async fn download_content_pack(
     app: &AppHandle,
     content: &ContentUpdateInfo,
+    progress: Option<&Channel<ContentDownloadProgress>>,
 ) -> Result<PathBuf, String> {
+    let reporter = DownloadProgressReporter { app, channel: progress };
     fs::create_dir_all(downloads_dir(app)?).map_err(|error| error.to_string())?;
     let destination = download_path(app, &content.latest_version)?;
     let config = config::load_config(app)?;
@@ -575,8 +588,7 @@ pub async fn download_content_pack(
     let mut downloaded_bytes: u64 = 0;
     let mut last_reported_percent = 0u64;
 
-    emit_content_download_progress(
-        app,
+    reporter.emit(
         ContentDownloadProgress {
             phase: "downloading".to_string(),
             downloaded_bytes: 0,
@@ -594,8 +606,7 @@ pub async fn download_content_pack(
         if total_bytes > 0 {
             let percent = ((downloaded_bytes * 100).min(total_bytes * 100)) / total_bytes;
             if percent > last_reported_percent {
-                emit_content_download_progress(
-                    app,
+                reporter.emit(
                     ContentDownloadProgress {
                         phase: "downloading".to_string(),
                         downloaded_bytes,
@@ -606,8 +617,7 @@ pub async fn download_content_pack(
                 last_reported_percent = percent;
             }
         } else if downloaded_bytes / (512 * 1024) > last_reported_percent {
-            emit_content_download_progress(
-                app,
+            reporter.emit(
                 ContentDownloadProgress {
                     phase: "downloading".to_string(),
                     downloaded_bytes,
@@ -620,8 +630,7 @@ pub async fn download_content_pack(
     }
 
     if total_bytes > 0 {
-        emit_content_download_progress(
-            app,
+        reporter.emit(
             ContentDownloadProgress {
                 phase: "downloading".to_string(),
                 downloaded_bytes: total_bytes,
@@ -639,8 +648,7 @@ pub async fn download_content_pack(
         ));
     }
 
-    emit_content_download_progress(
-        app,
+    reporter.emit(
         ContentDownloadProgress {
             phase: "verifying".to_string(),
             downloaded_bytes,
@@ -662,9 +670,10 @@ pub fn apply_downloaded_content_pack(
     app: &AppHandle,
     zip_path: &Path,
     content_version: &str,
+    progress: Option<&Channel<ContentDownloadProgress>>,
 ) -> Result<PackInfo, String> {
-    emit_content_download_progress(
-        app,
+    let reporter = DownloadProgressReporter { app, channel: progress };
+    reporter.emit(
         ContentDownloadProgress {
             phase: "installing".to_string(),
             downloaded_bytes: 0,
@@ -680,9 +689,13 @@ pub fn apply_downloaded_content_pack(
     Ok(pack_info)
 }
 
-pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackInfo, String> {
-    emit_content_download_progress(
-        app,
+pub async fn download_and_apply_content_update(
+    app: &AppHandle,
+    on_progress: Option<Channel<ContentDownloadProgress>>,
+) -> Result<PackInfo, String> {
+    let channel = on_progress.as_ref();
+    let reporter = DownloadProgressReporter { app, channel };
+    reporter.emit(
         ContentDownloadProgress {
             phase: "checking".to_string(),
             downloaded_bytes: 0,
@@ -693,8 +706,7 @@ pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackIn
 
     let check = check_updates(app).await?;
     if check.status == "app_update_required" {
-        emit_content_download_progress(
-            app,
+        reporter.emit(
             ContentDownloadProgress {
                 phase: "idle".to_string(),
                 downloaded_bytes: 0,
@@ -707,8 +719,7 @@ pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackIn
             .unwrap_or_else(|| "请先升级 App，再更新准则库。".to_string()));
     }
     let Some(content) = check.available_content else {
-        emit_content_download_progress(
-            app,
+        reporter.emit(
             ContentDownloadProgress {
                 phase: "idle".to_string(),
                 downloaded_bytes: 0,
@@ -719,11 +730,10 @@ pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackIn
         return Err("当前已是最新准则库".to_string());
     };
 
-    let zip_path = download_content_pack(app, &content).await?;
-    let pack_info = apply_downloaded_content_pack(app, &zip_path, &content.latest_version)?;
+    let zip_path = download_content_pack(app, &content, channel).await?;
+    let pack_info = apply_downloaded_content_pack(app, &zip_path, &content.latest_version, channel)?;
 
-    emit_content_download_progress(
-        app,
+    reporter.emit(
         ContentDownloadProgress {
             phase: "idle".to_string(),
             downloaded_bytes: 0,

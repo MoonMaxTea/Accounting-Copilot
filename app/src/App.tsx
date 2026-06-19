@@ -12,7 +12,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
-import type { AppTab, PackInfo, UpdateCheckResult } from "./types";
+import type { AppTab, ContentDownloadProgress, PackInfo, UpdateCheckResult } from "./types";
 
 const EMPTY_PACK_INFO: PackInfo = {
   loaded: false,
@@ -42,6 +42,7 @@ function AppShell() {
   const [loading, setLoading] = useState(true);
   const [downloadingInitial, setDownloadingInitial] = useState(false);
   const [downloadingStartup, setDownloadingStartup] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<ContentDownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheckResult | null>(null);
 
@@ -52,9 +53,17 @@ function AppShell() {
   }, []);
 
   const applyContentUpdate = useCallback(async () => {
-    const updated = await downloadAndApplyContentUpdate();
+    setDownloadProgress(null);
+    const updated = await downloadAndApplyContentUpdate((progress) => {
+      if (progress.phase === "idle") {
+        setDownloadProgress(null);
+        return;
+      }
+      setDownloadProgress(progress);
+    });
     setPackInfo(updated);
     setStartupUpdate(null);
+    setDownloadProgress(null);
     return updated;
   }, []);
 
@@ -104,27 +113,24 @@ function AppShell() {
 
   const handleDownloadInitial = async () => {
     setDownloadingInitial(true);
+    setDownloadProgress(null);
     setError(null);
     try {
-      const result = await checkContentUpdates();
-      if (result.status === "content_available") {
-        const updated = await downloadAndApplyContentUpdate();
-        setPackInfo(updated);
-        setActiveTab("standards");
-        showToast(`Standards installed ${updated.content_version ?? ""}`, "success");
-        return;
-      }
-      if (result.status === "up_to_date" && result.current_content_version) {
-        setError(
-          "The server has no newer content pack. Contact your administrator if nothing is installed locally.",
-        );
-        return;
-      }
-      setError(result.message ?? "Unable to download standards. Check your network or access token.");
+      const updated = await downloadAndApplyContentUpdate((progress) => {
+        if (progress.phase === "idle") {
+          setDownloadProgress(null);
+          return;
+        }
+        setDownloadProgress(progress);
+      });
+      setPackInfo(updated);
+      setActiveTab("standards");
+      showToast(`Standards installed ${updated.content_version ?? ""}`, "success");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setDownloadingInitial(false);
+      setDownloadProgress(null);
     }
   };
 
@@ -211,6 +217,7 @@ function AppShell() {
           <SetupPage
             onDownloadInitial={handleDownloadInitial}
             downloading={downloadingInitial || downloadingStartup}
+            downloadProgress={downloadProgress}
             error={error}
             onOpenSettings={() => setActiveTab("settings")}
           />

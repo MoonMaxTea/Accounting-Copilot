@@ -9,8 +9,7 @@ import {
   saveUpdateConfig,
 } from "../api";
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
-import { useContentDownloadProgress } from "../hooks/useContentDownloadProgress";
-import type { AiConfig, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
+import type { AiConfig, ContentDownloadProgress, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
 
 interface SettingsPageProps {
   packInfo: PackInfo;
@@ -83,7 +82,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [savingUpdateConfig, setSavingUpdateConfig] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const downloadProgress = useContentDownloadProgress(applyingUpdate);
+  const [downloadProgress, setDownloadProgress] = useState<ContentDownloadProgress | null>(null);
 
   useEffect(() => {
     getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -146,9 +145,16 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   const handleApplyUpdate = async () => {
     setApplyingUpdate(true);
+    setDownloadProgress(null);
     setNotice(null);
     try {
-      const updated = await downloadAndApplyContentUpdate();
+      const updated = await downloadAndApplyContentUpdate((progress) => {
+        if (progress.phase === "idle") {
+          setDownloadProgress(null);
+          return;
+        }
+        setDownloadProgress(progress);
+      });
       onPackUpdated(updated);
       setUpdateStatus(null);
       setUpdateConfig((current) => ({
@@ -160,6 +166,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setApplyingUpdate(false);
+      setDownloadProgress(null);
     }
   };
 
@@ -270,7 +277,9 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
           )}
         </div>
 
-        {applyingUpdate && <ContentDownloadProgressBar progress={downloadProgress} />}
+        {applyingUpdate && (
+          <ContentDownloadProgressBar progress={downloadProgress} pending={!downloadProgress} />
+        )}
 
         <div className="mt-5 space-y-4 border-t border-slate-100 pt-5">
           <label className="flex items-center gap-2 text-sm text-slate-700">

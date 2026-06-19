@@ -1,10 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AppConfigResponse,
   AiConfig,
   AiConversationTurn,
   CitationScanResult,
   CitationTarget,
+  ContentDownloadProgress,
   DeleteFolderResult,
   GenerateProjectResult,
   PackInfo,
@@ -231,8 +232,14 @@ export function checkContentUpdates(): Promise<UpdateCheckResult> {
   return invoke<UpdateCheckResult>("check_content_updates");
 }
 
-export function downloadAndApplyContentUpdate(): Promise<PackInfo> {
-  return invoke<PackInfo>("download_and_apply_content_update");
+export function downloadAndApplyContentUpdate(
+  onProgress: (progress: ContentDownloadProgress) => void,
+): Promise<PackInfo> {
+  return invoke<PackInfo>("download_and_apply_content_update", {
+    onProgress: new Channel<ContentDownloadProgress>((progress) => {
+      onProgress(progress);
+    }),
+  });
 }
 
 export function saveUpdateConfig(update: UpdateConfig): Promise<AppConfigResponse> {

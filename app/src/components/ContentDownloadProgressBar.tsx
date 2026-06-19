@@ -3,6 +3,7 @@ import type { ContentDownloadProgress } from "../types";
 
 interface ContentDownloadProgressBarProps {
   progress: ContentDownloadProgress | null;
+  pending?: boolean;
 }
 
 function phaseLabel(phase: string): string {
@@ -20,29 +21,43 @@ function phaseLabel(phase: string): string {
   }
 }
 
-export function ContentDownloadProgressBar({ progress }: ContentDownloadProgressBarProps) {
-  if (!progress || progress.phase === "idle") {
+export function ContentDownloadProgressBar({
+  progress,
+  pending = false,
+}: ContentDownloadProgressBarProps) {
+  if ((!progress || progress.phase === "idle") && !pending) {
     return null;
   }
 
+  const display =
+    progress && progress.phase !== "idle"
+      ? progress
+      : {
+          phase: "checking",
+          downloaded_bytes: 0,
+          total_bytes: 0,
+          message: "Preparing download…",
+        };
+
   const percent =
-    progress.total_bytes > 0
-      ? Math.min(100, Math.round((progress.downloaded_bytes / progress.total_bytes) * 100))
+    display.total_bytes > 0
+      ? Math.min(100, Math.round((display.downloaded_bytes / display.total_bytes) * 100))
       : null;
-  const showDeterminate = progress.phase === "downloading" && percent !== null;
-  const label = progress.message ?? phaseLabel(progress.phase);
+  const showDeterminate = display.phase === "downloading" && percent !== null;
+  const label = display.message ?? phaseLabel(display.phase);
 
   return (
     <div className="mt-4 space-y-2" aria-live="polite">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
         <span>{label}</span>
-        {progress.phase === "downloading" && progress.total_bytes > 0 && percent !== null && (
+        {display.phase === "downloading" && display.total_bytes > 0 && percent !== null && (
           <span>
-            {percent}% · {formatBytes(progress.downloaded_bytes)} / {formatBytes(progress.total_bytes)}
+            {percent}% · {formatBytes(display.downloaded_bytes)} /{" "}
+            {formatBytes(display.total_bytes)}
           </span>
         )}
-        {progress.phase === "downloading" && progress.total_bytes === 0 && (
-          <span>{formatBytes(progress.downloaded_bytes)}</span>
+        {display.phase === "downloading" && display.total_bytes === 0 && (
+          <span>{formatBytes(display.downloaded_bytes)}</span>
         )}
       </div>
       <div
