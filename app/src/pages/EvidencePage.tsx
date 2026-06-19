@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   continueProjectDocument,
   countProjectFolderEntries,
@@ -6,6 +6,7 @@ import {
   deleteProjectFolder,
   generateProjectDocument,
   getConfig,
+  getProjectConversation,
   getStandard,
   listProjectFiles,
   listProjectTree,
@@ -35,6 +36,7 @@ import {
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
 import type {
+  AiConversationTurn,
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
@@ -81,13 +83,17 @@ export function EvidencePage() {
   const [generating, setGenerating] = useState(false);
   const [lastResult, setLastResult] = useState<GenerateProjectResult | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [conversationTurns, setConversationTurns] = useState<AiConversationTurn[]>([]);
   const restoredRef = useRef(false);
 
-  const threadKey = selected?.relative_path ?? DRAFT_THREAD_KEY;
-  const conversationTurns = useMemo(
-    () => projectsUi.ai_threads?.[threadKey] ?? [],
-    [projectsUi.ai_threads, threadKey],
-  );
+  const refreshConversation = useCallback(async (relativePath: string | null) => {
+    try {
+      const turns = await getProjectConversation(relativePath ?? DRAFT_THREAD_KEY);
+      setConversationTurns(turns);
+    } catch {
+      setConversationTurns([]);
+    }
+  }, []);
 
   const refreshProjectsUi = useCallback(async () => {
     const config = await getConfig();
@@ -179,6 +185,10 @@ export function EvidencePage() {
     }
     void saveProjectsUiState(selected?.path ?? null, selectedFolderRelative).then(setProjectsUi).catch(() => undefined);
   }, [selected, selectedFolderRelative]);
+
+  useEffect(() => {
+    void refreshConversation(selected?.relative_path ?? null);
+  }, [selected?.relative_path, refreshConversation]);
 
   useEffect(() => {
     if (!selected) {
@@ -316,6 +326,7 @@ export function EvidencePage() {
       }
       showToast(`已保存「${generated.project_name}」`);
       await refreshSidebar(searchQuery);
+      await refreshConversation(generated.relative_path);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -350,6 +361,7 @@ export function EvidencePage() {
       setFacts("");
       await refreshProjectsUi();
       showToast("已更新项目笔记");
+      await refreshConversation(selected.relative_path);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {

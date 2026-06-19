@@ -28,6 +28,13 @@ fn persist_agent_run(
     config::update_projects_ui(app, |ui| {
         if from_session_key != to_session_key {
             ui.ai_agent_sessions.remove(from_session_key);
+            if let Some(draft_turns) = ui.ai_threads.remove(from_session_key) {
+                let merged = ui
+                    .ai_threads
+                    .entry(to_session_key.to_string())
+                    .or_default();
+                merged.extend(draft_turns);
+            }
         }
         ui.set_agent_session(to_session_key, session);
         for turn in activity {
@@ -328,6 +335,32 @@ pub fn save_evidence_panel_collapsed(
     config::update_projects_ui(&app, |ui| {
         ui.evidence_panel_collapsed = collapsed;
     })
+}
+
+#[tauri::command]
+pub fn get_project_conversation(
+    app: AppHandle,
+    relative_path: String,
+) -> Result<Vec<crate::models::AiConversationTurn>, String> {
+    let config = config::load_config(&app)?;
+    if let Some(threads) = config.projects_ui.ai_threads.get(&relative_path) {
+        if !threads.is_empty() {
+            return Ok(threads.clone());
+        }
+    }
+    if let Some(session) = config.projects_ui.ai_agent_sessions.get(&relative_path) {
+        let turns = projects::conversation_turns_from_agent_session(session);
+        if !turns.is_empty() {
+            return Ok(turns);
+        }
+    }
+    if relative_path == DRAFT_AGENT_SESSION_KEY {
+        return Ok(Vec::new());
+    }
+    let root = config::ensure_projects_dir(&app)?;
+    let file_path = root.join(&relative_path);
+    let content = projects::read_project_file(&root, &file_path)?;
+    Ok(projects::extract_conversation_from_markdown(&content))
 }
 
 #[tauri::command]

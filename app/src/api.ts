@@ -147,6 +147,10 @@ export function saveEvidencePanelCollapsed(collapsed: boolean): Promise<Projects
   return invoke<ProjectsUiState>("save_evidence_panel_collapsed", { collapsed });
 }
 
+export function getProjectConversation(relativePath: string): Promise<AiConversationTurn[]> {
+  return invoke<AiConversationTurn[]>("get_project_conversation", { relativePath });
+}
+
 export function appendAiConversationTurn(
   relativePath: string,
   turn: AiConversationTurn,

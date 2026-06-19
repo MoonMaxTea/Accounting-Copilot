@@ -289,6 +289,8 @@ fn finalize_project_markdown(
     folder_relative: Option<&str>,
     preserve_date: Option<&str>,
     allow_legacy: bool,
+    question: Option<&str>,
+    is_continue: bool,
 ) -> Result<(String, ProjectValidationReport), String> {
     let heading_aligned = projects::ensure_heading_matches_name(project_name, markdown);
     let (with_pack_quotes, pack_warnings) = inject_pack_quotes(content_dir, &heading_aligned)?;
@@ -298,14 +300,19 @@ fn finalize_project_markdown(
         folder_relative,
         preserve_date,
     );
-    let mut validation = validate_project_content(&with_frontmatter, content_dir, allow_legacy)?;
+    let with_log = if let Some(q) = question.filter(|value| !value.trim().is_empty()) {
+        projects::append_log_for_turn(&with_frontmatter, q.trim(), is_continue, preserve_date)
+    } else {
+        with_frontmatter
+    };
+    let mut validation = validate_project_content(&with_log, content_dir, allow_legacy)?;
     validation.warnings.extend(pack_warnings);
-    if !projects::has_yaml_frontmatter(&with_frontmatter) {
+    if !projects::has_yaml_frontmatter(&with_log) {
         validation
             .warnings
             .push("缺少 YAML frontmatter（tags/date/status/type/standards）。".to_string());
     }
-    Ok((with_frontmatter, validation))
+    Ok((with_log, validation))
 }
 
 pub fn parse_ai_response(raw: &str) -> Result<ParsedAiDocument, String> {
@@ -494,6 +501,8 @@ pub async fn generate_and_save_project(
         folder_relative,
         None,
         ai.allow_legacy_citations,
+        Some(question),
+        false,
     )?;
     for item in &similar_projects {
         validation.warnings.push(format!(
@@ -566,6 +575,8 @@ pub async fn continue_and_update_project(
         folder_relative.as_deref(),
         preserve_date.as_deref(),
         ai.allow_legacy_citations,
+        Some(question),
+        true,
     )?;
     let entry = projects::update_project_file(projects_root, file_path, &normalized_markdown)?;
 

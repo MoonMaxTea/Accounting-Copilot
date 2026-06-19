@@ -527,6 +527,40 @@ mod tests {
         assert!(!matches.is_empty());
         assert!(matches.iter().any(|item| item.project_name == "合营安排判断"));
     }
+
+    #[test]
+    fn extract_conversation_merges_log_and_question_sections() {
+        let single = r#"## 问题
+
+双方各 50%，重大决策需一致同意，应如何判断？
+
+## 日志
+
+- 2026-06-18：初稿，基于 IFRS 11 §7
+"#;
+        let turns = extract_conversation_from_markdown(single);
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].kind, "create");
+        assert!(turns[0].content.contains("50%"));
+        assert!(turns[0].timestamp_secs > 0);
+
+        let follow_up = r#"## 问题
+
+### 追加问题
+
+其中一方对融资享有一票否决权，结论如何变化？
+
+## 日志
+
+- 2026-06-18：初稿，基于 IFRS 11 §7
+- 2026-06-19：新增融资否决权场景分析
+"#;
+        let turns = extract_conversation_from_markdown(follow_up);
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].kind, "create");
+        assert_eq!(turns[1].kind, "continue");
+        assert!(turns[1].content.contains("融资"));
+    }
 }
 
 pub fn sanitize_project_name(name: &str) -> String {
@@ -659,19 +693,403 @@ pub fn extract_frontmatter_date(content: &str) -> Option<String> {
     None
 }
 
+pub fn strip_duplicate_leading_frontmatter(markdown: &str) -> String {
+    let trimmed = markdown.trim_start();
+    if !has_yaml_frontmatter(trimmed) {
+        return markdown.to_string();
+    }
+
+    let mut line_iter = trimmed.lines();
+    line_iter.next();
+    let mut first_block = Vec::from(["---"]);
+    for line in line_iter.by_ref() {
+        first_block.push(line);
+        if line.trim() == "---" {
+            break;
+        }
+    }
+
+    let mut body_lines: Vec<&str> = line_iter.collect();
+    while body_lines.first().is_some_and(|line| line.trim().is_empty()) {
+        body_lines.remove(0);
+    }
+
+    while has_yaml_frontmatter(body_lines.join("\n").as_str()) {
+        if body_lines.first().is_some_and(|line| line.trim() == "---") {
+            body_lines.remove(0);
+            while let Some(line) = body_lines.first() {
+                if line.trim() == "---" {
+                    body_lines.remove(0);
+                    break;
+                }
+                body_lines.remove(0);
+            }
+            while body_lines.first().is_some_and(|line| line.trim().is_empty()) {
+                body_lines.remove(0);
+            }
+            continue;
+        }
+        break;
+    }
+
+    while body_lines.len() >= 2
+        && body_lines[0].starts_with("# ")
+        && body_lines[1].trim().is_empty()
+        && body_lines.len() >= 4
+        && body_lines[2].starts_with("# ")
+    {
+        body_lines.remove(0);
+        if body_lines.first().is_some_and(|line| line.trim().is_empty()) {
+            body_lines.remove(0);
+        }
+    }
+
+    format!(
+        "{}\n\n{}",
+        first_block.join("\n"),
+        body_lines.join("\n")
+    )
+    .trim()
+    .to_string()
+}
+
+pub fn append_project_log_entry(markdown: &str, entry_line: &str) -> String {
+    let trimmed_entry = entry_line.trim();
+    if trimmed_entry.is_empty() {
+        return markdown.to_string();
+    }
+    if markdown.contains(trimmed_entry) {
+        return markdown.to_string();
+    }
+
+    if markdown.find("## 日志").is_some() {
+        let mut lines: Vec<String> = markdown.lines().map(str::to_string).collect();
+        for (index, line) in lines.iter().enumerate() {
+            if line.trim() == "## 日志" {
+                lines.insert(index + 1, trimmed_entry.to_string());
+                return lines.join("\n");
+            }
+        }
+        return format!("{markdown}\n{trimmed_entry}");
+    }
+
+    format!("{markdown}\n\n## 日志\n{trimmed_entry}\n")
+}
+
+fn truncate_for_log(text: &str, max_chars: usize) -> String {
+    let trimmed = text.trim().replace('\n', " ");
+    if trimmed.chars().count() <= max_chars {
+        return trimmed;
+    }
+    format!(
+        "{}…",
+        trimmed.chars().take(max_chars).collect::<String>()
+    )
+}
+
+pub fn append_log_for_turn(
+    markdown: &str,
+    question: &str,
+    is_continue: bool,
+    preserve_date: Option<&str>,
+) -> String {
+    let today = preserve_date
+        .map(str::to_string)
+        .unwrap_or_else(|| Local::now().format("%Y-%m-%d").to_string());
+    let summary = truncate_for_log(question, 96);
+    let entry = if is_continue {
+        format!("- {today}：追问更新 — {summary}")
+    } else {
+        format!("- {today}：初稿 — {summary}")
+    };
+    let normalized = strip_duplicate_leading_frontmatter(markdown);
+    append_project_log_entry(&normalized, &entry)
+}
+
+fn parse_log_date_to_secs(date_str: &str) -> Option<u64> {
+    use chrono::{Local, NaiveDate, TimeZone};
+
+    let date = NaiveDate::parse_from_str(date_str.trim(), "%Y-%m-%d").ok()?;
+    let naive = date.and_hms_opt(12, 0, 0)?;
+    Local
+        .from_local_datetime(&naive)
+        .single()
+        .map(|value| value.timestamp() as u64)
+}
+
+fn normalize_log_turn_content(rest: &str) -> String {
+    let trimmed = rest.trim();
+    for prefix in [
+        "初稿 — ",
+        "初稿—",
+        "初稿，",
+        "初稿 - ",
+        "追问更新 — ",
+        "追问更新—",
+        "追问更新，",
+    ] {
+        if let Some(stripped) = trimmed.strip_prefix(prefix) {
+            return stripped.trim().to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn classify_log_turn_kind(rest: &str, index: usize) -> &'static str {
+    if rest.contains("追问") || rest.contains("追加") || rest.contains("更新") {
+        "continue"
+    } else if rest.contains("初稿") {
+        "create"
+    } else if index == 0 {
+        "create"
+    } else {
+        "continue"
+    }
+}
+
+fn extract_turns_from_log_section(content: &str) -> Vec<crate::models::AiConversationTurn> {
+    use crate::models::AiConversationTurn;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+    let mut turns = Vec::new();
+
+    let Some(log_start) = content.find("## 日志") else {
+        return turns;
+    };
+    let log_section = content[log_start..]
+        .split("\n## ")
+        .next()
+        .unwrap_or("");
+
+    for (index, line) in log_section.lines().skip(1).enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("- ") {
+            continue;
+        }
+        let body = trimmed.trim_start_matches("- ").trim();
+        let (date_part, rest) = match body.split_once('：').or_else(|| body.split_once(':')) {
+            Some(parts) => parts,
+            None => continue,
+        };
+        let timestamp_secs = parse_log_date_to_secs(date_part)
+            .unwrap_or_else(|| now.saturating_sub((index as u64).saturating_mul(120)));
+        let normalized = normalize_log_turn_content(rest);
+        if normalized.chars().count() < 4 {
+            continue;
+        }
+        turns.push(AiConversationTurn {
+            role: "user".to_string(),
+            content: normalized,
+            timestamp_secs,
+            kind: classify_log_turn_kind(rest, index).to_string(),
+        });
+    }
+
+    turns
+}
+
+fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiConversationTurn> {
+    use crate::models::AiConversationTurn;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+    let mut turns = Vec::new();
+
+    let Some(question_start) = content.find("## 问题") else {
+        return turns;
+    };
+    let section = content[question_start..]
+        .split("\n## ")
+        .next()
+        .unwrap_or("");
+
+    if let Some(add_idx) = section.find("### 追加问题") {
+        let initial = section[..add_idx]
+            .replace("## 问题", "")
+            .trim()
+            .to_string();
+        if initial.chars().count() > 12 {
+            turns.push(AiConversationTurn {
+                role: "user".to_string(),
+                content: truncate_for_log(&initial, 240),
+                timestamp_secs: now.saturating_sub(3600),
+                kind: "create".to_string(),
+            });
+        }
+        let follow_up = section[add_idx..]
+            .replace("### 追加问题", "")
+            .trim()
+            .to_string();
+        if follow_up.chars().count() > 8 {
+            turns.push(AiConversationTurn {
+                role: "user".to_string(),
+                content: truncate_for_log(&follow_up, 240),
+                timestamp_secs: now.saturating_sub(60),
+                kind: "continue".to_string(),
+            });
+        }
+    } else {
+        let initial = section.replace("## 问题", "").trim().to_string();
+        if initial.chars().count() > 8 {
+            turns.push(AiConversationTurn {
+                role: "user".to_string(),
+                content: truncate_for_log(&initial, 240),
+                timestamp_secs: now.saturating_sub(3600),
+                kind: "create".to_string(),
+            });
+        }
+    }
+
+    turns
+}
+
+fn question_content_is_richer(question: &str, log_summary: &str) -> bool {
+    question.chars().count() > log_summary.chars().count().saturating_add(20)
+        || log_summary.contains('初')
+            && (log_summary.contains("稿") || log_summary.contains("追问"))
+        || log_summary.starts_with("基于 ")
+}
+
+fn merge_conversation_turns(
+    log_turns: Vec<crate::models::AiConversationTurn>,
+    question_turns: Vec<crate::models::AiConversationTurn>,
+) -> Vec<crate::models::AiConversationTurn> {
+    if log_turns.is_empty() {
+        return question_turns;
+    }
+    if question_turns.is_empty() {
+        return log_turns;
+    }
+
+    let mut merged = log_turns;
+    if let Some(first_question) = question_turns.iter().find(|turn| turn.kind == "create") {
+        if let Some(first_log) = merged.iter_mut().find(|turn| turn.kind == "create") {
+            if question_content_is_richer(&first_question.content, &first_log.content) {
+                first_log.content = first_question.content.clone();
+            }
+        } else {
+            merged.insert(0, first_question.clone());
+        }
+    }
+
+    let question_continues: Vec<_> = question_turns
+        .iter()
+        .filter(|turn| turn.kind == "continue")
+        .cloned()
+        .collect();
+    let mut continue_index = 0usize;
+    for turn in merged.iter_mut().filter(|turn| turn.kind == "continue") {
+        if let Some(question) = question_continues.get(continue_index) {
+            if question_content_is_richer(&question.content, &turn.content) {
+                turn.content = question.content.clone();
+            }
+        }
+        continue_index += 1;
+    }
+    for question in question_continues.iter().skip(continue_index) {
+        merged.push(question.clone());
+    }
+
+    merged
+}
+
+pub fn extract_conversation_from_markdown(content: &str) -> Vec<crate::models::AiConversationTurn> {
+    let log_turns = extract_turns_from_log_section(content);
+    let question_turns = extract_turns_from_question_section(content);
+    merge_conversation_turns(log_turns, question_turns)
+}
+
+pub fn conversation_turns_from_agent_session(
+    session: &[crate::models::AiAgentMessage],
+) -> Vec<crate::models::AiConversationTurn> {
+    use crate::models::AiConversationTurn;
+
+    let mut turns = Vec::new();
+    let base = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+
+    for (index, message) in session.iter().enumerate() {
+        if message.role != "user" {
+            continue;
+        }
+        let Some(raw) = message.content.as_ref() else {
+            continue;
+        };
+        if raw.contains("请根据以上工具检索")
+            || raw.contains("请继续调用工具")
+            || raw.contains("不要调用工具，直接输出")
+        {
+            continue;
+        }
+
+        let (kind, content) = if let Some(question) = raw.strip_prefix("用户问题：\n") {
+            (
+                "create".to_string(),
+                question
+                    .split("\n\n补充事实：")
+                    .next()
+                    .unwrap_or(question)
+                    .trim()
+                    .to_string(),
+            )
+        } else if let Some(idx) = raw.find("用户追问") {
+            let tail = &raw[idx..];
+            let question = tail
+                .split('\n')
+                .next()
+                .unwrap_or(tail)
+                .replace("用户追问（请更新项目笔记，输出完整新版 Markdown）：", "")
+                .replace("用户追问：", "")
+                .trim()
+                .to_string();
+            ("continue".to_string(), question)
+        } else {
+            continue;
+        };
+
+        if content.chars().count() < 4 {
+            continue;
+        }
+
+        turns.push(AiConversationTurn {
+            role: "user".to_string(),
+            content: content.to_string(),
+            timestamp_secs: base.saturating_sub((session.len() - index) as u64 * 30),
+            kind: kind.to_string(),
+        });
+    }
+
+    turns
+}
+
 pub fn ensure_frontmatter(
     markdown: &str,
     project_name: &str,
     folder_relative: Option<&str>,
     preserve_date: Option<&str>,
 ) -> String {
-    if has_yaml_frontmatter(markdown) {
-        return markdown.to_string();
+    let normalized = strip_duplicate_leading_frontmatter(markdown);
+    if has_yaml_frontmatter(&normalized) {
+        if let Some(date) = preserve_date {
+            return normalized.replacen(
+                &format!("date: {}", extract_frontmatter_date(&normalized).unwrap_or_default()),
+                &format!("date: {date}"),
+                1,
+            );
+        }
+        return normalized;
     }
 
-    let standards = collect_standards_from_content(markdown);
+    let standards = collect_standards_from_content(&normalized);
     let tags = build_frontmatter_tags(&standards, project_name);
-    let note_type = infer_note_type(folder_relative, markdown);
+    let note_type = infer_note_type(folder_relative, &normalized);
     let date = preserve_date
         .map(str::to_string)
         .unwrap_or_else(|| Local::now().format("%Y-%m-%d").to_string());
@@ -683,7 +1101,7 @@ pub fn ensure_frontmatter(
         .join(", ");
 
     format!(
-        "---\ntags: [{tags_yaml}]\ndate: {date}\nstatus: active\ntype: {note_type}\nstandards: [{standards_yaml}]\nrelated: []\n---\n\n{markdown}"
+        "---\ntags: [{tags_yaml}]\ndate: {date}\nstatus: active\ntype: {note_type}\nstandards: [{standards_yaml}]\nrelated: []\n---\n\n{normalized}"
     )
 }
 
