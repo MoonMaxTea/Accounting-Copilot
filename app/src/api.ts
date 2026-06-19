@@ -1,5 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { PackInfo, SearchHit, StandardDetail, StandardSummary } from "./types";
+import type {
+  AppConfigResponse,
+  CitationScanResult,
+  CitationTarget,
+  PackInfo,
+  ProjectFileEntry,
+  SearchHit,
+  StandardDetail,
+  StandardSummary,
+} from "./types";
 
 export function getPackInfo(): Promise<PackInfo> {
   return invoke<PackInfo>("get_pack_info");
@@ -11,6 +20,42 @@ export function pickAndImportContentPack(): Promise<PackInfo> {
 
 export function importContentPack(zipPath: string): Promise<PackInfo> {
   return invoke<PackInfo>("import_content_pack", { zipPath });
+}
+
+export function getConfig(): Promise<AppConfigResponse> {
+  return invoke<AppConfigResponse>("get_config");
+}
+
+export function saveProjectsDir(projectsDir: string): Promise<AppConfigResponse> {
+  return invoke<AppConfigResponse>("save_projects_dir", { projectsDir });
+}
+
+export function pickProjectsDir(): Promise<AppConfigResponse> {
+  return invoke<AppConfigResponse>("pick_projects_dir");
+}
+
+export function listProjectFiles(): Promise<ProjectFileEntry[]> {
+  return invoke<ProjectFileEntry[]>("list_project_files");
+}
+
+export function searchProjectFiles(query: string): Promise<ProjectFileEntry[]> {
+  return invoke<ProjectFileEntry[]>("search_project_files", { query });
+}
+
+export function readProjectFile(path: string): Promise<string> {
+  return invoke<string>("read_project_file", { path });
+}
+
+export function resolveCitation(citation: string): Promise<CitationTarget | null> {
+  return invoke<CitationTarget | null>("resolve_citation", { citation });
+}
+
+export function scanNoteCitations(content: string): Promise<CitationScanResult[]> {
+  return invoke<CitationScanResult[]>("scan_note_citations", { content });
+}
+
+export function paragraphsIndexLoaded(): Promise<number> {
+  return invoke<number>("paragraphs_index_loaded");
 }
 
 export function listStandards(

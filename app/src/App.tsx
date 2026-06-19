@@ -3,6 +3,7 @@ import { getPackInfo, pickAndImportContentPack } from "./api";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
+import { EvidencePage } from "./pages/EvidencePage";
 import type { AppTab, PackInfo } from "./types";
 
 function App() {
@@ -77,6 +78,18 @@ function App() {
               </button>
               <button
                 type="button"
+                onClick={() => setActiveTab("evidence")}
+                className={[
+                  "rounded-full px-4 py-2 text-sm font-medium",
+                  activeTab === "evidence"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+              >
+                Evidence
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab("settings")}
                 className={[
                   "rounded-full px-4 py-2 text-sm font-medium",
@@ -101,6 +114,10 @@ function App() {
           />
         ) : activeTab === "settings" ? (
           <SettingsPage packInfo={packInfo} onPackUpdated={setPackInfo} />
+        ) : activeTab === "evidence" ? (
+          <div className="h-[calc(100vh-8.5rem)]">
+            <EvidencePage />
+          </div>
         ) : (
           <div className="h-[calc(100vh-8.5rem)]">
             <StandardsPage />

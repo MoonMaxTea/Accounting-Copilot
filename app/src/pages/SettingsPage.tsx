@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAppVersion, pickAndImportContentPack } from "../api";
+import { getAppVersion, getConfig, pickAndImportContentPack, pickProjectsDir } from "../api";
 import type { PackInfo } from "../types";
 
 interface SettingsPageProps {
@@ -9,11 +9,16 @@ interface SettingsPageProps {
 
 export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [appVersion, setAppVersion] = useState("0.1.0");
+  const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [pickingProjectsDir, setPickingProjectsDir] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getAppVersion().then(setAppVersion).catch(() => undefined);
+    getConfig()
+      .then((config) => setProjectsDir(config.projects_dir))
+      .catch(() => undefined);
   }, []);
 
   const handleReimport = async () => {
@@ -27,6 +32,23 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       setMessage(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handlePickProjectsDir = async () => {
+    setPickingProjectsDir(true);
+    setMessage(null);
+    try {
+      const config = await pickProjectsDir();
+      setProjectsDir(config.projects_dir);
+      setMessage("项目目录已更新。");
+    } catch (caught: unknown) {
+      const text = caught instanceof Error ? caught.message : String(caught);
+      if (text !== "选择已取消") {
+        setMessage(text);
+      }
+    } finally {
+      setPickingProjectsDir(false);
     }
   };
 
@@ -52,6 +74,27 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
             <dd className="max-w-md truncate font-medium">{packInfo.content_dir ?? "—"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">项目目录</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          选择 Obsidian Vault 中的 <strong>02 - 项目</strong> 文件夹。Evidence 分屏与「项目」页都会读取这里的 .md 笔记。
+        </p>
+        <dl className="mt-4 grid gap-3 text-sm text-slate-700">
+          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+            <dt>当前目录</dt>
+            <dd className="max-w-md truncate font-medium">{projectsDir ?? "未设置"}</dd>
+          </div>
+        </dl>
+        <button
+          type="button"
+          disabled={pickingProjectsDir}
+          onClick={() => void handlePickProjectsDir()}
+          className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+        >
+          {pickingProjectsDir ? "正在选择…" : "选择项目文件夹"}
+        </button>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

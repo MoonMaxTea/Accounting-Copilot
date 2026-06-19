@@ -87,6 +87,40 @@ pub struct SearchHit {
     pub snippet: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfigResponse {
+    pub projects_dir: Option<String>,
+    pub ai: crate::config::AiConfig,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectFileEntry {
+    pub path: String,
+    pub relative_path: String,
+    pub title: String,
+    pub modified_secs: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CitationTarget {
+    pub citation: String,
+    pub standard_id: String,
+    pub paragraph: String,
+    pub pack_path: String,
+    pub char_start: u64,
+    pub char_end: u64,
+    pub snippet_en: String,
+    pub status: String,
+    pub resolved: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CitationScanResult {
+    pub citation: String,
+    pub resolved: bool,
+    pub target: Option<CitationTarget>,
+}
+
 impl From<&StandardRecord> for StandardSummary {
     fn from(record: &StandardRecord) -> Self {
         Self {

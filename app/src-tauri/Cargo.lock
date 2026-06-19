@@ -6,6 +6,7 @@ version = 4
 name = "accounting-standards-desktop"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
@@ -14,6 +15,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tempfile",
+ "walkdir",
  "zip",
 ]
 

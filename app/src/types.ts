@@ -43,4 +43,64 @@ export interface SearchHit {
 }
 
 export type FrameworkFilter = "ALL" | "IFRS" | "IAS" | "ASC";
-export type AppTab = "standards" | "settings";
+export type AppTab = "standards" | "evidence" | "settings";
+
+export interface AiConfig {
+  provider: string | null;
+  api_key: string | null;
+  model: string | null;
+  allow_legacy_citations: boolean;
+}
+
+export interface AppConfigResponse {
+  projects_dir: string | null;
+  ai: AiConfig;
+}
+
+export interface ProjectFileEntry {
+  path: string;
+  relative_path: string;
+  title: string;
+  modified_secs: number;
+}
+
+export interface CitationRef {
+  standardId: string;
+  paragraph: string;
+}
+
+export interface ParagraphIndexEntry {
+  standard_id: string;
+  paragraph: string;
+  paragraph_normalized: string;
+  pack_path: string;
+  char_start: number;
+  char_end: number;
+  snippet_en: string;
+  status: string;
+}
+
+export interface CitationTarget {
+  citation: string;
+  standard_id: string;
+  paragraph: string;
+  pack_path: string;
+  char_start: number;
+  char_end: number;
+  snippet_en: string;
+  status: string;
+  resolved: boolean;
+}
+
+export interface CitationScanResult {
+  citation: string;
+  resolved: boolean;
+  target: CitationTarget | null;
+}
+
+export interface CitationHighlight {
+  char_start: number;
+  char_end: number;
+  snippet_en: string;
+  paragraph: string;
+}
