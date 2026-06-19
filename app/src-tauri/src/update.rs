@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_util::StreamExt;
 use reqwest::Client;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
@@ -14,8 +15,11 @@ use crate::config::{self, UpdateConfig};
 use crate::models::{ContentUpdateInfo, PackInfo, UpdateCheckResult};
 use crate::pack;
 
+const USER_AGENT: &str = "AccountingStandards-Desktop/0.1.0";
+
 fn build_http_client() -> Result<Client, String> {
     Client::builder()
+        .user_agent(USER_AGENT)
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|error| error.to_string())
@@ -27,6 +31,169 @@ fn authorized_get(client: &Client, url: &str, access_token: Option<&str>) -> req
         Some(token) => request.bearer_auth(token),
         None => request,
     }
+}
+
+fn github_api_get(client: &Client, url: &str, access_token: &str) -> reqwest::RequestBuilder {
+    client
+        .get(url)
+        .bearer_auth(access_token)
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+}
+
+fn github_raw_get(client: &Client, url: &str, access_token: &str) -> reqwest::RequestBuilder {
+    client
+        .get(url)
+        .bearer_auth(access_token)
+        .header(reqwest::header::ACCEPT, "application/vnd.github.raw+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+}
+
+fn github_asset_get(client: &Client, asset_api_url: &str, access_token: &str) -> reqwest::RequestBuilder {
+    client
+        .get(asset_api_url)
+        .bearer_auth(access_token)
+        .header(reqwest::header::ACCEPT, "application/octet-stream")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+}
+
+fn auth_error_hint(status: StatusCode) -> &'static str {
+    match status {
+        StatusCode::UNAUTHORIZED => {
+            "访问令牌无效或已过期。请重新生成 GitHub Token 并确保勾选 Contents 读取权限。"
+        }
+        StatusCode::FORBIDDEN => {
+            "访问令牌权限不足。Fine-grained Token 需对 Accounting-standards-Desktop 仓库勾选 Contents: Read-only。"
+        }
+        StatusCode::NOT_FOUND => {
+            "资源不存在，或私有仓库未配置有效访问令牌（raw.githubusercontent.com 不支持私有仓库 Token）。"
+        }
+        _ => "请检查网络连接与访问令牌配置。",
+    }
+}
+
+/// Parses `https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`.
+fn parse_raw_github_url(url: &str) -> Option<(String, String, String, String)> {
+    let remainder = url
+        .trim()
+        .strip_prefix("https://raw.githubusercontent.com/")?;
+    let mut parts = remainder.splitn(4, '/');
+    let owner = parts.next()?.to_string();
+    let repo = parts.next()?.to_string();
+    let git_ref = parts.next()?.to_string();
+    let file_path = parts.next()?.to_string();
+    Some((owner, repo, git_ref, file_path))
+}
+
+/// Parses `https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}`.
+fn parse_release_download_url(url: &str) -> Option<(String, String, String, String)> {
+    let remainder = url.trim().strip_prefix("https://github.com/")?;
+    let mut parts = remainder.split('/');
+    let owner = parts.next()?.to_string();
+    let repo = parts.next()?.to_string();
+    if parts.next()? != "releases" {
+        return None;
+    }
+    if parts.next()? != "download" {
+        return None;
+    }
+    let tag = parts.next()?.to_string();
+    let asset_name = parts.collect::<Vec<_>>().join("/");
+    if asset_name.is_empty() {
+        return None;
+    }
+    Some((owner, repo, tag, asset_name))
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubReleaseAsset {
+    name: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubRelease {
+    assets: Vec<GitHubReleaseAsset>,
+}
+
+async fn fetch_manifest_via_github_api(
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    git_ref: &str,
+    file_path: &str,
+    access_token: &str,
+) -> Result<UpdatesManifest, String> {
+    let api_url = format!(
+        "https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={git_ref}"
+    );
+    let response = github_raw_get(client, &api_url, access_token)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|error| format!("无法通过 GitHub API 获取更新清单: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "GitHub API 读取更新清单失败: {}。{}",
+            response.status(),
+            auth_error_hint(response.status())
+        ));
+    }
+
+    response
+        .json::<UpdatesManifest>()
+        .await
+        .map_err(|error| format!("更新清单格式无效: {error}"))
+}
+
+async fn download_release_asset_via_github_api(
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    asset_name: &str,
+    access_token: &str,
+) -> Result<reqwest::Response, String> {
+    let release_url = format!("https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}");
+    let release = github_api_get(client, &release_url, access_token)
+        .send()
+        .await
+        .map_err(|error| format!("无法查询 Release 信息: {error}"))?;
+
+    if !release.status().is_success() {
+        return Err(format!(
+            "查询 Release 失败: {}。{}",
+            release.status(),
+            auth_error_hint(release.status())
+        ));
+    }
+
+    let release_info = release
+        .json::<GitHubRelease>()
+        .await
+        .map_err(|error| format!("Release 信息格式无效: {error}"))?;
+
+    let asset = release_info
+        .assets
+        .into_iter()
+        .find(|item| item.name == asset_name)
+        .ok_or_else(|| format!("Release {tag} 中未找到文件 {asset_name}"))?;
+
+    let response = github_asset_get(client, &asset.url, access_token)
+        .send()
+        .await
+        .map_err(|error| format!("无法下载 Release 文件: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "下载 Release 文件失败: {}。{}",
+            response.status(),
+            auth_error_hint(response.status())
+        ));
+    }
+
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,24 +282,42 @@ pub async fn fetch_manifest(
         .await
         .map_err(|error| format!("无法获取更新清单: {error}"))?;
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
+    if response.status().is_success() {
+        return response
+            .json::<UpdatesManifest>()
+            .await
+            .map_err(|error| format!("更新清单格式无效: {error}"));
+    }
+
+    let status = response.status();
+    let token = access_token.map(str::trim).filter(|value| !value.is_empty());
+
+    if let Some(token) = token {
+        if let Some((owner, repo, git_ref, file_path)) = parse_raw_github_url(manifest_url) {
+            if matches!(
+                status,
+                StatusCode::NOT_FOUND | StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+            ) {
+                return fetch_manifest_via_github_api(
+                    &client, &owner, &repo, &git_ref, &file_path, token,
+                )
+                .await;
+            }
+        }
+    }
+
+    if status == StatusCode::NOT_FOUND && token.is_none() {
         return Err(
-            "无法读取更新清单（404）。若清单或准则包在私有仓库，请在设置中填写 GitHub 访问令牌。"
+            "无法读取更新清单（404）。若清单在私有 GitHub 仓库，请填写有 Contents 读取权限的访问令牌。"
                 .to_string(),
         );
     }
 
-    if !response.status().is_success() {
-        return Err(format!(
-            "更新清单返回错误: {}。私有仓库需配置访问令牌。",
-            response.status()
-        ));
-    }
-
-    response
-        .json::<UpdatesManifest>()
-        .await
-        .map_err(|error| format!("更新清单格式无效: {error}"))
+    Err(format!(
+        "更新清单返回错误: {}。{}",
+        status,
+        auth_error_hint(status)
+    ))
 }
 
 pub fn current_content_version(app: &AppHandle) -> Result<Option<String>, String> {
@@ -253,19 +438,55 @@ pub async fn download_content_pack(
         .await
         .map_err(|error| format!("下载准则库失败: {error}"))?;
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(
-            "无法下载准则库（404）。若 Release 在私有仓库，请在设置中填写 GitHub 访问令牌。"
-                .to_string(),
-        );
-    }
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "下载准则库失败: {}。私有仓库需配置访问令牌。",
-            response.status()
-        ));
-    }
+    let response = if response.status().is_success() {
+        response
+    } else {
+        let status = response.status();
+        let token = access_token.map(str::trim).filter(|value| !value.is_empty());
+        if let Some(token) = token {
+            if let Some((owner, repo, tag, asset_name)) =
+                parse_release_download_url(&content.pack_url)
+            {
+                if matches!(
+                    status,
+                    StatusCode::NOT_FOUND | StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+                ) {
+                    download_release_asset_via_github_api(
+                        &client, &owner, &repo, &tag, &asset_name, token,
+                    )
+                    .await?
+                } else {
+                    return Err(format!(
+                        "下载准则库失败: {}。{}",
+                        status,
+                        auth_error_hint(status)
+                    ));
+                }
+            } else if status == StatusCode::NOT_FOUND {
+                return Err(
+                    "无法下载准则库（404）。若 Release 在私有仓库，请在设置中填写 GitHub 访问令牌。"
+                        .to_string(),
+                );
+            } else {
+                return Err(format!(
+                    "下载准则库失败: {}。{}",
+                    status,
+                    auth_error_hint(status)
+                ));
+            }
+        } else if status == StatusCode::NOT_FOUND {
+            return Err(
+                "无法下载准则库（404）。若 Release 在私有仓库，请填写有 Contents 读取权限的访问令牌。"
+                    .to_string(),
+            );
+        } else {
+            return Err(format!(
+                "下载准则库失败: {}。{}",
+                status,
+                auth_error_hint(status)
+            ));
+        }
+    };
 
     let mut file = File::create(&destination).map_err(|error| error.to_string())?;
     let mut stream = response.bytes_stream();
@@ -355,5 +576,29 @@ mod tests {
         assert!(app_meets_min_version("0.2.0", Some("0.1.0")));
         assert!(app_meets_min_version("0.1.0", Some("0.1.0")));
         assert!(!app_meets_min_version("0.1.0", Some("1.0.0")));
+    }
+
+    #[test]
+    fn parses_raw_github_manifest_url() {
+        let parsed = parse_raw_github_url(
+            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json",
+        )
+        .expect("should parse");
+        assert_eq!(parsed.0, "MoonMaxTea");
+        assert_eq!(parsed.1, "Accounting-standards-Desktop");
+        assert_eq!(parsed.2, "main");
+        assert_eq!(parsed.3, "updates/manifest.json");
+    }
+
+    #[test]
+    fn parses_release_download_url() {
+        let parsed = parse_release_download_url(
+            "https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
+        )
+        .expect("should parse");
+        assert_eq!(parsed.0, "MoonMaxTea");
+        assert_eq!(parsed.1, "Accounting-standards-Desktop");
+        assert_eq!(parsed.2, "content-2026.06.19");
+        assert_eq!(parsed.3, "standards-pack-2026.06.19.zip");
     }
 }
