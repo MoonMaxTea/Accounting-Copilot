@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   continueProjectDocument,
   countProjectFolderEntries,
@@ -57,6 +57,42 @@ const defaultUiState: ProjectsUiState = {
 };
 
 const DRAFT_THREAD_KEY = "__draft__";
+
+function findLatestConversationFolder(
+  aiThreads: Record<string, AiConversationTurn[]> | undefined,
+  lastEvidenceFile: string | null,
+  selectedRelativePath: string | null,
+): string | null {
+  if (selectedRelativePath) {
+    return folderRelativeForSelection(selectedRelativePath, null);
+  }
+
+  let latestRelative: string | null = null;
+  let latestTimestamp = 0;
+
+  if (aiThreads) {
+    for (const [relativePath, turns] of Object.entries(aiThreads)) {
+      if (relativePath === DRAFT_THREAD_KEY || turns.length === 0) {
+        continue;
+      }
+      const maxTimestamp = Math.max(...turns.map((turn) => turn.timestamp_secs));
+      if (maxTimestamp > latestTimestamp) {
+        latestTimestamp = maxTimestamp;
+        latestRelative = relativePath;
+      }
+    }
+  }
+
+  if (latestRelative) {
+    return folderRelativeForSelection(latestRelative, null);
+  }
+
+  if (lastEvidenceFile) {
+    return folderRelativeForSelection(lastEvidenceFile, null);
+  }
+
+  return null;
+}
 
 export function EvidencePage() {
   const { showToast } = useToast();
@@ -398,13 +434,23 @@ export function EvidencePage() {
     selectedFolderRelative,
   );
 
+  const activeConversationFolder = useMemo(
+    () =>
+      findLatestConversationFolder(
+        projectsUi.ai_threads,
+        projectsUi.last_evidence_file,
+        selected?.relative_path ?? null,
+      ),
+    [projectsUi.ai_threads, projectsUi.last_evidence_file, selected?.relative_path],
+  );
+
   if (!projectsDir) {
     return (
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-950">
         <h2 className="text-lg font-semibold">尚未设置项目目录</h2>
         <p className="mt-2 text-sm leading-6">
           请先在「设置」中选择 Obsidian Vault 的 <strong>02 - 项目</strong> 文件夹，
-          然后回到 Evidence 工作台。
+          然后回到工作台。
         </p>
       </section>
     );
@@ -473,14 +519,8 @@ export function EvidencePage() {
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div
-        className={[
-          "grid min-h-0 flex-1 gap-3",
-          panelCollapsed
-            ? "grid-cols-[minmax(220px,240px)_minmax(0,1fr)]"
-            : "grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(0,1fr)]",
-        ].join(" ")}
-      >
+      <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
+        <div className="h-full w-[240px] shrink-0">
         <ProjectFolderTree
           nodes={tree}
           searchResults={searchResults}
@@ -488,6 +528,7 @@ export function EvidencePage() {
           selectedFolderRelative={selectedFolderRelative}
           pinnedPaths={projectsUi.pinned}
           loading={loadingFiles}
+          activeFolderRelative={activeConversationFolder}
           onSelectFile={(entry) => {
             setSelected(entry);
             setSelectedFolderRelative(folderRelativeForSelection(entry.relative_path, null));
@@ -543,7 +584,9 @@ export function EvidencePage() {
             await refreshSidebar(searchQuery);
           }}
         />
+        </div>
 
+        <div className="min-h-0 min-w-0 flex-1">
         <NotePanel
           title={selected?.title ?? "项目笔记"}
           content={noteContent}
@@ -551,7 +594,9 @@ export function EvidencePage() {
           loading={loadingNote}
           onCitationClick={(citation) => void handleCitationClick(citation)}
         />
+        </div>
 
+        <div className={panelCollapsed ? "h-full shrink-0" : "min-h-0 min-w-0 flex-1"}>
         <EvidenceSidePanel
           collapsed={panelCollapsed}
           onToggleCollapsed={handleTogglePanel}
@@ -571,6 +616,7 @@ export function EvidencePage() {
           missMessage={citationMiss}
           onOpenSuperseded={(standardId) => void handleOpenSuperseded(standardId)}
         />
+        </div>
       </div>
     </div>
   );

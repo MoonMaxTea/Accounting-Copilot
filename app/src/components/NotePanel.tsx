@@ -165,7 +165,7 @@ export function NotePanel({
               event.stopPropagation();
             }}
             className="inline text-slate-600 underline decoration-dotted underline-offset-2"
-            title="此链接仅在 Obsidian 中有效，请在 Evidence 中使用 IFRS/IAS/ASC 引用格式"
+            title="此链接仅在 Obsidian 中有效，请在工作台中使用 IFRS/IAS/ASC 引用格式"
           >
             {children}
           </button>

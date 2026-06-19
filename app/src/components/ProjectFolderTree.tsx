@@ -19,6 +19,7 @@ interface ProjectFolderTreeProps {
   onMoveFileToTrash?: (filePath: string) => Promise<void>;
   onTogglePin?: (relativePath: string) => Promise<void>;
   onReorder?: (parentRelative: string | null, orderedRelativePaths: string[]) => Promise<void>;
+  activeFolderRelative?: string | null;
   emptyMessage?: string;
 }
 
@@ -76,6 +77,16 @@ function parentRelativeFromPath(relativePath: string): string | null {
     return null;
   }
   return relativePath.slice(0, index);
+}
+
+export function folderAncestorPaths(folderRelative: string): string[] {
+  const paths: string[] = [];
+  let current: string | null = folderRelative;
+  while (current) {
+    paths.push(current);
+    current = parentRelativeFromPath(current);
+  }
+  return paths;
 }
 
 function collectPinnedNodes(nodes: ProjectTreeNode[], pinned: Set<string>): ProjectTreeNode[] {
@@ -143,6 +154,7 @@ export function ProjectFolderTree({
   onMoveFileToTrash,
   onTogglePin,
   onReorder,
+  activeFolderRelative = null,
   emptyMessage = "暂无项目笔记",
 }: ProjectFolderTreeProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -157,6 +169,21 @@ export function ProjectFolderTree({
     () => collectPinnedNodes(nodes, pinnedSet),
     [nodes, pinnedSet],
   );
+
+  useEffect(() => {
+    if (!activeFolderRelative) {
+      return;
+    }
+
+    const paths = folderAncestorPaths(activeFolderRelative);
+    setExpanded((current) => {
+      const next = { ...current };
+      for (const path of paths) {
+        next[path] = true;
+      }
+      return next;
+    });
+  }, [activeFolderRelative]);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -189,7 +216,7 @@ export function ProjectFolderTree({
   const toggleExpanded = (relativePath: string) => {
     setExpanded((current) => ({
       ...current,
-      [relativePath]: !(current[relativePath] ?? true),
+      [relativePath]: !(current[relativePath] ?? false),
     }));
   };
 
@@ -562,7 +589,7 @@ export function ProjectFolderTree({
     parentRelative: string | null,
     siblings: ProjectTreeNode[],
   ) => {
-    const isOpen = expanded[node.relative_path] ?? true;
+    const isOpen = expanded[node.relative_path] ?? false;
     const isSelected = selectedFolderRelative === node.relative_path;
     const isDragOver = dragOverFolder === node.relative_path;
     const reorderActive = dragOverReorder === node.relative_path;

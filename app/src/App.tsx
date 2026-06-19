@@ -102,7 +102,7 @@ function AppShell() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
-        正在启动 AccountingStandards Desktop…
+        正在启动 Accounting Copilot…
       </div>
     );
   }
@@ -112,10 +112,7 @@ function AppShell() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between px-3 py-3 sm:px-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-              AccountingStandards Desktop
-            </p>
-            <h1 className="text-lg font-semibold text-slate-900">双准则证据工作台</h1>
+            <h1 className="text-lg font-semibold text-slate-900">Accounting Copilot</h1>
           </div>
           {packInfo?.loaded && (
             <nav className="flex items-center gap-2">
@@ -131,7 +128,7 @@ function AppShell() {
                       : "text-slate-600 hover:bg-slate-100",
                   ].join(" ")}
                 >
-                  {tab === "standards" ? "准则库" : tab === "settings" ? "设置" : "Evidence"}
+                  {tab === "standards" ? "准则库" : tab === "settings" ? "设置" : "工作台"}
                 </button>
               ))}
             </nav>

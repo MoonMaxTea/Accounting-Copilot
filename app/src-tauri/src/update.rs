@@ -15,7 +15,7 @@ use crate::config::{self, UpdateConfig};
 use crate::models::{ContentUpdateInfo, PackInfo, UpdateCheckResult};
 use crate::pack;
 
-const USER_AGENT: &str = "AccountingStandards-Desktop/0.1.0";
+const USER_AGENT: &str = "Accounting-Copilot/0.1.0";
 
 fn build_http_client() -> Result<Client, String> {
     Client::builder()

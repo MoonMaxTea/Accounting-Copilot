@@ -340,7 +340,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">项目目录</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          选择 Obsidian Vault 中的 <strong>02 - 项目</strong> 文件夹。Evidence 分屏与「项目」页都会读取这里的 .md 笔记。
+          选择 Obsidian Vault 中的 <strong>02 - 项目</strong> 文件夹。工作台会读取这里的 .md 笔记。
         </p>
         <dl className="mt-4 grid gap-3 text-sm text-slate-700">
           <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
