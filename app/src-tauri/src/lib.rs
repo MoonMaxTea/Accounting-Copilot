@@ -1,10 +1,10 @@
-mod citations;
+pub mod citations;
 mod commands;
 mod config;
 mod db;
 mod models;
 mod pack;
-mod projects;
+pub mod projects;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
