@@ -70,34 +70,37 @@ export function resolveCitation(
   };
 }
 
-export function scanCitations(content: string): string[] {
-  const found: string[] = [];
+export const CITATION_PATTERN =
+  /(?:IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*\d+(?:[–-]\d+)?|ASC\s+(?:\d+\s*(?:§|Paragraph)?\s*)?\d{3}-\d{2}-\d{2}-\d+/gi;
 
-  for (const pattern of [
-    /(?:IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*\d+(?:[–-]\d+)?/gi,
-    /ASC\s+(?:\d+\s*(?:§|Paragraph)?\s*)?\d{3}-\d{2}-\d{2}-\d+/gi,
-  ]) {
-    pattern.lastIndex = 0;
-    for (const match of content.matchAll(pattern)) {
-      found.push(match[0]);
-    }
-  }
-
-  return [...new Set(found)].sort();
+export function citationKey(citation: string): string {
+  return encodeURIComponent(citation.trim());
 }
 
+export function citationFromKey(key: string): string {
+  return decodeURIComponent(key);
+}
+
+/** Replace inline citations with markdown hash links (handled as buttons in UI). */
 export function injectCitationLinks(content: string): string {
   let result = content;
 
-  for (const pattern of [
-    /(?:IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*\d+(?:[–-]\d+)?/gi,
-    /ASC\s+(?:\d+\s*(?:§|Paragraph)?\s*)?\d{3}-\d{2}-\d{2}-\d+/gi,
-  ]) {
+  for (const pattern of [CITATION_PATTERN]) {
     result = result.replace(pattern, (match) => {
-      const encoded = encodeURIComponent(match);
-      return `[${match}](citation:${encoded})`;
+      const key = citationKey(match);
+      return `[${match}](#asd-cite-${key})`;
     });
   }
 
   return result;
+}
+
+export function scanCitations(content: string): string[] {
+  const found: string[] = [];
+
+  for (const match of content.matchAll(CITATION_PATTERN)) {
+    found.push(match[0]);
+  }
+
+  return [...new Set(found)].sort();
 }

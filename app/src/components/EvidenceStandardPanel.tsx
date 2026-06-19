@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getStandard, openOfficialUrl } from "../api";
-import { HighlightedBody } from "./NotePanel";
+import { HighlightedBody } from "./HighlightedBody";
 import type { CitationHighlight, CitationTarget, StandardDetail } from "../types";
 
 interface EvidenceStandardPanelProps {

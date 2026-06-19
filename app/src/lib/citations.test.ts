@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCitation, resolveCitation, scanCitations } from "./citations";
+import { injectCitationLinks, parseCitation, resolveCitation, scanCitations } from "./citations";
 import type { ParagraphIndexEntry } from "../types";
 
 const sampleIndex: ParagraphIndexEntry[] = [
@@ -75,6 +75,14 @@ describe("resolveCitation", () => {
 
   it("returns null when paragraph is missing", () => {
     expect(resolveCitation("IFRS 99 §1", sampleIndex)).toBeNull();
+  });
+});
+
+describe("injectCitationLinks", () => {
+  it("wraps citations in in-app hash links", () => {
+    const linked = injectCitationLinks("See IFRS 11 §7-8 for details.");
+    expect(linked).toContain("[IFRS 11 §7-8](#asd-cite-");
+    expect(linked).not.toContain("citation:");
   });
 });
 

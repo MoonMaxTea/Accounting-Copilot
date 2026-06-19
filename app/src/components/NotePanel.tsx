@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
-import { injectCitationLinks } from "../lib/citations";
+import {
+  citationFromKey,
+  injectCitationLinks,
+  parseCitation,
+} from "../lib/citations";
 import type { CitationScanResult } from "../types";
 
 interface NotePanelProps {
@@ -11,6 +15,62 @@ interface NotePanelProps {
   scanResults: CitationScanResult[];
   loading: boolean;
   onCitationClick: (citation: string) => void;
+}
+
+function citationFromHref(href: string | undefined): string | null {
+  if (!href) {
+    return null;
+  }
+  if (href.startsWith("#asd-cite-")) {
+    return citationFromKey(href.slice("#asd-cite-".length));
+  }
+  if (href.startsWith("citation:")) {
+    return citationFromKey(href.slice("citation:".length));
+  }
+  return null;
+}
+
+function citationFromLinkLabel(label: string): string | null {
+  const parsed = parseCitation(label);
+  return parsed ? label.trim() : null;
+}
+
+function isResolved(scanResults: CitationScanResult[], citation: string): boolean {
+  const normalized = citation.trim();
+  return scanResults.some(
+    (item) => item.citation === normalized && item.resolved,
+  );
+}
+
+function CitationLink({
+  citation,
+  resolved,
+  onCitationClick,
+  children,
+}: {
+  citation: string;
+  resolved: boolean;
+  onCitationClick: (citation: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onCitationClick(citation);
+      }}
+      className={[
+        "inline rounded px-0.5 font-medium underline decoration-2 underline-offset-2",
+        resolved
+          ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
+          : "text-amber-800 decoration-amber-400 hover:bg-amber-50",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function NotePanel({
@@ -30,28 +90,35 @@ export function NotePanel({
   const components = useMemo<Components>(
     () => ({
       a: ({ href, children }) => {
-        if (href?.startsWith("citation:")) {
-          const citation = decodeURIComponent(href.slice("citation:".length));
-          const resolved = scanResults.find((item) => item.citation === citation)?.resolved;
+        const fromHref = citationFromHref(href);
+        const label = String(children);
+        const citation = fromHref ?? citationFromLinkLabel(label);
+
+        if (citation) {
           return (
-            <button
-              type="button"
-              onClick={() => onCitationClick(citation)}
-              className={[
-                "rounded px-1 font-medium underline decoration-2 underline-offset-2",
-                resolved
-                  ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
-                  : "text-amber-800 decoration-amber-400 hover:bg-amber-50",
-              ].join(" ")}
+            <CitationLink
+              citation={citation}
+              resolved={isResolved(scanResults, citation)}
+              onCitationClick={onCitationClick}
             >
               {children}
-            </button>
+            </CitationLink>
           );
         }
+
+        // Obsidian vault links and other markdown links must not navigate away.
         return (
-          <a href={href} className="text-blue-700 underline">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            className="inline text-slate-600 underline decoration-dotted underline-offset-2"
+            title="此链接仅在 Obsidian 中有效，请在 Evidence 中使用 IFRS/IAS/ASC 引用格式"
+          >
             {children}
-          </a>
+          </button>
         );
       },
     }),
@@ -76,7 +143,16 @@ export function NotePanel({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-6 py-5">
+      <div
+        className="flex-1 overflow-auto px-6 py-5"
+        onClickCapture={(event) => {
+          const anchor = (event.target as HTMLElement).closest("a");
+          if (anchor) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+      >
         {loading && <p className="text-sm text-slate-500">正在加载笔记…</p>}
         {!loading && (
           <div className="markdown-body prose prose-slate max-w-none text-slate-800">
@@ -90,37 +166,4 @@ export function NotePanel({
   );
 }
 
-interface HighlightedBodyProps {
-  body: string;
-  charStart: number;
-  charEnd: number;
-}
-
-function HighlightedBody({ body, charStart, charEnd }: HighlightedBodyProps) {
-  const highlightRef = useRef<HTMLSpanElement>(null);
-  const safeStart = Math.max(0, Math.min(charStart, body.length));
-  const safeEnd = Math.max(safeStart, Math.min(charEnd, body.length));
-  const before = body.slice(0, safeStart);
-  const highlight = body.slice(safeStart, safeEnd);
-  const after = body.slice(safeEnd);
-
-  useEffect(() => {
-    highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [charStart, charEnd, body]);
-
-  return (
-    <div className="markdown-body prose prose-slate max-w-none text-slate-800">
-      {before && <ReactMarkdown remarkPlugins={[remarkGfm]}>{before}</ReactMarkdown>}
-      <span
-        ref={highlightRef}
-        id="citation-highlight"
-        className="block rounded-xl bg-yellow-100 px-3 py-2 ring-2 ring-yellow-400"
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{highlight || " "}</ReactMarkdown>
-      </span>
-      {after && <ReactMarkdown remarkPlugins={[remarkGfm]}>{after}</ReactMarkdown>}
-    </div>
-  );
-}
-
-export { HighlightedBody };
+export { HighlightedBody } from "./HighlightedBody";

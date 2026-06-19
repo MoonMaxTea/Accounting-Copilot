@@ -114,14 +114,15 @@ function App() {
           />
         ) : activeTab === "settings" ? (
           <SettingsPage packInfo={packInfo} onPackUpdated={setPackInfo} />
-        ) : activeTab === "evidence" ? (
-          <div className="h-[calc(100vh-8.5rem)]">
-            <EvidencePage />
-          </div>
         ) : (
-          <div className="h-[calc(100vh-8.5rem)]">
-            <StandardsPage />
-          </div>
+          <>
+            <div className={activeTab === "standards" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
+              <StandardsPage />
+            </div>
+            <div className={activeTab === "evidence" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
+              <EvidencePage />
+            </div>
+          </>
         )}
       </main>
     </div>
