@@ -2,6 +2,17 @@
 
 双准则（IFRS + US GAAP）桌面证据工作台：**离线全量准则包** + **AI 写项目文档** + **引用对照原文** + **官网二次验证**。
 
+> **Product UI name:** Accounting Copilot · **Latest app:** see [Releases](https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases)
+
+## For developers & AI agents
+
+| Doc | Purpose |
+|-----|---------|
+| [**AGENTS.md**](AGENTS.md) | Start here — repo map, conventions, pitfalls |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map & data flows |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, tests, release workflow |
+| [docs/DESIGN.md](docs/DESIGN.md) | Full product design (Chinese) |
+
 ## 相关仓库
 
 | 仓库 | 用途 |
@@ -41,11 +52,11 @@
 
 | Phase | 状态 |
 |-------|------|
-| 0 — 仓库 + registry + pack-builder | ✅ pack-builder 已完成（12 项测试通过） |
-| 1 — Tauri + 准则浏览 | ✅ 初版 App 已实现 |
-| 2 — Evidence 分屏 | 待开始 |
-| 3 — AI 写文档 | 待开始 |
-| 4 — GitHub Release 自动更新 | 待开始 |
+| 0 — 仓库 + registry + pack-builder | ✅ |
+| 1 — Tauri + 准则浏览 | ✅ |
+| 2 — Evidence 分屏 / Workbench | ✅ |
+| 3 — AI 写文档 | ✅ |
+| 4 — GitHub Release 自动更新 | ✅ |
 
 ## 版权
 
