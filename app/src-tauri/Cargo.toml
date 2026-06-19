@@ -1,6 +1,6 @@
 [package]
 name = "accounting-standards-desktop"
-version = "0.1.0"
+version = "0.1.6"
 description = "AccoutingStandards Desktop — IFRS & US GAAP offline standards browser"
 authors = ["MoonMaxTea"]
 edition = "2021"
