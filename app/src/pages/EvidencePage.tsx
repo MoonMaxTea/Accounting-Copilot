@@ -27,6 +27,8 @@ import {
   toggleProjectPin,
 } from "../api";
 import { EvidenceSidePanel } from "../components/EvidenceSidePanel";
+import { useDialog } from "../components/DialogProvider";
+import { IconGrip, IconSearch, IconTrash } from "../components/icons";
 import { NotePanel } from "../components/NotePanel";
 import { ProjectBreadcrumb } from "../components/ProjectBreadcrumb";
 import {
@@ -35,6 +37,7 @@ import {
 } from "../components/ProjectFolderTree";
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
+import { useHorizontalResize } from "../hooks/useHorizontalResize";
 import type {
   AiConversationTurn,
   CitationHighlight,
@@ -94,8 +97,10 @@ function findLatestConversationFolder(
   return null;
 }
 
-export function EvidencePage() {
+export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const { showToast } = useToast();
+  const { confirm } = useDialog();
+  const sidebar = useHorizontalResize(240, 200, 360);
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [projectsUi, setProjectsUi] = useState<ProjectsUiState>(defaultUiState);
   const [tree, setTree] = useState<ProjectTreeNode[]>([]);
@@ -273,7 +278,7 @@ export function EvidencePage() {
     try {
       const target = await resolveCitation(citation);
       if (!target) {
-        setCitationMiss(`未在本地 pack 找到引用：${citation}`);
+        setCitationMiss(`Citation not found in local pack: ${citation}`);
         setCitationTarget({
           citation,
           standard_id: "",
@@ -287,14 +292,14 @@ export function EvidencePage() {
           paragraph_resolved: false,
         });
         setHighlight(null);
-        showToast(`未找到引用：${citation}`, "info");
+        showToast(`Citation not found: ${citation}`, "info");
         return;
       }
 
       setCitationTarget(target);
       if (target.paragraph_resolved === false) {
         setHighlight(null);
-        showToast(`未找到 ${citation} 对应段落，已打开 ${target.standard_id} 全文`, "info");
+        showToast(`Paragraph not found for ${citation}; opened ${target.standard_id} full text`, "info");
         return;
       }
 
@@ -304,7 +309,7 @@ export function EvidencePage() {
         snippet_en: target.snippet_en,
         paragraph: target.paragraph,
       });
-      showToast(`已打开 ${target.standard_id} §${target.paragraph}`, "info");
+      showToast(`Opened ${target.standard_id} §${target.paragraph}`, "info");
     } catch (caught: unknown) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(message);
@@ -336,7 +341,7 @@ export function EvidencePage() {
   const handleGenerate = async () => {
     const trimmed = question.trim();
     if (!trimmed) {
-      setError("请先输入要分析的问题。");
+      setError("Enter a question before generating.");
       return;
     }
 
@@ -360,7 +365,7 @@ export function EvidencePage() {
         setSelected(match);
         setSelectedFolderRelative(folderRelativeForSelection(match.relative_path, null));
       }
-      showToast(`已保存「${generated.project_name}」`);
+      showToast(`Saved "${generated.project_name}"`);
       await refreshSidebar(searchQuery);
       await refreshConversation(generated.relative_path);
     } catch (caught: unknown) {
@@ -376,7 +381,7 @@ export function EvidencePage() {
     }
     const trimmed = question.trim();
     if (!trimmed) {
-      setError("请先输入追问内容。");
+      setError("Enter a follow-up before continuing.");
       return;
     }
 
@@ -396,7 +401,7 @@ export function EvidencePage() {
       setQuestion("");
       setFacts("");
       await refreshProjectsUi();
-      showToast("已更新项目笔记");
+      showToast("Project note updated");
       await refreshConversation(selected.relative_path);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -414,16 +419,22 @@ export function EvidencePage() {
     const count = await countProjectFolderEntries(folderRelative);
     const message =
       count > 0
-        ? `文件夹内有 ${count} 篇笔记，删除后笔记会移入废纸篓。确定删除「${folderRelative}」？`
-        : `确定删除空文件夹「${folderRelative}」？`;
-    if (!window.confirm(message)) {
+        ? `This folder contains ${count} notes. They will be moved to Trash. Delete "${folderRelative}"?`
+        : `Delete empty folder "${folderRelative}"?`;
+    const approved = await confirm({
+      title: "Delete folder",
+      message,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!approved) {
       return;
     }
     const result = await deleteProjectFolder(folderRelative);
     showToast(
       result.trashed_files > 0
-        ? `已删除文件夹，${result.trashed_files} 篇笔记已移入废纸篓`
-        : "已删除空文件夹",
+        ? `Folder deleted; ${result.trashed_files} notes moved to Trash`
+        : "Empty folder deleted",
     );
     await refreshSidebar(searchQuery);
     await refreshTrash();
@@ -446,27 +457,37 @@ export function EvidencePage() {
 
   if (!projectsDir) {
     return (
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-950">
-        <h2 className="text-lg font-semibold">尚未设置项目目录</h2>
-        <p className="mt-2 text-sm leading-6">
-          请先在「设置」中选择 Obsidian Vault 的 <strong>02 - 项目</strong> 文件夹，
-          然后回到工作台。
+      <section className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-amber-950">
+        <p className="text-caption font-medium text-amber-800">Step 2 · Choose project folder</p>
+        <h2 className="mt-2 text-title">Project folder not configured</h2>
+        <p className="mt-2 text-body">
+          Open Settings and choose the Obsidian <strong>02 - Projects</strong> folder. The
+          workbench reads project notes from there.
         </p>
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="ui-focus-ring mt-4 rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
+          >
+            Open Settings
+          </button>
+        )}
       </section>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-full bg-white px-4 py-2 ring-1 ring-slate-200">
-          <span className="text-sm text-slate-500">🔍</span>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <IconSearch className="h-4 w-4 text-slate-400" />
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="搜索项目笔记…"
-            className="w-full bg-transparent text-sm text-slate-800 outline-none"
+            placeholder="Search project notes…"
+            className="ui-focus-ring w-full bg-transparent text-sm text-slate-800 outline-none"
           />
         </label>
         <button
@@ -477,11 +498,11 @@ export function EvidencePage() {
               void refreshTrash();
             }
           }}
-          className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+          className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
         >
-          废纸篓{trashItems.length > 0 ? ` (${trashItems.length})` : ""}
+          <IconTrash className="h-4 w-4" />
+          Trash{trashItems.length > 0 ? ` (${trashItems.length})` : ""}
         </button>
-        <p className="truncate text-xs text-slate-500">项目目录：{projectsDir}</p>
       </div>
 
       {!searchQuery.trim() && (
@@ -505,22 +526,22 @@ export function EvidencePage() {
           onClose={() => setTrashOpen(false)}
           onRestore={async (id) => {
             const restored = await restoreTrashItem(id);
-            showToast(`已恢复「${restored.title}」`);
+            showToast(`Restored "${restored.title}"`);
             await refreshSidebar(searchQuery);
             await refreshTrash();
           }}
           onPurge={async (id) => {
             await purgeTrashItem(id);
-            showToast("已永久删除", "info");
+            showToast("Permanently deleted", "info");
             await refreshTrash();
           }}
         />
       )}
 
-      {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
-        <div className="h-full w-[240px] shrink-0">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="h-full shrink-0" style={{ width: sidebar.width }}>
         <ProjectFolderTree
           nodes={tree}
           searchResults={searchResults}
@@ -536,18 +557,18 @@ export function EvidencePage() {
           onSelectFolder={setSelectedFolderRelative}
           onCreateFolder={async (parentRelative, name) => {
             await createProjectFolder(name, parentRelative);
-            showToast(`已创建文件夹「${name}」`);
+            showToast(`Created folder "${name}"`);
             await refreshSidebar(searchQuery);
           }}
           onRenameFolder={async (folderRelative, newName) => {
             const updated = await renameProjectFolder(folderRelative, newName);
-            showToast(`已重命名为「${newName}」`);
+            showToast(`Renamed to "${newName}"`);
             await refreshSidebar(searchQuery);
             return updated;
           }}
           onRenameFile={async (filePath, newName) => {
             const renamed = await renameProjectFile(filePath, newName);
-            showToast(`已重命名为「${newName}」`);
+            showToast(`Renamed to "${newName}"`);
             await refreshSidebar(searchQuery);
             if (selected?.path === filePath) {
               setSelected(renamed);
@@ -556,14 +577,14 @@ export function EvidencePage() {
           }}
           onMoveFile={async (filePath, targetFolderRelative) => {
             const moved = await moveProjectFile(filePath, targetFolderRelative);
-            showToast(`已移动到 ${targetFolderRelative ?? "根目录"}`);
+            showToast(`Moved to ${targetFolderRelative ?? "Root"}`);
             await refreshSidebar(searchQuery);
             setSelected(moved);
           }}
           onDeleteFolder={handleDeleteFolder}
           onMoveFileToTrash={async (filePath) => {
             await moveProjectFileToTrash(filePath);
-            showToast("已移入废纸篓", "info");
+            showToast("Moved to Trash", "info");
             if (selected?.path === filePath) {
               setSelected(null);
             }
@@ -573,10 +594,7 @@ export function EvidencePage() {
           onTogglePin={async (relativePath) => {
             const ui = await toggleProjectPin(relativePath);
             setProjectsUi(ui);
-            showToast(
-              ui.pinned.includes(relativePath) ? "已置顶" : "已取消置顶",
-              "info",
-            );
+            showToast(ui.pinned.includes(relativePath) ? "Pinned" : "Unpinned", "info");
           }}
           onReorder={async (parentRelative, orderedRelativePaths) => {
             const ui = await saveProjectsChildOrder(parentRelative, orderedRelativePaths);
@@ -586,9 +604,21 @@ export function EvidencePage() {
         />
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1">
+        <button
+          type="button"
+          aria-label="Resize sidebar"
+          onMouseDown={sidebar.onMouseDown}
+          className={[
+            "flex w-1.5 shrink-0 items-center justify-center border-x border-slate-200 bg-slate-50 hover:bg-slate-100",
+            sidebar.dragging ? "bg-slate-200" : "",
+          ].join(" ")}
+        >
+          <IconGrip className="h-4 w-4 text-slate-400" />
+        </button>
+
+        <div className="min-h-0 min-w-0 flex-1 border border-slate-200 bg-white">
         <NotePanel
-          title={selected?.title ?? "项目笔记"}
+          title={selected?.title ?? "Project note"}
           content={noteContent}
           scanResults={scanResults}
           loading={loadingNote}
@@ -610,6 +640,7 @@ export function EvidencePage() {
           generating={generating}
           onGenerate={() => void handleGenerate()}
           onContinue={() => void handleContinue()}
+          onExampleQuestion={setQuestion}
           lastResult={lastResult}
           citationTarget={citationTarget}
           highlight={highlight}

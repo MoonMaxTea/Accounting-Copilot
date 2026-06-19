@@ -6,6 +6,7 @@ interface SetupPageProps {
   onDownloadInitial: () => Promise<void>;
   downloading: boolean;
   error: string | null;
+  onOpenSettings?: () => void;
 }
 
 const defaultUpdateConfig: UpdateConfig = {
@@ -18,7 +19,18 @@ const defaultUpdateConfig: UpdateConfig = {
   access_token: null,
 };
 
-export function SetupPage({ onDownloadInitial, downloading, error }: SetupPageProps) {
+const STEPS = [
+  { id: 1, title: "Install standards pack" },
+  { id: 2, title: "Choose project folder" },
+  { id: 3, title: "Configure AI (optional)" },
+];
+
+export function SetupPage({
+  onDownloadInitial,
+  downloading,
+  error,
+  onOpenSettings,
+}: SetupPageProps) {
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>(defaultUpdateConfig);
   const [savingToken, setSavingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
@@ -35,7 +47,7 @@ export function SetupPage({ onDownloadInitial, downloading, error }: SetupPagePr
     try {
       const config = await saveUpdateConfig(updateConfig);
       setUpdateConfig(config.update);
-      setTokenNotice("访问令牌已保存到本机。");
+      setTokenNotice("Access token saved locally.");
     } catch (caught: unknown) {
       setTokenNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -54,19 +66,40 @@ export function SetupPage({ onDownloadInitial, downloading, error }: SetupPagePr
   };
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col items-center justify-center px-6 text-center">
-      <div className="rounded-3xl border border-slate-200 bg-white p-10 text-left shadow-sm">
-        <p className="text-center text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-          首次使用
-        </p>
-        <h1 className="mt-3 text-center text-3xl font-semibold text-slate-900">下载官方准则库</h1>
-        <p className="mt-4 text-center text-base leading-7 text-slate-600">
-          本应用只使用官方打包的 IFRS / IAS / ASC 准则库，不支持手动导入 zip。
-          首次使用请从更新服务器下载并安装准则库。
+    <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col justify-center px-6">
+      <div className="mb-8">
+        <p className="text-caption font-medium text-slate-500">Welcome to Accounting Copilot</p>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Get started in three steps</h1>
+      </div>
+
+      <ol className="mb-8 grid gap-3 sm:grid-cols-3">
+        {STEPS.map((step) => (
+          <li
+            key={step.id}
+            className={[
+              "rounded-lg border px-4 py-3",
+              step.id === 1
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-500",
+            ].join(" ")}
+          >
+            <p className="text-caption font-medium">Step {step.id}</p>
+            <p className="mt-1 text-sm font-medium">{step.title}</p>
+          </li>
+        ))}
+      </ol>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+        <h2 className="text-title text-slate-900">Step 1 · Install the official standards pack</h2>
+        <p className="mt-3 text-body text-slate-600">
+          Accounting Copilot uses the official IFRS / IAS / ASC content pack. Manual zip import is
+          not supported.
         </p>
 
-        <label className="mt-8 block space-y-2 text-sm">
-          <span className="font-medium text-slate-800">GitHub 访问令牌（私有仓库必填）</span>
+        <label className="mt-6 block space-y-2">
+          <span className="text-sm font-medium text-slate-800">
+            GitHub access token (required for private repos)
+          </span>
           <input
             type="password"
             value={updateConfig.access_token ?? ""}
@@ -76,12 +109,12 @@ export function SetupPage({ onDownloadInitial, downloading, error }: SetupPagePr
                 access_token: event.target.value || null,
               }))
             }
-            placeholder="ghp_… 或 github_pat_…"
-            className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            placeholder="ghp_… or github_pat_…"
+            className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
           />
-          <span className="block text-xs leading-5 text-slate-500">
-            若准则库 Release 在私有 GitHub 仓库，请填写有 read 权限的 Token。Token 仅保存在本机，
-            安装完成后也可在「设置」中修改。
+          <span className="block text-caption text-slate-500">
+            Use a token with Contents read access. It is stored only on this device. You can change
+            it later in Settings.
           </span>
         </label>
 
@@ -90,26 +123,45 @@ export function SetupPage({ onDownloadInitial, downloading, error }: SetupPagePr
             type="button"
             disabled={savingToken}
             onClick={() => void handleSaveToken()}
-            className="rounded-xl px-4 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
+            className="ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
           >
-            {savingToken ? "正在保存…" : "保存令牌"}
+            {savingToken ? "Saving…" : "Save token"}
           </button>
         </div>
 
-        {tokenNotice && (
-          <p className="mt-3 text-sm text-slate-600">{tokenNotice}</p>
+        {(tokenNotice || error) && (
+          <p className={`mt-3 text-sm ${error ? "text-red-600" : "text-slate-600"}`}>
+            {error ?? tokenNotice}
+          </p>
         )}
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 border-t border-slate-100 pt-6">
           <button
             type="button"
             disabled={downloading}
             onClick={() => void handleDownload()}
-            className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="ui-focus-ring rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            {downloading ? "正在检查并下载…" : "检查并下载准则库"}
+            {downloading ? "Checking and downloading…" : "Download standards pack"}
           </button>
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        </div>
+
+        <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">
+          <p className="font-medium text-slate-800">After installation</p>
+          <p className="mt-1">
+            Step 2: open Settings and choose your Obsidian{" "}
+            <strong>02 - Projects</strong> folder.
+          </p>
+          <p className="mt-1">Step 3: add your AI provider and API key (optional).</p>
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="ui-focus-ring mt-3 text-sm font-medium text-slate-900 underline"
+            >
+              Open Settings
+            </button>
+          )}
         </div>
       </div>
     </div>

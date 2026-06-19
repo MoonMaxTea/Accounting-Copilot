@@ -34,11 +34,11 @@ export function SearchBar({ onSelectHit }: SearchBarProps) {
       <input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="搜索准则全文，例如 joint control / 合营 / 740"
+        placeholder="Search standards, e.g. joint control, IFRS 11, ASC 740"
         className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none ring-slate-900 transition focus:ring-2"
       />
       {loading && (
-        <p className="absolute right-4 top-3 text-xs text-slate-400">搜索中…</p>
+        <p className="absolute right-4 top-3 text-xs text-slate-400">Searching…</p>
       )}
       {hits.length > 0 && (
         <div className="absolute z-20 mt-2 max-h-80 w-full overflow-auto rounded-2xl border border-slate-200 bg-white shadow-lg">

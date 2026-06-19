@@ -108,6 +108,7 @@ export function StandardsPage() {
   };
 
   const emptyMessage = emptyStandardsMessage(primary, secondary);
+  const showListingRulesEmptyState = primary === "listing-rules" && !loading && standards.length === 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -129,7 +130,14 @@ export function StandardsPage() {
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 overflow-hidden">
         <div className="min-h-0 overflow-auto">
           {loading ? (
-            <p className="rounded-2xl bg-white p-6 text-sm text-slate-500">正在加载准则列表…</p>
+            <p className="rounded-lg bg-white p-6 text-sm text-slate-500">Loading standards…</p>
+          ) : showListingRulesEmptyState ? (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6">
+              <h3 className="text-sm font-semibold text-slate-900">Listing rules coming soon</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {emptyMessage}
+              </p>
+            </div>
           ) : (
             <StandardList
               standards={standards}

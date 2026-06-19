@@ -18,6 +18,12 @@ interface NotePanelProps {
   onCitationClick: (citation: string) => void;
 }
 
+const EXAMPLE_NOTE_PROMPTS = [
+  "How should we classify a 50:50 joint arrangement under IFRS 11?",
+  "What indicators suggest joint control in a joint arrangement (IFRS 11 §7-8)?",
+  "Compare joint operation vs joint venture accounting for a shared asset.",
+];
+
 function citationFromHref(href: string | undefined): string | null {
   if (!href) {
     return null;
@@ -98,7 +104,7 @@ function CitationLink({
         {children}
       </button>
       {hoverOpen && (
-        <span className="absolute bottom-full left-0 z-20 mb-2 block w-72 rounded-xl bg-slate-900 px-3 py-2 text-left text-xs leading-5 text-white shadow-lg">
+        <span className="absolute bottom-full left-0 z-20 mb-2 block w-72 rounded-lg bg-slate-900 px-3 py-2 text-left text-xs leading-5 text-white shadow-lg">
           <span className="block font-medium">{citation}</span>
           <span className="mt-1 block text-slate-200">
             {preview
@@ -107,9 +113,9 @@ function CitationLink({
                 : preview
               : resolved
                 ? paragraphResolved
-                  ? "悬停预览暂不可用，点击可在右侧打开段落。"
-                  : "未定位到具体段落，点击可在右侧打开准则全文。"
-                : "未在本地 pack 中找到此引用。"}
+                  ? "Hover preview unavailable. Click to open the paragraph on the right."
+                  : "Paragraph not located. Click to open the full standard on the right."
+                : "Citation not found in the local content pack."}
           </span>
         </span>
       )}
@@ -135,6 +141,7 @@ export function NotePanel({
   );
 
   const linkedContent = useMemo(() => injectCitationLinks(body), [body]);
+  const isContentEmpty = !body.trim();
 
   const components = useMemo<Components>(
     () => ({
@@ -165,7 +172,7 @@ export function NotePanel({
               event.stopPropagation();
             }}
             className="inline text-slate-600 underline decoration-dotted underline-offset-2"
-            title="此链接仅在 Obsidian 中有效，请在工作台中使用 IFRS/IAS/ASC 引用格式"
+            title="This link works in Obsidian only. Use IFRS/IAS/ASC citation formats in the workbench."
           >
             {children}
           </button>
@@ -176,10 +183,12 @@ export function NotePanel({
   );
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 px-5 py-3">
         <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        <p className="mt-0.5 text-xs text-slate-500">点击正文中的准则引用，右侧将打开对应段落</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Click standard citations in the note to open the matching paragraph on the right
+        </p>
       </header>
 
       {unresolved.length > 0 && (
@@ -187,19 +196,20 @@ export function NotePanel({
           <summary className="cursor-pointer list-none px-5 py-2.5 text-sm font-medium text-amber-900 marker:content-none [&::-webkit-details-marker]:hidden">
             <span className="inline-flex items-center gap-2">
               <span className="text-xs text-amber-700 transition group-open:rotate-90">▶</span>
-              {unresolved.length} 处引用未在本地 pack 中找到（点击展开）
+              {unresolved.length} unresolved citation{unresolved.length === 1 ? "" : "s"} (click to expand)
             </span>
           </summary>
           <div className="border-t border-amber-200 px-5 py-2.5 text-sm text-amber-900">
             <p className="mb-2 text-xs text-amber-800">
-              这些引用可能来自知识库全文检索；桌面版 pack 尚未索引到对应段落，或需更新 content pack。
+              These citations may come from Vault full-text search. The desktop pack may not index
+              the paragraph yet, or your content pack may need updating.
             </p>
             <ul className="list-disc space-y-1 pl-5">
               {unresolved.map((item) => (
                 <li key={item.citation}>
                   <button
                     type="button"
-                    className="text-left underline decoration-amber-400 underline-offset-2 hover:text-amber-950"
+                    className="ui-focus-ring text-left underline decoration-amber-400 underline-offset-2 hover:text-amber-950"
                     onClick={() => onCitationClick(item.citation)}
                   >
                     {item.citation}
@@ -221,8 +231,24 @@ export function NotePanel({
           }
         }}
       >
-        {loading && <p className="text-sm text-slate-500">正在加载笔记…</p>}
-        {!loading && (
+        {loading && <p className="text-sm text-slate-500">Loading note…</p>}
+        {!loading && isContentEmpty && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-500">No note content yet. Example topics for joint arrangements:</p>
+            <div className="flex flex-col gap-2">
+              {EXAMPLE_NOTE_PROMPTS.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="ui-focus-ring rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {!loading && !isContentEmpty && (
           <>
             {frontmatter && <NoteMetadata metadata={frontmatter} />}
             <MarkdownPreview content={linkedContent} components={components} />

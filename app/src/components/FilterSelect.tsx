@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { IconChevronDown } from "./icons";
 
 export interface FilterSelectOption<T extends string> {
   id: T;
@@ -64,7 +65,7 @@ export function FilterSelect<T extends string>({
           }
         }}
         className={[
-          "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition",
+          "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition ui-focus-ring",
           disabled
             ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
             : open
@@ -72,15 +73,10 @@ export function FilterSelect<T extends string>({
               : "border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50",
         ].join(" ")}
       >
-        <span className="truncate font-medium">{selected?.label ?? "请选择"}</span>
-        <span
-          className={[
-            "text-xs text-slate-400 transition-transform",
-            open ? "rotate-180" : "",
-          ].join(" ")}
-        >
-          ▾
-        </span>
+        <span className="truncate font-medium">{selected?.label ?? "Select"}</span>
+        <IconChevronDown
+          className={["h-4 w-4 text-slate-400 transition", open ? "rotate-180" : ""].join(" ")}
+        />
       </button>
 
       {open && !disabled && (

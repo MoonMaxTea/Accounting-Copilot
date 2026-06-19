@@ -11,11 +11,11 @@ export function StandardList({
   standards,
   selectedId,
   onSelect,
-  emptyMessage = "当前筛选条件下没有准则。可尝试切换分类或勾选「显示旧准则」。",
+  emptyMessage = "No standards match the current filters. Try another series or enable legacy standards.",
 }: StandardListProps) {
   if (standards.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
         {emptyMessage}
       </div>
     );
@@ -58,7 +58,7 @@ export function StandardList({
                   active ? "bg-amber-300 text-amber-950" : "bg-amber-100 text-amber-800",
                 ].join(" ")}
               >
-                {standard.legacy_label ?? "旧准则"}
+                {standard.legacy_label ?? "Legacy"}
               </span>
             )}
           </button>

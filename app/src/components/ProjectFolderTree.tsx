@@ -1,4 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialog } from "./DialogProvider";
+import {
+  IconChevronRight,
+  IconFile,
+  IconFolder,
+  IconPin,
+} from "./icons";
 import type { ProjectFileEntry, ProjectTreeNode } from "../types";
 import { treeFileToEntry } from "../types";
 
@@ -50,21 +57,12 @@ function formatModified(secs: number): string {
   if (!secs) {
     return "—";
   }
-  return new Date(secs * 1000).toLocaleString("zh-CN", {
+  return new Date(secs * 1000).toLocaleString(undefined, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function promptText(label: string, defaultValue = ""): string | null {
-  const value = window.prompt(label, defaultValue);
-  if (value === null) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function nodeRelativePath(node: ProjectTreeNode): string {
@@ -155,8 +153,9 @@ export function ProjectFolderTree({
   onTogglePin,
   onReorder,
   activeFolderRelative = null,
-  emptyMessage = "暂无项目笔记",
+  emptyMessage = "No project notes yet",
 }: ProjectFolderTreeProps) {
+  const { prompt, confirm } = useDialog();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [dragOverFolder, setDragOverFolder] = useState<string | "__root__" | null>(null);
   const [dragOverReorder, setDragOverReorder] = useState<string | null>(null);
@@ -221,7 +220,10 @@ export function ProjectFolderTree({
   };
 
   const handleCreateFolder = async () => {
-    const name = promptText("新建文件夹名称");
+    const name = await prompt({
+      title: "New folder",
+      label: "Folder name",
+    });
     if (!name) {
       return;
     }
@@ -240,7 +242,11 @@ export function ProjectFolderTree({
   };
 
   const handleRenameFolderAt = async (folderRelative: string, currentName: string) => {
-    const name = promptText("重命名文件夹", currentName);
+    const name = await prompt({
+      title: "Rename folder",
+      label: "Folder name",
+      defaultValue: currentName,
+    });
     if (!name) {
       return;
     }
@@ -274,7 +280,11 @@ export function ProjectFolderTree({
     if (!onRenameFile) {
       return;
     }
-    const name = promptText("重命名项目", currentTitle);
+    const name = await prompt({
+      title: "Rename project",
+      label: "Project name",
+      defaultValue: currentTitle,
+    });
     if (!name) {
       return;
     }
@@ -290,7 +300,13 @@ export function ProjectFolderTree({
     if (!onMoveFileToTrash) {
       return;
     }
-    if (!window.confirm(`将「${fileTitle}」移入废纸篓？`)) {
+    const approved = await confirm({
+      title: "Move to Trash",
+      message: `Move "${fileTitle}" to Trash?`,
+      confirmLabel: "Move to Trash",
+      tone: "danger",
+    });
+    if (!approved) {
       return;
     }
     setBusy(true);
@@ -381,7 +397,7 @@ export function ProjectFolderTree({
     return (
       <button
         type="button"
-        title={pinned ? "取消置顶" : "置顶"}
+        title={pinned ? "Unpin" : "Pin"}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -392,7 +408,7 @@ export function ProjectFolderTree({
           pinned ? "text-amber-500" : "text-slate-400 hover:text-amber-500",
         ].join(" ")}
       >
-        {pinned ? "★" : "☆"}
+        <IconPin className={["h-3.5 w-3.5", pinned ? "text-amber-500" : "text-slate-400"].join(" ")} />
       </button>
     );
   };
@@ -442,7 +458,7 @@ export function ProjectFolderTree({
                 void handleRenameFolderAt(contextMenu.folderRelative, contextMenu.folderName);
               }}
             >
-              重命名
+              Rename
             </button>
             {onDeleteFolder && (
               <button
@@ -453,7 +469,7 @@ export function ProjectFolderTree({
                   void handleDeleteFolderAt(contextMenu.folderRelative);
                 }}
               >
-                删除
+                Delete
               </button>
             )}
             {onTogglePin && (
@@ -465,7 +481,7 @@ export function ProjectFolderTree({
                   void handleTogglePinAt(contextMenu.folderRelative);
                 }}
               >
-                {pinnedSet.has(contextMenu.folderRelative) ? "取消置顶" : "置顶"}
+                {pinnedSet.has(contextMenu.folderRelative) ? "Unpin" : "Pin"}
               </button>
             )}
           </>
@@ -481,7 +497,7 @@ export function ProjectFolderTree({
                   void handleRenameFileAt(contextMenu.filePath, contextMenu.fileTitle);
                 }}
               >
-                重命名
+                Rename
               </button>
             )}
             {onMoveFileToTrash && (
@@ -493,7 +509,7 @@ export function ProjectFolderTree({
                   void handleMoveFileToTrashAt(contextMenu.filePath, contextMenu.fileTitle);
                 }}
               >
-                移入废纸篓
+                Move to Trash
               </button>
             )}
             {onTogglePin && (
@@ -505,7 +521,7 @@ export function ProjectFolderTree({
                   void handleTogglePinAt(contextMenu.relativePath);
                 }}
               >
-                {pinnedSet.has(contextMenu.relativePath) ? "取消置顶" : "置顶"}
+                {pinnedSet.has(contextMenu.relativePath) ? "Unpin" : "Pin"}
               </button>
             )}
           </>
@@ -564,13 +580,16 @@ export function ProjectFolderTree({
             }}
             onClick={() => onSelectFile(entry)}
             className={[
-              "min-w-0 flex-1 rounded-lg px-2 py-2 text-left transition",
-              active ? "bg-slate-900 text-white" : "hover:bg-slate-100",
+              "min-w-0 flex-1 rounded-lg px-2 py-2 text-left transition ui-focus-ring",
+              active ? "ui-selected-item font-medium text-slate-900" : "hover:bg-slate-100",
             ].join(" ")}
           >
-            <p className="truncate text-sm font-medium">📄 {node.title}</p>
+            <p className="flex items-center gap-2 truncate text-sm font-medium">
+              <IconFile className="h-4 w-4 shrink-0 text-slate-400" />
+              {node.title}
+            </p>
             <p
-              className={["truncate text-xs", active ? "text-slate-300" : "text-slate-500"].join(
+              className={["truncate text-xs", active ? "text-slate-500" : "text-slate-500"].join(
                 " ",
               )}
             >
@@ -645,12 +664,15 @@ export function ProjectFolderTree({
               toggleExpanded(node.relative_path);
             }}
             className={[
-              "min-w-0 flex-1 flex items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition",
-              isSelected ? "bg-slate-200 font-medium text-slate-900" : "hover:bg-slate-100",
+              "min-w-0 flex-1 flex items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition ui-focus-ring",
+              isSelected ? "ui-selected-item font-medium text-slate-900" : "hover:bg-slate-100",
             ].join(" ")}
           >
-            <span className="text-xs text-slate-500">{isOpen ? "▾" : "▸"}</span>
-            <span className="truncate">📁 {node.name}</span>
+            <IconChevronRight
+              className={["h-4 w-4 shrink-0 text-slate-400 transition", isOpen ? "rotate-90" : ""].join(" ")}
+            />
+            <IconFolder className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate">{node.name}</span>
           </button>
           {renderPinButton(node.relative_path)}
         </div>
@@ -694,8 +716,8 @@ export function ProjectFolderTree({
             onClick={() => onSelectFile(entry)}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-slate-100"
           >
-            <span className="text-amber-500">★</span>
-            <span className="truncate text-sm">{node.title}</span>
+            <IconPin className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span className="truncate text-sm">{node.title}</span>
           </button>
         </li>
       );
@@ -722,7 +744,7 @@ export function ProjectFolderTree({
           className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-slate-100"
         >
           <span className="text-amber-500">★</span>
-          <span className="truncate text-sm">📁 {node.name}</span>
+          <span className="truncate text-sm">{node.name}</span>
         </button>
       </li>
     );
@@ -731,7 +753,7 @@ export function ProjectFolderTree({
   if (loading) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-        正在加载项目笔记…
+        Loading project notes…
       </section>
     );
   }
@@ -740,19 +762,19 @@ export function ProjectFolderTree({
 
   return (
     <>
-      <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="flex h-full flex-col overflow-hidden border border-slate-200 bg-white">
         <header className="border-b border-slate-200 px-3 py-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-slate-900">项目笔记</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Project notes</h2>
             {!showingSearch && (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void handleCreateFolder()}
-                className="rounded-lg bg-slate-900 px-2 py-1 text-xs text-white hover:bg-slate-700 disabled:opacity-50"
-                title={selectedFolderRelative ? "在所选文件夹下新建" : "在根目录新建"}
+                className="ui-focus-ring rounded-lg bg-slate-900 px-2 py-1 text-xs text-white hover:bg-slate-700 disabled:opacity-50"
+                title={selectedFolderRelative ? "Create inside selected folder" : "Create at root"}
               >
-                + 文件夹
+                + Folder
               </button>
             )}
           </div>
@@ -783,7 +805,7 @@ export function ProjectFolderTree({
         >
           {showingSearch ? (
             searchResults.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">没有匹配的项目笔记。</p>
+              <p className="p-4 text-sm text-slate-500">No matching project notes.</p>
             ) : (
               <ul className="space-y-1">
                 {searchResults.map((entry) => {
@@ -831,7 +853,7 @@ export function ProjectFolderTree({
             <>
               {pinnedNodes.length > 0 && (
                 <div className="mb-3 rounded-xl bg-amber-50 px-2 py-2 ring-1 ring-amber-100">
-                  <p className="px-2 pb-1 text-xs font-medium text-amber-900">置顶</p>
+                  <p className="px-2 pb-1 text-xs font-medium text-amber-900">Pinned</p>
                   <ul className="space-y-1">{pinnedNodes.map(renderPinnedNode)}</ul>
                 </div>
               )}

@@ -5,12 +5,34 @@ import {
   getConfig,
   getPackInfo,
 } from "./api";
+import { IconSettings } from "./components/icons";
 import { ToastProvider, useToast } from "./components/Toast";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
 import type { AppTab, PackInfo, UpdateCheckResult } from "./types";
+
+const EMPTY_PACK_INFO: PackInfo = {
+  loaded: false,
+  content_version: null,
+  vault_commit: null,
+  counts: null,
+  content_dir: null,
+};
+
+const MAIN_TABS: AppTab[] = ["evidence", "standards"];
+
+function tabLabel(tab: AppTab): string {
+  switch (tab) {
+    case "standards":
+      return "Standards";
+    case "settings":
+      return "Settings";
+    default:
+      return "Workbench";
+  }
+}
 
 function AppShell() {
   const { showToast } = useToast();
@@ -61,8 +83,8 @@ function AppShell() {
             const updated = await applyContentUpdate();
             showToast(
               packInfo?.loaded
-                ? `准则库已更新至 ${updated.content_version ?? "最新版本"}`
-                : `准则库已安装 ${updated.content_version ?? ""}`,
+                ? `Standards updated to ${updated.content_version ?? "latest"}`
+                : `Standards installed ${updated.content_version ?? ""}`,
               "success",
             );
           } catch {
@@ -84,14 +106,16 @@ function AppShell() {
         const updated = await downloadAndApplyContentUpdate();
         setPackInfo(updated);
         setActiveTab("standards");
-        showToast(`准则库已安装 ${updated.content_version ?? ""}`, "success");
+        showToast(`Standards installed ${updated.content_version ?? ""}`, "success");
         return;
       }
       if (result.status === "up_to_date" && result.current_content_version) {
-        setError("服务器未提供比当前更高的版本；若本地尚未安装，请联系管理员发布 content pack。");
+        setError(
+          "The server has no newer content pack. Contact your administrator if nothing is installed locally.",
+        );
         return;
       }
-      setError(result.message ?? "暂时无法下载准则库，请检查网络或访问令牌。");
+      setError(result.message ?? "Unable to download standards. Check your network or access token.");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -102,7 +126,7 @@ function AppShell() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
-        正在启动 Accounting Copilot…
+        Starting Accounting Copilot…
       </div>
     );
   }
@@ -110,67 +134,90 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between px-3 py-3 sm:px-4">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Accounting Copilot</h1>
+        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between gap-4 px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 items-center gap-6">
+            <h1 className="shrink-0 text-title text-slate-900">Accounting Copilot</h1>
+            {packInfo?.loaded && (
+              <nav className="flex items-center gap-1">
+                {MAIN_TABS.map((tab) => {
+                  const active = activeTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setActiveTab(tab)}
+                      className={[
+                        "ui-focus-ring relative px-3 py-2 text-sm font-medium transition",
+                        active ? "text-slate-900" : "text-slate-500 hover:text-slate-800",
+                      ].join(" ")}
+                    >
+                      {tabLabel(tab)}
+                      {active && (
+                        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-slate-900" />
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            )}
           </div>
-          {packInfo?.loaded && (
-            <nav className="flex items-center gap-2">
-              {(["evidence", "standards", "settings"] as AppTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={[
-                    "rounded-full px-4 py-2 text-sm font-medium capitalize",
-                    activeTab === tab
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100",
-                  ].join(" ")}
-                >
-                  {tab === "standards" ? "准则库" : tab === "settings" ? "设置" : "工作台"}
-                </button>
-              ))}
-            </nav>
-          )}
+
+          <button
+            type="button"
+            title="Settings"
+            aria-label="Settings"
+            onClick={() => setActiveTab("settings")}
+            className={[
+              "ui-focus-ring rounded-lg p-2 transition",
+              activeTab === "settings"
+                ? "bg-slate-900 text-white"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+            ].join(" ")}
+          >
+            <IconSettings className="h-5 w-5" />
+          </button>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-[min(1920px,calc(100%-1rem))] px-3 py-4 sm:px-4">
         {startupUpdate?.available_content && packInfo?.loaded && activeTab !== "settings" && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
             <p>
-              发现新的准则库版本{" "}
-              <strong>{startupUpdate.available_content.latest_version}</strong>
-              ，可在设置页下载安装。
+              New standards version{" "}
+              <strong>{startupUpdate.available_content.latest_version}</strong> is available in
+              Settings.
             </p>
             <button
               type="button"
               onClick={() => setActiveTab("settings")}
-              className="rounded-lg bg-emerald-900 px-3 py-1.5 text-white hover:bg-emerald-800"
+              className="ui-focus-ring rounded-lg bg-emerald-900 px-3 py-1.5 text-white hover:bg-emerald-800"
             >
-              前往设置
+              Open Settings
             </button>
           </div>
         )}
-        {!packInfo?.loaded ? (
+        {activeTab === "settings" ? (
+          <SettingsPage
+            packInfo={packInfo ?? EMPTY_PACK_INFO}
+            onPackUpdated={setPackInfo}
+          />
+        ) : !packInfo?.loaded ? (
           <SetupPage
             onDownloadInitial={handleDownloadInitial}
             downloading={downloadingInitial}
             error={error}
+            onOpenSettings={() => setActiveTab("settings")}
           />
-        ) : activeTab === "settings" ? (
-          <SettingsPage packInfo={packInfo} onPackUpdated={setPackInfo} />
         ) : (
           <>
             {activeTab === "standards" && (
-              <div className="h-[calc(100vh-8.5rem)]">
+              <div className="h-[calc(100vh-4.5rem)]">
                 <StandardsPage />
               </div>
             )}
             {activeTab === "evidence" && (
-              <div className="h-[calc(100vh-8.5rem)]">
-                <EvidencePage />
+              <div className="h-[calc(100vh-4.5rem)]">
+                <EvidencePage onOpenSettings={() => setActiveTab("settings")} />
               </div>
             )}
           </>

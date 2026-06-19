@@ -42,12 +42,38 @@ export function secondaryOptions(
   return primary === "listing-rules" ? LISTING_MARKETS : ACCOUNTING_MARKETS;
 }
 
+export function secondaryFieldLabel(primary: StandardsPrimaryCategory): string {
+  return primary === "listing-rules" ? "Market" : "Standards System";
+}
+
 export function secondaryLabel(
   primary: StandardsPrimaryCategory,
   secondary: StandardsSecondary,
 ): string {
   const options = secondaryOptions(primary);
   return options.find((item) => item.id === secondary)?.label ?? secondary;
+}
+
+export function tertiaryLabel(tertiary: FrameworkFilter): string {
+  if (tertiary === "ALL") {
+    return "All";
+  }
+  return tertiary;
+}
+
+export function standardsBreadcrumb(
+  primary: StandardsPrimaryCategory,
+  secondary: StandardsSecondary,
+  tertiary: FrameworkFilter,
+): string {
+  const parts = [
+    PRIMARY_CATEGORIES.find((item) => item.id === primary)?.label ?? primary,
+    secondaryLabel(primary, secondary),
+  ];
+  if (primary === "accounting-standards") {
+    parts.push(tertiaryLabel(tertiary));
+  }
+  return parts.join(" › ");
 }
 
 export function defaultSecondary(primary: StandardsPrimaryCategory): StandardsSecondary {
@@ -64,7 +90,7 @@ export function tertiaryOptions(
 
   if (secondary === "ifrs") {
     return [
-      { id: "ALL", label: "全部" },
+      { id: "ALL", label: "All" },
       { id: "IFRS", label: "IFRS" },
       { id: "IAS", label: "IAS" },
     ];
@@ -146,8 +172,8 @@ export function emptyStandardsMessage(
   secondary: StandardsSecondary,
 ): string {
   if (primary === "listing-rules") {
-    return `Listing Rules（${secondaryLabel(primary, secondary)}）内容即将上线。`;
+    return `Listing rules for ${secondaryLabel(primary, secondary)} are coming soon. Browse Accounting Standards in the meantime.`;
   }
 
-  return "当前筛选条件下没有准则。可尝试切换分类或勾选「显示旧准则」。";
+  return "No standards match the current filters. Try another series or enable legacy standards.";
 }

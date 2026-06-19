@@ -1,12 +1,16 @@
-import type { FrameworkFilter } from "../types";
+import { useEffect, useRef, useState } from "react";
+import { IconChevronDown, IconFilter } from "./icons";
 import { FilterSelect } from "./FilterSelect";
 import {
   PRIMARY_CATEGORIES,
+  secondaryFieldLabel,
   secondaryOptions,
+  standardsBreadcrumb,
   type StandardsPrimaryCategory,
   type StandardsSecondary,
   tertiaryOptions,
 } from "../lib/standards-navigation";
+import type { FrameworkFilter } from "../types";
 
 interface StandardsCategoryNavProps {
   primary: StandardsPrimaryCategory;
@@ -29,51 +33,95 @@ export function StandardsCategoryNav({
   onTertiaryChange,
   onIncludeLegacyChange,
 }: StandardsCategoryNavProps) {
-  const secondaryChoices = secondaryOptions(primary);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const breadcrumb = standardsBreadcrumb(primary, secondary, tertiary);
   const tertiaryChoices = tertiaryOptions(primary, secondary);
-  const secondaryLabelText = primary === "listing-rules" ? "市场" : "准则体系";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const close = () => setOpen(false);
+    const handlePointerDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      close();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        close();
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className="shrink-0 rounded-2xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 px-3 py-3 shadow-sm">
-      <div className="flex flex-wrap items-end gap-3">
-        <FilterSelect
-          label="一级分类"
-          value={primary}
-          options={PRIMARY_CATEGORIES}
-          onChange={onPrimaryChange}
-        />
-        <FilterSelect
-          label={`二级分类 · ${secondaryLabelText}`}
-          value={secondary}
-          options={secondaryChoices}
-          onChange={onSecondaryChange}
-        />
-        {tertiaryChoices.length > 0 && (
-          <FilterSelect
-            label="三级分类"
-            value={tertiary}
-            options={tertiaryChoices}
-            onChange={onTertiaryChange}
-          />
-        )}
-
-        {primary === "accounting-standards" && (
-          <label className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm">
-            <input
-              type="checkbox"
-              checked={includeLegacy}
-              onChange={(event) => onIncludeLegacyChange(event.target.checked)}
-              className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-            />
-            显示旧准则
-          </label>
-        )}
+    <div
+      ref={rootRef}
+      className="relative flex shrink-0 flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-slate-500">Browse</p>
+        <p className="truncate text-sm font-medium text-slate-900">{breadcrumb}</p>
       </div>
 
-      {primary === "listing-rules" && (
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          Listing Rules 按上市市场分类（如 HK、US），细则内容将陆续加入。
-        </p>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+      >
+        <IconFilter className="h-4 w-4" />
+        Filters
+        <IconChevronDown className={["h-4 w-4 transition", open ? "rotate-180" : ""].join(" ")} />
+      </button>
+
+      {primary === "accounting-standards" && (
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={includeLegacy}
+            onChange={(event) => onIncludeLegacyChange(event.target.checked)}
+            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+          />
+          Include legacy
+        </label>
+      )}
+
+      {open && (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <FilterSelect
+              label="Content Type"
+              value={primary}
+              options={PRIMARY_CATEGORIES}
+              onChange={onPrimaryChange}
+            />
+            <FilterSelect
+              label={secondaryFieldLabel(primary)}
+              value={secondary}
+              options={secondaryOptions(primary)}
+              onChange={onSecondaryChange}
+            />
+            {tertiaryChoices.length > 0 && (
+              <FilterSelect
+                label="Specific Series"
+                value={tertiary}
+                options={tertiaryChoices}
+                onChange={onTertiaryChange}
+              />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -52,5 +52,5 @@ export function truncatePreview(text: string, maxChars = 72): string {
 }
 
 export function roundKindLabel(kind: ConversationRound["kind"]): string {
-  return kind === "create" ? "初稿" : "追问";
+  return kind === "create" ? "Draft" : "Follow-up";
 }

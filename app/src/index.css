@@ -16,6 +16,32 @@ body {
   min-height: 100vh;
 }
 
+.ui-focus-ring:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
+.ui-selected-item {
+  border-left: 3px solid #0f172a;
+  background: #f8fafc;
+}
+
+.text-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.text-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.text-caption {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 /* Cursor-style readable markdown preview */
 .markdown-preview {
   --md-text: #1e293b;

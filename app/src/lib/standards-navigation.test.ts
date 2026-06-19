@@ -6,6 +6,7 @@ import {
   navigationForStandard,
   resolveStandardsQuery,
   secondaryOptions,
+  standardsBreadcrumb,
   tertiaryOptions,
 } from "./standards-navigation";
 
@@ -36,6 +37,12 @@ describe("standards-navigation", () => {
   it("uses listing markets for listing rules secondary options", () => {
     expect(secondaryOptions("listing-rules").map((item) => item.id)).toEqual(["hk", "us"]);
     expect(defaultSecondary("listing-rules")).toBe("hk");
+  });
+
+  it("builds breadcrumb labels in English", () => {
+    expect(standardsBreadcrumb("accounting-standards", "ifrs", "ALL")).toBe(
+      "Accounting Standards › IFRS › All",
+    );
   });
 
   it("returns empty query for listing rules", () => {

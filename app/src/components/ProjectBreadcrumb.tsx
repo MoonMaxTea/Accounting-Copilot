@@ -23,7 +23,7 @@ export function ProjectBreadcrumb({
 
   return (
     <nav
-      aria-label="项目路径"
+      aria-label="Project path"
       className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200"
     >
       <button
@@ -31,7 +31,7 @@ export function ProjectBreadcrumb({
         onClick={() => onNavigateFolder(null)}
         className="rounded px-1.5 py-0.5 hover:bg-white hover:text-slate-900"
       >
-        根目录
+        Root
       </button>
       {segments.map((segment, index) => {
         const folderRelative = segments.slice(0, index + 1).join("/");
