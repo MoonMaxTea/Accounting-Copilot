@@ -1,11 +1,11 @@
 pub mod citations;
 mod commands;
-mod config;
+pub mod config;
 mod db;
 mod models;
 pub mod pack;
 pub mod projects;
-mod ai;
+pub mod ai;
 mod trash;
 mod update;
 
