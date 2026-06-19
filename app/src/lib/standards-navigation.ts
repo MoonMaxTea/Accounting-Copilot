@@ -1,7 +1,9 @@
 import type { FrameworkFilter, StandardSummary } from "../types";
 
 export type StandardsPrimaryCategory = "accounting-standards" | "listing-rules";
-export type StandardsMarket = "ifrs" | "us-gaap";
+export type AccountingMarket = "ifrs" | "us-gaap";
+export type ListingMarket = "hk" | "us";
+export type StandardsSecondary = AccountingMarket | ListingMarket;
 
 export interface StandardsNavOption<T extends string> {
   id: T;
@@ -13,9 +15,14 @@ export const PRIMARY_CATEGORIES: StandardsNavOption<StandardsPrimaryCategory>[] 
   { id: "listing-rules", label: "Listing Rules" },
 ];
 
-export const MARKETS: StandardsNavOption<StandardsMarket>[] = [
+export const ACCOUNTING_MARKETS: StandardsNavOption<AccountingMarket>[] = [
   { id: "ifrs", label: "IFRS" },
   { id: "us-gaap", label: "US GAAP" },
+];
+
+export const LISTING_MARKETS: StandardsNavOption<ListingMarket>[] = [
+  { id: "hk", label: "HK" },
+  { id: "us", label: "US" },
 ];
 
 export interface StandardsQuery {
@@ -23,15 +30,39 @@ export interface StandardsQuery {
   postFilter: (standard: StandardSummary) => boolean;
 }
 
+export function isAccountingMarket(
+  secondary: StandardsSecondary,
+): secondary is AccountingMarket {
+  return secondary === "ifrs" || secondary === "us-gaap";
+}
+
+export function secondaryOptions(
+  primary: StandardsPrimaryCategory,
+): StandardsNavOption<StandardsSecondary>[] {
+  return primary === "listing-rules" ? LISTING_MARKETS : ACCOUNTING_MARKETS;
+}
+
+export function secondaryLabel(
+  primary: StandardsPrimaryCategory,
+  secondary: StandardsSecondary,
+): string {
+  const options = secondaryOptions(primary);
+  return options.find((item) => item.id === secondary)?.label ?? secondary;
+}
+
+export function defaultSecondary(primary: StandardsPrimaryCategory): StandardsSecondary {
+  return primary === "listing-rules" ? "hk" : "ifrs";
+}
+
 export function tertiaryOptions(
   primary: StandardsPrimaryCategory,
-  market: StandardsMarket,
+  secondary: StandardsSecondary,
 ): StandardsNavOption<FrameworkFilter>[] {
   if (primary === "listing-rules") {
     return [];
   }
 
-  if (market === "ifrs") {
+  if (secondary === "ifrs") {
     return [
       { id: "ALL", label: "全部" },
       { id: "IFRS", label: "IFRS" },
@@ -42,26 +73,26 @@ export function tertiaryOptions(
   return [{ id: "ASC", label: "ASC" }];
 }
 
-export function defaultTertiaryForMarket(
+export function defaultTertiary(
   primary: StandardsPrimaryCategory,
-  market: StandardsMarket,
+  secondary: StandardsSecondary,
 ): FrameworkFilter {
   if (primary === "listing-rules") {
     return "ALL";
   }
-  return market === "ifrs" ? "ALL" : "ASC";
+  return secondary === "ifrs" ? "ALL" : "ASC";
 }
 
 export function resolveStandardsQuery(
   primary: StandardsPrimaryCategory,
-  market: StandardsMarket,
+  secondary: StandardsSecondary,
   tertiary: FrameworkFilter,
 ): StandardsQuery | "empty" {
-  if (primary === "listing-rules") {
+  if (primary === "listing-rules" || !isAccountingMarket(secondary)) {
     return "empty";
   }
 
-  if (market === "ifrs") {
+  if (secondary === "ifrs") {
     if (tertiary === "IFRS" || tertiary === "IAS") {
       return {
         framework: tertiary,
@@ -84,13 +115,13 @@ export function resolveStandardsQuery(
 
 export function navigationForStandard(standard: StandardSummary): {
   primary: StandardsPrimaryCategory;
-  market: StandardsMarket;
+  secondary: StandardsSecondary;
   tertiary: FrameworkFilter;
 } {
   if (standard.framework === "ASC") {
     return {
       primary: "accounting-standards",
-      market: "us-gaap",
+      secondary: "us-gaap",
       tertiary: "ASC",
     };
   }
@@ -98,24 +129,24 @@ export function navigationForStandard(standard: StandardSummary): {
   if (standard.framework === "IAS") {
     return {
       primary: "accounting-standards",
-      market: "ifrs",
+      secondary: "ifrs",
       tertiary: "IAS",
     };
   }
 
   return {
     primary: "accounting-standards",
-    market: "ifrs",
+    secondary: "ifrs",
     tertiary: "IFRS",
   };
 }
 
 export function emptyStandardsMessage(
   primary: StandardsPrimaryCategory,
-  market: StandardsMarket,
+  secondary: StandardsSecondary,
 ): string {
   if (primary === "listing-rules") {
-    return `Listing Rules（${market === "ifrs" ? "IFRS" : "US GAAP"}）内容即将上线。`;
+    return `Listing Rules（${secondaryLabel(primary, secondary)}）内容即将上线。`;
   }
 
   return "当前筛选条件下没有准则。可尝试切换分类或勾选「显示旧准则」。";

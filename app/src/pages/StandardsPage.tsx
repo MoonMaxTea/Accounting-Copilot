@@ -5,18 +5,19 @@ import { StandardDetailPanel } from "../components/StandardDetailPanel";
 import { StandardList } from "../components/StandardList";
 import { StandardsCategoryNav } from "../components/StandardsCategoryNav";
 import {
-  defaultTertiaryForMarket,
+  defaultSecondary,
+  defaultTertiary,
   emptyStandardsMessage,
   navigationForStandard,
   resolveStandardsQuery,
-  type StandardsMarket,
   type StandardsPrimaryCategory,
+  type StandardsSecondary,
 } from "../lib/standards-navigation";
 import type { FrameworkFilter, StandardSummary } from "../types";
 
 export function StandardsPage() {
   const [primary, setPrimary] = useState<StandardsPrimaryCategory>("accounting-standards");
-  const [market, setMarket] = useState<StandardsMarket>("ifrs");
+  const [secondary, setSecondary] = useState<StandardsSecondary>("ifrs");
   const [tertiary, setTertiary] = useState<FrameworkFilter>("ALL");
   const [includeLegacy, setIncludeLegacy] = useState(false);
   const [standards, setStandards] = useState<StandardSummary[]>([]);
@@ -26,7 +27,7 @@ export function StandardsPage() {
 
   const applyNavigation = useCallback((next: ReturnType<typeof navigationForStandard>) => {
     setPrimary(next.primary);
-    setMarket(next.market);
+    setSecondary(next.secondary);
     setTertiary(next.tertiary);
   }, []);
 
@@ -34,7 +35,7 @@ export function StandardsPage() {
     setLoading(true);
     setError(null);
 
-    const query = resolveStandardsQuery(primary, market, tertiary);
+    const query = resolveStandardsQuery(primary, secondary, tertiary);
     if (query === "empty") {
       setStandards([]);
       setSelected(null);
@@ -59,7 +60,7 @@ export function StandardsPage() {
     } finally {
       setLoading(false);
     }
-  }, [primary, market, tertiary, includeLegacy]);
+  }, [primary, secondary, tertiary, includeLegacy]);
 
   useEffect(() => {
     void loadStandards();
@@ -95,17 +96,18 @@ export function StandardsPage() {
   );
 
   const handlePrimaryChange = (value: StandardsPrimaryCategory) => {
+    const nextSecondary = defaultSecondary(value);
     setPrimary(value);
-    setMarket("ifrs");
-    setTertiary(defaultTertiaryForMarket(value, "ifrs"));
+    setSecondary(nextSecondary);
+    setTertiary(defaultTertiary(value, nextSecondary));
   };
 
-  const handleMarketChange = (value: StandardsMarket) => {
-    setMarket(value);
-    setTertiary(defaultTertiaryForMarket(primary, value));
+  const handleSecondaryChange = (value: StandardsSecondary) => {
+    setSecondary(value);
+    setTertiary(defaultTertiary(primary, value));
   };
 
-  const emptyMessage = emptyStandardsMessage(primary, market);
+  const emptyMessage = emptyStandardsMessage(primary, secondary);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -113,11 +115,11 @@ export function StandardsPage() {
 
       <StandardsCategoryNav
         primary={primary}
-        market={market}
+        secondary={secondary}
         tertiary={tertiary}
         includeLegacy={includeLegacy}
         onPrimaryChange={handlePrimaryChange}
-        onMarketChange={handleMarketChange}
+        onSecondaryChange={handleSecondaryChange}
         onTertiaryChange={setTertiary}
         onIncludeLegacyChange={setIncludeLegacy}
       />
@@ -138,10 +140,10 @@ export function StandardsPage() {
           )}
         </div>
         <div className="min-h-0 overflow-hidden">
-        <StandardDetailPanel
-          summary={selectedSummary}
-          onOpenSuperseded={openStandardById}
-        />
+          <StandardDetailPanel
+            summary={selectedSummary}
+            onOpenSuperseded={openStandardById}
+          />
         </div>
       </div>
     </div>

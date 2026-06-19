@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { StandardSummary } from "../types";
 import {
-  defaultTertiaryForMarket,
+  defaultSecondary,
+  defaultTertiary,
   navigationForStandard,
   resolveStandardsQuery,
+  secondaryOptions,
   tertiaryOptions,
 } from "./standards-navigation";
 
@@ -20,11 +22,9 @@ const sample = (framework: string): StandardSummary => ({
 
 describe("standards-navigation", () => {
   it("shows IFRS market tertiary options under accounting standards", () => {
-    expect(tertiaryOptions("accounting-standards", "ifrs").map((item) => item.id)).toEqual([
-      "ALL",
-      "IFRS",
-      "IAS",
-    ]);
+    expect(
+      tertiaryOptions("accounting-standards", "ifrs").map((item) => item.id),
+    ).toEqual(["ALL", "IFRS", "IAS"]);
   });
 
   it("shows ASC under US GAAP", () => {
@@ -33,8 +33,14 @@ describe("standards-navigation", () => {
     ]);
   });
 
+  it("uses listing markets for listing rules secondary options", () => {
+    expect(secondaryOptions("listing-rules").map((item) => item.id)).toEqual(["hk", "us"]);
+    expect(defaultSecondary("listing-rules")).toBe("hk");
+  });
+
   it("returns empty query for listing rules", () => {
-    expect(resolveStandardsQuery("listing-rules", "ifrs", "ALL")).toBe("empty");
+    expect(resolveStandardsQuery("listing-rules", "hk", "ALL")).toBe("empty");
+    expect(resolveStandardsQuery("listing-rules", "us", "ALL")).toBe("empty");
   });
 
   it("filters IFRS market ALL to IFRS and IAS only", () => {
@@ -53,10 +59,10 @@ describe("standards-navigation", () => {
   it("maps standards to navigation buckets", () => {
     expect(navigationForStandard(sample("ASC"))).toEqual({
       primary: "accounting-standards",
-      market: "us-gaap",
+      secondary: "us-gaap",
       tertiary: "ASC",
     });
     expect(navigationForStandard(sample("IAS")).tertiary).toBe("IAS");
-    expect(defaultTertiaryForMarket("accounting-standards", "us-gaap")).toBe("ASC");
+    expect(defaultTertiary("accounting-standards", "us-gaap")).toBe("ASC");
   });
 });
