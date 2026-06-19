@@ -31,6 +31,10 @@ fn extract_title(content: &str, fallback: &str) -> String {
     fallback.to_string()
 }
 
+pub fn extract_title_for_entry(content: &str, fallback: &str) -> String {
+    extract_title(content, fallback)
+}
+
 pub fn list_project_files(projects_root: &Path) -> Result<Vec<ProjectFileEntry>, String> {
     if !projects_root.is_dir() {
         return Err(format!(
@@ -88,16 +92,22 @@ pub fn list_project_files(projects_root: &Path) -> Result<Vec<ProjectFileEntry>,
     Ok(entries)
 }
 
-pub fn list_project_tree(projects_root: &Path) -> Result<Vec<crate::models::ProjectTreeNode>, String> {
+pub fn list_project_tree(
+    projects_root: &Path,
+    ui: Option<&crate::config::ProjectsUiState>,
+) -> Result<Vec<crate::models::ProjectTreeNode>, String> {
     if !projects_root.is_dir() {
         return Err(format!("项目目录不存在: {}", projects_root.display()));
     }
-    build_tree_level(projects_root, projects_root)
+    let nodes = build_tree_level(projects_root, projects_root, None, ui)?;
+    Ok(nodes)
 }
 
 fn build_tree_level(
     current_dir: &Path,
     projects_root: &Path,
+    parent_relative: Option<&str>,
+    ui: Option<&crate::config::ProjectsUiState>,
 ) -> Result<Vec<crate::models::ProjectTreeNode>, String> {
     let mut dir_names = Vec::new();
     let mut file_entries = Vec::new();
@@ -165,7 +175,7 @@ fn build_tree_level(
             .map_err(|error| error.to_string())?
             .to_string_lossy()
             .replace('\\', "/");
-        let children = build_tree_level(&path, projects_root)?;
+        let children = build_tree_level(&path, projects_root, Some(&relative), ui)?;
         nodes.push(crate::models::ProjectTreeNode::Folder {
             name,
             path: path.display().to_string(),
@@ -175,7 +185,69 @@ fn build_tree_level(
     }
 
     nodes.extend(file_entries.into_iter().map(|(_, node)| node));
+    if let Some(state) = ui {
+        apply_ui_to_nodes(&mut nodes, state, parent_relative);
+    }
     Ok(nodes)
+}
+
+fn apply_ui_to_nodes(
+    nodes: &mut Vec<crate::models::ProjectTreeNode>,
+    ui: &crate::config::ProjectsUiState,
+    parent_relative: Option<&str>,
+) {
+    let key = crate::config::ProjectsUiState::parent_key(parent_relative);
+    if let Some(order) = ui.order.get(&key) {
+        nodes.sort_by(|left, right| {
+            let left_key = node_relative_path(left);
+            let right_key = node_relative_path(right);
+            let left_index = order.iter().position(|item| item == left_key);
+            let right_index = order.iter().position(|item| item == right_key);
+            match (left_index, right_index) {
+                (Some(left), Some(right)) => left.cmp(&right),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => node_sort_fallback(left, right),
+            }
+        });
+    }
+
+    for node in nodes.iter_mut() {
+        if let crate::models::ProjectTreeNode::Folder { relative_path, children, .. } = node {
+            apply_ui_to_nodes(children, ui, Some(relative_path));
+        }
+    }
+}
+
+fn node_relative_path(node: &crate::models::ProjectTreeNode) -> &str {
+    match node {
+        crate::models::ProjectTreeNode::Folder { relative_path, .. } => relative_path,
+        crate::models::ProjectTreeNode::File { relative_path, .. } => relative_path,
+    }
+}
+
+fn node_sort_fallback(
+    left: &crate::models::ProjectTreeNode,
+    right: &crate::models::ProjectTreeNode,
+) -> std::cmp::Ordering {
+    match (left, right) {
+        (
+            crate::models::ProjectTreeNode::Folder { name: left_name, .. },
+            crate::models::ProjectTreeNode::Folder { name: right_name, .. },
+        ) => left_name.to_lowercase().cmp(&right_name.to_lowercase()),
+        (crate::models::ProjectTreeNode::Folder { .. }, _) => std::cmp::Ordering::Less,
+        (_, crate::models::ProjectTreeNode::Folder { .. }) => std::cmp::Ordering::Greater,
+        (
+            crate::models::ProjectTreeNode::File {
+                modified_secs: left_secs,
+                ..
+            },
+            crate::models::ProjectTreeNode::File {
+                modified_secs: right_secs,
+                ..
+            },
+        ) => right_secs.cmp(left_secs),
+    }
 }
 
 pub fn resolve_folder_path(
@@ -272,7 +344,7 @@ pub fn move_project_file(
     file_entry_from_path(projects_root, &destination)
 }
 
-fn file_entry_from_path(projects_root: &Path, path: &Path) -> Result<ProjectFileEntry, String> {
+pub fn file_entry_from_path(projects_root: &Path, path: &Path) -> Result<ProjectFileEntry, String> {
     let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
     let modified = metadata
         .modified()
@@ -335,7 +407,7 @@ mod tests {
         let moved = move_project_file(temp.path(), &note_path, Some("合营分析")).expect("move");
         assert!(moved.relative_path.starts_with("合营分析/"));
 
-        let tree = list_project_tree(temp.path()).expect("tree");
+        let tree = list_project_tree(temp.path(), None).expect("tree");
         assert_eq!(tree.len(), 1);
         match &tree[0] {
             crate::models::ProjectTreeNode::Folder { name, children, .. } => {
@@ -344,6 +416,25 @@ mod tests {
             }
             _ => panic!("expected folder"),
         }
+    }
+
+    #[test]
+    fn finds_similar_project_names() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            temp.path().join("合营安排判断-2026-06-01.md"),
+            "# 合营安排判断",
+        )
+        .expect("write");
+        fs::write(
+            temp.path().join("合营安排-2026-05-01.md"),
+            "# 合营安排",
+        )
+        .expect("write");
+
+        let matches = find_similar_projects(temp.path(), "合营安排判断").expect("matches");
+        assert!(!matches.is_empty());
+        assert!(matches.iter().any(|item| item.project_name == "合营安排判断"));
     }
 }
 
@@ -461,4 +552,157 @@ pub fn search_project_files(
                 .contains(&needle)
     });
     Ok(entries)
+}
+
+pub fn count_folder_entries(projects_root: &Path, folder_relative: &str) -> Result<usize, String> {
+    let folder = resolve_folder_path(projects_root, Some(folder_relative))?;
+    Ok(collect_md_files(&folder)?.len())
+}
+
+fn collect_md_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+    for entry in walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|item| item.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_ignored_file)
+        {
+            continue;
+        }
+        files.push(path.to_path_buf());
+    }
+    Ok(files)
+}
+
+pub fn delete_project_folder(
+    projects_root: &Path,
+    folder_relative: &str,
+    trash: &mut crate::trash::TrashStore,
+    app: &tauri::AppHandle,
+) -> Result<crate::models::DeleteFolderResult, String> {
+    let folder = resolve_folder_path(projects_root, Some(folder_relative))?;
+    let files = collect_md_files(&folder)?;
+    if files.is_empty() {
+        fs::remove_dir_all(&folder).map_err(|error| error.to_string())?;
+        return Ok(crate::models::DeleteFolderResult {
+            folder_relative: folder_relative.to_string(),
+            trashed_files: 0,
+        });
+    }
+
+    for file in &files {
+        trash.move_project_file(app, projects_root, file)?;
+    }
+
+    fs::remove_dir_all(&folder).map_err(|error| error.to_string())?;
+    Ok(crate::models::DeleteFolderResult {
+        folder_relative: folder_relative.to_string(),
+        trashed_files: files.len(),
+    })
+}
+
+pub fn project_name_from_filename(relative_path: &str) -> String {
+    let file_name = Path::new(relative_path)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(relative_path);
+    if let Some(captures) = regex::Regex::new(r"^(.+)-\d{4}-\d{2}-\d{2}(?:-\d+)?$")
+        .expect("valid regex")
+        .captures(file_name)
+    {
+        return captures
+            .get(1)
+            .map(|value| value.as_str().to_string())
+            .unwrap_or_else(|| file_name.to_string());
+    }
+    file_name.to_string()
+}
+
+fn normalize_project_name(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && !matches!(ch, '-' | '_' | '—' | '·'))
+        .collect()
+}
+
+pub fn find_similar_projects(
+    projects_root: &Path,
+    project_name: &str,
+) -> Result<Vec<crate::models::SimilarProjectMatch>, String> {
+    let target = normalize_project_name(project_name);
+    if target.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut matches = Vec::new();
+    for entry in list_project_files(projects_root)? {
+        let candidate_name = project_name_from_filename(&entry.relative_path);
+        let normalized = normalize_project_name(&candidate_name);
+        if normalized.is_empty() {
+            continue;
+        }
+
+        let reason = if normalized == target {
+            Some("项目名完全相同")
+        } else if normalized.contains(&target) || target.contains(&normalized) {
+            Some("项目名高度相似")
+        } else {
+            similarity_ratio(&normalized, &target)
+                .filter(|ratio| *ratio >= 0.72)
+                .map(|_| "项目名可能重复")
+        };
+
+        if let Some(reason) = reason {
+            matches.push(crate::models::SimilarProjectMatch {
+                relative_path: entry.relative_path.clone(),
+                title: entry.title.clone(),
+                project_name: candidate_name,
+                reason: reason.to_string(),
+            });
+        }
+    }
+
+    matches.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    matches.dedup_by(|left, right| left.relative_path == right.relative_path);
+    Ok(matches)
+}
+
+fn similarity_ratio(left: &str, right: &str) -> Option<f32> {
+    if left.is_empty() || right.is_empty() {
+        return None;
+    }
+    let left_chars: Vec<char> = left.chars().collect();
+    let right_chars: Vec<char> = right.chars().collect();
+    let distance = levenshtein(&left_chars, &right_chars);
+    let max_len = left_chars.len().max(right_chars.len()) as f32;
+    Some(1.0 - (distance as f32 / max_len))
+}
+
+fn levenshtein(left: &[char], right: &[char]) -> usize {
+    let mut rows: Vec<Vec<usize>> = vec![vec![0; right.len() + 1]; left.len() + 1];
+    for (index, value) in rows[0].iter_mut().enumerate() {
+        *value = index;
+    }
+    for (index, row) in rows.iter_mut().enumerate().skip(1) {
+        row[0] = index;
+    }
+    for (left_index, left_char) in left.iter().enumerate() {
+        for (right_index, right_char) in right.iter().enumerate() {
+            let cost = usize::from(left_char != right_char);
+            rows[left_index + 1][right_index + 1] = (rows[left_index][right_index + 1] + 1)
+                .min(rows[left_index + 1][right_index] + 1)
+                .min(rows[left_index][right_index] + cost);
+        }
+    }
+    rows[left.len()][right.len()]
 }

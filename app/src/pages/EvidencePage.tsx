@@ -1,26 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  countProjectFolderEntries,
   createProjectFolder,
+  deleteProjectFolder,
   getConfig,
   getStandard,
   listProjectFiles,
   listProjectTree,
+  listTrashItems,
   moveProjectFile,
+  moveProjectFileToTrash,
+  purgeTrashItem,
   readProjectFile,
   renameProjectFolder,
+  restoreTrashItem,
+  saveProjectsChildOrder,
+  saveProjectsUiState,
   resolveCitation,
   scanNoteCitations,
   searchProjectFiles,
+  toggleProjectPin,
 } from "../api";
 import { EvidenceStandardPanel } from "../components/EvidenceStandardPanel";
 import { NotePanel } from "../components/NotePanel";
-import { ProjectFolderTree } from "../components/ProjectFolderTree";
+import { ProjectBreadcrumb } from "../components/ProjectBreadcrumb";
+import {
+  folderRelativeForSelection,
+  ProjectFolderTree,
+} from "../components/ProjectFolderTree";
+import { TrashPanel } from "../components/TrashPanel";
+import { useToast } from "../components/Toast";
 import type {
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
   ProjectFileEntry,
+  ProjectsUiState,
   ProjectTreeNode,
+  TrashEntry,
 } from "../types";
 
 interface EvidencePageProps {
@@ -28,11 +45,20 @@ interface EvidencePageProps {
   onInitialFilePathConsumed?: () => void;
 }
 
+const defaultUiState: ProjectsUiState = {
+  pinned: [],
+  order: {},
+  last_evidence_file: null,
+  last_selected_folder: null,
+};
+
 export function EvidencePage({
   initialFilePath = null,
   onInitialFilePathConsumed,
 }: EvidencePageProps) {
+  const { showToast } = useToast();
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
+  const [projectsUi, setProjectsUi] = useState<ProjectsUiState>(defaultUiState);
   const [tree, setTree] = useState<ProjectTreeNode[]>([]);
   const [searchResults, setSearchResults] = useState<ProjectFileEntry[] | null>(null);
   const [selected, setSelected] = useState<ProjectFileEntry | null>(null);
@@ -45,6 +71,10 @@ export function EvidencePage({
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [loadingNote, setLoadingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashItems, setTrashItems] = useState<TrashEntry[]>([]);
+  const [loadingTrash, setLoadingTrash] = useState(false);
+  const restoredRef = useRef(false);
 
   const refreshSidebar = useCallback(async (query: string) => {
     setLoadingFiles(true);
@@ -75,9 +105,28 @@ export function EvidencePage({
     }
   }, []);
 
+  const refreshTrash = useCallback(async () => {
+    setLoadingTrash(true);
+    try {
+      const items = await listTrashItems();
+      setTrashItems(items);
+    } catch {
+      setTrashItems([]);
+    } finally {
+      setLoadingTrash(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshTrash();
+  }, [refreshTrash]);
+
   useEffect(() => {
     getConfig()
-      .then((config) => setProjectsDir(config.projects_dir))
+      .then((config) => {
+        setProjectsDir(config.projects_dir);
+        setProjectsUi(config.projects_ui ?? defaultUiState);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -86,19 +135,43 @@ export function EvidencePage({
   }, [refreshSidebar, searchQuery]);
 
   useEffect(() => {
-    if (!initialFilePath) {
+    if (initialFilePath) {
+      listProjectFiles()
+        .then((entries) => {
+          const match = entries.find((entry) => entry.path === initialFilePath);
+          if (match) {
+            setSelected(match);
+            onInitialFilePathConsumed?.();
+          }
+        })
+        .catch(() => undefined);
       return;
     }
+
+    if (restoredRef.current || !projectsUi.last_evidence_file) {
+      return;
+    }
+
+    restoredRef.current = true;
     listProjectFiles()
       .then((entries) => {
-        const match = entries.find((entry) => entry.path === initialFilePath);
+        const match = entries.find((entry) => entry.path === projectsUi.last_evidence_file);
         if (match) {
           setSelected(match);
-          onInitialFilePathConsumed?.();
+        }
+        if (projectsUi.last_selected_folder) {
+          setSelectedFolderRelative(projectsUi.last_selected_folder);
         }
       })
       .catch(() => undefined);
-  }, [initialFilePath, onInitialFilePathConsumed]);
+  }, [initialFilePath, onInitialFilePathConsumed, projectsUi.last_evidence_file, projectsUi.last_selected_folder]);
+
+  useEffect(() => {
+    if (!selected && !selectedFolderRelative) {
+      return;
+    }
+    void saveProjectsUiState(selected?.path ?? null, selectedFolderRelative).then(setProjectsUi).catch(() => undefined);
+  }, [selected, selectedFolderRelative]);
 
   useEffect(() => {
     if (!selected) {
@@ -183,6 +256,30 @@ export function EvidencePage({
     }
   };
 
+  const handleDeleteFolder = async (folderRelative: string) => {
+    const count = await countProjectFolderEntries(folderRelative);
+    const message =
+      count > 0
+        ? `文件夹内有 ${count} 篇笔记，删除后笔记会移入废纸篓。确定删除「${folderRelative}」？`
+        : `确定删除空文件夹「${folderRelative}」？`;
+    if (!window.confirm(message)) {
+      return;
+    }
+    const result = await deleteProjectFolder(folderRelative);
+    showToast(
+      result.trashed_files > 0
+        ? `已删除文件夹，${result.trashed_files} 篇笔记已移入废纸篓`
+        : "已删除空文件夹",
+    );
+    await refreshSidebar(searchQuery);
+    await refreshTrash();
+  };
+
+  const breadcrumbFolder = folderRelativeForSelection(
+    selected?.relative_path ?? null,
+    selectedFolderRelative,
+  );
+
   if (!projectsDir) {
     return (
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-950">
@@ -208,8 +305,53 @@ export function EvidencePage({
             className="w-full bg-transparent text-sm text-slate-800 outline-none"
           />
         </label>
+        <button
+          type="button"
+          onClick={() => {
+            setTrashOpen((current) => !current);
+            if (!trashOpen) {
+              void refreshTrash();
+            }
+          }}
+          className="rounded-full bg-white px-4 py-2 text-sm text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+        >
+          废纸篓{trashItems.length > 0 ? ` (${trashItems.length})` : ""}
+        </button>
         <p className="truncate text-xs text-slate-500">项目目录：{projectsDir}</p>
       </div>
+
+      {!searchQuery.trim() && (
+        <ProjectBreadcrumb
+          selectedFolderRelative={breadcrumbFolder}
+          selectedFileRelative={selected?.relative_path ?? null}
+          onNavigateFolder={(folderRelative) => {
+            setSelectedFolderRelative(folderRelative);
+            if (folderRelative) {
+              setSelected(null);
+            }
+          }}
+        />
+      )}
+
+      {trashOpen && (
+        <TrashPanel
+          open={trashOpen}
+          items={trashItems}
+          loading={loadingTrash}
+          onClose={() => setTrashOpen(false)}
+          onRestore={async (id) => {
+            const restored = await restoreTrashItem(id);
+            showToast(`已恢复「${restored.title}」`);
+            await refreshSidebar(searchQuery);
+            await refreshTrash();
+          }}
+          onPurge={async (id) => {
+            await purgeTrashItem(id);
+            showToast("已永久删除", "info");
+            await refreshTrash();
+          }}
+        />
+      )}
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
@@ -219,22 +361,52 @@ export function EvidencePage({
           searchResults={searchResults}
           selectedPath={selected?.path ?? null}
           selectedFolderRelative={selectedFolderRelative}
+          pinnedPaths={projectsUi.pinned}
           loading={loadingFiles}
-          onSelectFile={setSelected}
+          onSelectFile={(entry) => {
+            setSelected(entry);
+            setSelectedFolderRelative(folderRelativeForSelection(entry.relative_path, null));
+          }}
           onSelectFolder={setSelectedFolderRelative}
           onCreateFolder={async (parentRelative, name) => {
             await createProjectFolder(name, parentRelative);
+            showToast(`已创建文件夹「${name}」`);
             await refreshSidebar(searchQuery);
           }}
           onRenameFolder={async (folderRelative, newName) => {
             const updated = await renameProjectFolder(folderRelative, newName);
+            showToast(`已重命名为「${newName}」`);
             await refreshSidebar(searchQuery);
             return updated;
           }}
           onMoveFile={async (filePath, targetFolderRelative) => {
             const moved = await moveProjectFile(filePath, targetFolderRelative);
+            showToast(`已移动到 ${targetFolderRelative ?? "根目录"}`);
             await refreshSidebar(searchQuery);
             setSelected(moved);
+          }}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveFileToTrash={async (filePath) => {
+            await moveProjectFileToTrash(filePath);
+            showToast("已移入废纸篓", "info");
+            if (selected?.path === filePath) {
+              setSelected(null);
+            }
+            await refreshSidebar(searchQuery);
+            await refreshTrash();
+          }}
+          onTogglePin={async (relativePath) => {
+            const ui = await toggleProjectPin(relativePath);
+            setProjectsUi(ui);
+            showToast(
+              ui.pinned.includes(relativePath) ? "已置顶" : "已取消置顶",
+              "info",
+            );
+          }}
+          onReorder={async (parentRelative, orderedRelativePaths) => {
+            const ui = await saveProjectsChildOrder(parentRelative, orderedRelativePaths);
+            setProjectsUi(ui);
+            await refreshSidebar(searchQuery);
           }}
         />
         <NotePanel

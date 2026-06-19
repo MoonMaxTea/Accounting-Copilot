@@ -4,13 +4,17 @@ import type {
   AiConfig,
   CitationScanResult,
   CitationTarget,
+  DeleteFolderResult,
   GenerateProjectResult,
   PackInfo,
   ProjectFileEntry,
+  ProjectsUiState,
   ProjectTreeNode,
   SearchHit,
+  SimilarProjectMatch,
   StandardDetail,
   StandardSummary,
+  TrashEntry,
 } from "./types";
 
 export function getPackInfo(): Promise<PackInfo> {
@@ -75,6 +79,58 @@ export function moveProjectFile(
     filePath,
     targetFolderRelative,
   });
+}
+
+export function countProjectFolderEntries(folderRelative: string): Promise<number> {
+  return invoke<number>("count_project_folder_entries", { folderRelative });
+}
+
+export function deleteProjectFolder(folderRelative: string): Promise<DeleteFolderResult> {
+  return invoke<DeleteFolderResult>("delete_project_folder", { folderRelative });
+}
+
+export function moveProjectFileToTrash(filePath: string): Promise<TrashEntry> {
+  return invoke<TrashEntry>("move_project_file_to_trash", { filePath });
+}
+
+export function listTrashItems(): Promise<TrashEntry[]> {
+  return invoke<TrashEntry[]>("list_trash_items");
+}
+
+export function restoreTrashItem(id: string): Promise<ProjectFileEntry> {
+  return invoke<ProjectFileEntry>("restore_trash_item", { id });
+}
+
+export function purgeTrashItem(id: string): Promise<void> {
+  return invoke<void>("purge_trash_item", { id });
+}
+
+export function saveProjectsChildOrder(
+  parentRelative: string | null,
+  orderedRelativePaths: string[],
+): Promise<ProjectsUiState> {
+  return invoke<ProjectsUiState>("save_projects_child_order", {
+    parentRelative,
+    orderedRelativePaths,
+  });
+}
+
+export function toggleProjectPin(relativePath: string): Promise<ProjectsUiState> {
+  return invoke<ProjectsUiState>("toggle_project_pin", { relativePath });
+}
+
+export function saveProjectsUiState(
+  lastEvidenceFile: string | null,
+  lastSelectedFolder: string | null,
+): Promise<ProjectsUiState> {
+  return invoke<ProjectsUiState>("save_projects_ui_state", {
+    lastEvidenceFile,
+    lastSelectedFolder,
+  });
+}
+
+export function findSimilarProjects(projectName: string): Promise<SimilarProjectMatch[]> {
+  return invoke<SimilarProjectMatch[]>("find_similar_projects", { projectName });
 }
 
 export function revealProjectFile(path: string): Promise<void> {

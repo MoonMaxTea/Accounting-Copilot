@@ -52,9 +52,17 @@ export interface AiConfig {
   allow_legacy_citations: boolean;
 }
 
+export interface ProjectsUiState {
+  pinned: string[];
+  order: Record<string, string[]>;
+  last_evidence_file: string | null;
+  last_selected_folder: string | null;
+}
+
 export interface AppConfigResponse {
   projects_dir: string | null;
   ai: AiConfig;
+  projects_ui: ProjectsUiState;
 }
 
 export interface ProjectFileEntry {
@@ -145,4 +153,25 @@ export interface GenerateProjectResult {
   title: string;
   content: string;
   validation: ProjectValidationReport;
+  similar_projects: SimilarProjectMatch[];
+}
+
+export interface SimilarProjectMatch {
+  relative_path: string;
+  title: string;
+  project_name: string;
+  reason: string;
+}
+
+export interface TrashEntry {
+  id: string;
+  original_relative_path: string;
+  title: string;
+  deleted_at_secs: number;
+  trash_filename: string;
+}
+
+export interface DeleteFolderResult {
+  folder_relative: string;
+  trashed_files: number;
 }

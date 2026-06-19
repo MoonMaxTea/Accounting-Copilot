@@ -6,6 +6,7 @@ mod models;
 mod pack;
 pub mod projects;
 mod ai;
+mod trash;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,6 +26,16 @@ pub fn run() {
             commands::create_project_folder,
             commands::rename_project_folder,
             commands::move_project_file,
+            commands::count_project_folder_entries,
+            commands::delete_project_folder,
+            commands::move_project_file_to_trash,
+            commands::list_trash_items,
+            commands::restore_trash_item,
+            commands::purge_trash_item,
+            commands::save_projects_child_order,
+            commands::toggle_project_pin,
+            commands::save_projects_ui_state,
+            commands::find_similar_projects,
             commands::reveal_project_file,
             commands::reveal_projects_dir,
             commands::list_project_files,

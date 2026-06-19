@@ -250,11 +250,18 @@ pub async fn generate_and_save_project(
     let parsed = parse_ai_response(&raw)?;
     let normalized_markdown =
         projects::ensure_heading_matches_name(&parsed.project_name, &parsed.markdown);
-    let validation = validate_project_content(
+    let similar_projects = projects::find_similar_projects(projects_root, &parsed.project_name)?;
+    let mut validation = validate_project_content(
         &normalized_markdown,
         content_dir,
         ai.allow_legacy_citations,
     )?;
+    for item in &similar_projects {
+        validation.warnings.push(format!(
+            "发现相似历史项目「{}」（{}）：{}",
+            item.title, item.relative_path, item.reason
+        ));
+    }
     let entry = projects::save_generated_project(
         projects_root,
         &parsed.project_name,
@@ -269,6 +276,7 @@ pub async fn generate_and_save_project(
         title: entry.title.clone(),
         content: normalized_markdown,
         validation,
+        similar_projects,
     })
 }
 

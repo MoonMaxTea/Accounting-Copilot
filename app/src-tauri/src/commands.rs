@@ -7,11 +7,13 @@ use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, sc
 use crate::config::{self, AiConfig};
 use crate::db;
 use crate::models::{
-    AppConfigResponse, CitationScanResult, CitationTarget, GenerateProjectResult, PackInfo,
-    ProjectFileEntry, ProjectTreeNode, SearchHit, StandardDetail, StandardSummary,
+    AppConfigResponse, CitationScanResult, CitationTarget, DeleteFolderResult,
+    GenerateProjectResult, PackInfo, ProjectFileEntry, ProjectTreeNode, SearchHit,
+    SimilarProjectMatch, StandardDetail, StandardSummary,
 };
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
 use crate::projects;
+use crate::trash::{TrashEntry, TrashStore};
 
 #[tauri::command]
 pub fn get_pack_info(app: AppHandle) -> Result<PackInfo, String> {
@@ -52,6 +54,7 @@ pub fn get_config(app: AppHandle) -> Result<AppConfigResponse, String> {
     Ok(AppConfigResponse {
         projects_dir: config.projects_dir,
         ai: config.ai,
+        projects_ui: config.projects_ui,
     })
 }
 
@@ -113,7 +116,8 @@ pub async fn generate_project_document(
 #[tauri::command]
 pub fn list_project_tree(app: AppHandle) -> Result<Vec<ProjectTreeNode>, String> {
     let root = config::ensure_projects_dir(&app)?;
-    projects::list_project_tree(&root)
+    let ui = config::load_config(&app)?.projects_ui;
+    projects::list_project_tree(&root, Some(&ui))
 }
 
 #[tauri::command]
@@ -148,6 +152,88 @@ pub fn move_project_file(
         PathBuf::from(file_path).as_path(),
         target_folder_relative.as_deref(),
     )
+}
+
+#[tauri::command]
+pub fn count_project_folder_entries(app: AppHandle, folder_relative: String) -> Result<usize, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::count_folder_entries(&root, &folder_relative)
+}
+
+#[tauri::command]
+pub fn delete_project_folder(app: AppHandle, folder_relative: String) -> Result<DeleteFolderResult, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    let result = projects::delete_project_folder(&root, &folder_relative, &mut trash, &app)?;
+    config::update_projects_ui(&app, |ui| {
+        ui.remove_folder_prefix(&folder_relative);
+    })?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn move_project_file_to_trash(app: AppHandle, file_path: String) -> Result<TrashEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    let entry = trash.move_project_file(&app, &root, PathBuf::from(file_path).as_path())?;
+    config::update_projects_ui(&app, |ui| {
+        ui.remove_path_references(&entry.original_relative_path);
+    })?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn list_trash_items(app: AppHandle) -> Result<Vec<TrashEntry>, String> {
+    Ok(TrashStore::load(&app)?.list())
+}
+
+#[tauri::command]
+pub fn restore_trash_item(app: AppHandle, id: String) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    trash.restore(&app, &root, &id)
+}
+
+#[tauri::command]
+pub fn purge_trash_item(app: AppHandle, id: String) -> Result<(), String> {
+    let mut trash = TrashStore::load(&app)?;
+    trash.purge(&app, &id)
+}
+
+#[tauri::command]
+pub fn save_projects_child_order(
+    app: AppHandle,
+    parent_relative: Option<String>,
+    ordered_relative_paths: Vec<String>,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.set_child_order(parent_relative.as_deref(), ordered_relative_paths);
+    })
+}
+
+#[tauri::command]
+pub fn toggle_project_pin(app: AppHandle, relative_path: String) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.toggle_pin(&relative_path);
+    })
+}
+
+#[tauri::command]
+pub fn save_projects_ui_state(
+    app: AppHandle,
+    last_evidence_file: Option<String>,
+    last_selected_folder: Option<String>,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.last_evidence_file = last_evidence_file;
+        ui.last_selected_folder = last_selected_folder;
+    })
+}
+
+#[tauri::command]
+pub fn find_similar_projects(app: AppHandle, project_name: String) -> Result<Vec<SimilarProjectMatch>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::find_similar_projects(&root, &project_name)
 }
 
 #[tauri::command]

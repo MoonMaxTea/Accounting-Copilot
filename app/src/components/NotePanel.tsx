@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { MarkdownPreview } from "./MarkdownPreview";
 import {
@@ -41,34 +41,65 @@ function isResolved(scanResults: CitationScanResult[], citation: string): boolea
   );
 }
 
+function citationTarget(scanResults: CitationScanResult[], citation: string): CitationScanResult | null {
+  const normalized = citation.trim();
+  return scanResults.find((item) => item.citation === normalized) ?? null;
+}
+
 function CitationLink({
   citation,
   resolved,
+  scanResults,
   onCitationClick,
   children,
 }: {
   citation: string;
   resolved: boolean;
+  scanResults: CitationScanResult[];
   onCitationClick: (citation: string) => void;
   children: ReactNode;
 }) {
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const scan = citationTarget(scanResults, citation);
+  const preview = scan?.target?.snippet_en?.trim();
+
   return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onCitationClick(citation);
-      }}
-      className={[
-        "inline rounded px-0.5 font-medium underline decoration-2 underline-offset-2",
-        resolved
-          ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
-          : "text-amber-800 decoration-amber-400 hover:bg-amber-50",
-      ].join(" ")}
+    <span
+      className="relative inline"
+      onMouseEnter={() => setHoverOpen(true)}
+      onMouseLeave={() => setHoverOpen(false)}
     >
-      {children}
-    </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onCitationClick(citation);
+        }}
+        className={[
+          "inline rounded px-0.5 font-medium underline decoration-2 underline-offset-2",
+          resolved
+            ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
+            : "text-amber-800 decoration-amber-400 hover:bg-amber-50",
+        ].join(" ")}
+      >
+        {children}
+      </button>
+      {hoverOpen && (
+        <span className="absolute bottom-full left-0 z-20 mb-2 block w-72 rounded-xl bg-slate-900 px-3 py-2 text-left text-xs leading-5 text-white shadow-lg">
+          <span className="block font-medium">{citation}</span>
+          <span className="mt-1 block text-slate-200">
+            {preview
+              ? preview.length > 180
+                ? `${preview.slice(0, 180)}…`
+                : preview
+              : resolved
+                ? "悬停预览暂不可用，点击可在右侧打开段落。"
+                : "未在本地 pack 中找到此引用。"}
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -98,6 +129,7 @@ export function NotePanel({
             <CitationLink
               citation={citation}
               resolved={isResolved(scanResults, citation)}
+              scanResults={scanResults}
               onCitationClick={onCitationClick}
             >
               {children}

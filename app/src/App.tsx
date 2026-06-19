@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getPackInfo, pickAndImportContentPack } from "./api";
+import { ToastProvider } from "./components/Toast";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
@@ -60,7 +61,8 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <ToastProvider>
+      <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between px-3 py-3 sm:px-4">
           <div>
@@ -150,7 +152,8 @@ function App() {
           </>
         )}
       </main>
-    </div>
+      </div>
+    </ToastProvider>
   );
 }
 

@@ -91,6 +91,7 @@ pub struct SearchHit {
 pub struct AppConfigResponse {
     pub projects_dir: Option<String>,
     pub ai: crate::config::AiConfig,
+    pub projects_ui: crate::config::ProjectsUiState,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -153,6 +154,21 @@ pub struct GenerateProjectResult {
     pub title: String,
     pub content: String,
     pub validation: ProjectValidationReport,
+    pub similar_projects: Vec<SimilarProjectMatch>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarProjectMatch {
+    pub relative_path: String,
+    pub title: String,
+    pub project_name: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeleteFolderResult {
+    pub folder_relative: String,
+    pub trashed_files: usize,
 }
 
 impl From<&StandardRecord> for StandardSummary {
