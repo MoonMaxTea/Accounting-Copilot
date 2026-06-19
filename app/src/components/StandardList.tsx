@@ -4,13 +4,19 @@ interface StandardListProps {
   standards: StandardSummary[];
   selectedId: string | null;
   onSelect: (standard: StandardSummary) => void;
+  emptyMessage?: string;
 }
 
-export function StandardList({ standards, selectedId, onSelect }: StandardListProps) {
+export function StandardList({
+  standards,
+  selectedId,
+  onSelect,
+  emptyMessage = "当前筛选条件下没有准则。可尝试切换分类或勾选「显示旧准则」。",
+}: StandardListProps) {
   if (standards.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-        当前筛选条件下没有准则。可尝试切换框架或勾选「显示旧准则」。
+        {emptyMessage}
       </div>
     );
   }

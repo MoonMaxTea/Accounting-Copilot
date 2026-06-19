@@ -3,32 +3,54 @@ import { listStandards } from "../api";
 import { SearchBar } from "../components/SearchBar";
 import { StandardDetailPanel } from "../components/StandardDetailPanel";
 import { StandardList } from "../components/StandardList";
+import { StandardsCategoryNav } from "../components/StandardsCategoryNav";
+import {
+  defaultTertiaryForMarket,
+  emptyStandardsMessage,
+  navigationForStandard,
+  resolveStandardsQuery,
+  type StandardsMarket,
+  type StandardsPrimaryCategory,
+} from "../lib/standards-navigation";
 import type { FrameworkFilter, StandardSummary } from "../types";
 
-const FRAMEWORKS: FrameworkFilter[] = ["ALL", "IFRS", "IAS", "ASC"];
-
 export function StandardsPage() {
-  const [framework, setFramework] = useState<FrameworkFilter>("ALL");
+  const [primary, setPrimary] = useState<StandardsPrimaryCategory>("accounting-standards");
+  const [market, setMarket] = useState<StandardsMarket>("ifrs");
+  const [tertiary, setTertiary] = useState<FrameworkFilter>("ALL");
   const [includeLegacy, setIncludeLegacy] = useState(false);
   const [standards, setStandards] = useState<StandardSummary[]>([]);
   const [selected, setSelected] = useState<StandardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const applyNavigation = useCallback((next: ReturnType<typeof navigationForStandard>) => {
+    setPrimary(next.primary);
+    setMarket(next.market);
+    setTertiary(next.tertiary);
+  }, []);
+
   const loadStandards = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    const query = resolveStandardsQuery(primary, market, tertiary);
+    if (query === "empty") {
+      setStandards([]);
+      setSelected(null);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await listStandards(
-        framework === "ALL" ? null : framework,
-        includeLegacy,
-      );
-      setStandards(result);
+      const result = await listStandards(query.framework, includeLegacy);
+      const filtered = result.filter(query.postFilter);
+      setStandards(filtered);
       setSelected((current) => {
-        if (current && result.some((item) => item.id === current.id)) {
+        if (current && filtered.some((item) => item.id === current.id)) {
           return current;
         }
-        return result[0] ?? null;
+        return filtered[0] ?? null;
       });
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -37,7 +59,7 @@ export function StandardsPage() {
     } finally {
       setLoading(false);
     }
-  }, [framework, includeLegacy]);
+  }, [primary, market, tertiary, includeLegacy]);
 
   useEffect(() => {
     void loadStandards();
@@ -54,49 +76,51 @@ export function StandardsPage() {
     (standardId: string) => {
       const match = standards.find((item) => item.id === standardId);
       if (match) {
+        applyNavigation(navigationForStandard(match));
         setSelected(match);
         return;
       }
-      setSelected({ id: standardId } as StandardSummary);
+
       listStandards(null, true)
         .then((all) => {
           const found = all.find((item) => item.id === standardId) ?? null;
+          if (found) {
+            applyNavigation(navigationForStandard(found));
+          }
           setSelected(found);
         })
         .catch(() => undefined);
     },
-    [standards],
+    [applyNavigation, standards],
   );
+
+  const handlePrimaryChange = (value: StandardsPrimaryCategory) => {
+    setPrimary(value);
+    setMarket("ifrs");
+    setTertiary(defaultTertiaryForMarket(value, "ifrs"));
+  };
+
+  const handleMarketChange = (value: StandardsMarket) => {
+    setMarket(value);
+    setTertiary(defaultTertiaryForMarket(primary, value));
+  };
+
+  const emptyMessage = emptyStandardsMessage(primary, market);
 
   return (
     <div className="flex h-full flex-col gap-4">
       <SearchBar onSelectHit={openStandardById} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        {FRAMEWORKS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setFramework(item)}
-            className={[
-              "rounded-full px-4 py-2 text-sm font-medium transition",
-              framework === item
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-400",
-            ].join(" ")}
-          >
-            {item === "ALL" ? "全部" : item}
-          </button>
-        ))}
-        <label className="ml-auto flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
-          <input
-            type="checkbox"
-            checked={includeLegacy}
-            onChange={(event) => setIncludeLegacy(event.target.checked)}
-          />
-          显示旧准则
-        </label>
-      </div>
+      <StandardsCategoryNav
+        primary={primary}
+        market={market}
+        tertiary={tertiary}
+        includeLegacy={includeLegacy}
+        onPrimaryChange={handlePrimaryChange}
+        onMarketChange={handleMarketChange}
+        onTertiaryChange={setTertiary}
+        onIncludeLegacyChange={setIncludeLegacy}
+      />
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
@@ -109,6 +133,7 @@ export function StandardsPage() {
               standards={standards}
               selectedId={selectedSummary?.id ?? null}
               onSelect={setSelected}
+              emptyMessage={emptyMessage}
             />
           )}
         </div>
