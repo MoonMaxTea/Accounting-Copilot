@@ -36,6 +36,8 @@ pub fn run() {
             commands::save_projects_child_order,
             commands::toggle_project_pin,
             commands::save_projects_ui_state,
+            commands::save_evidence_panel_collapsed,
+            commands::append_ai_conversation_turn,
             commands::find_similar_projects,
             commands::reveal_project_file,
             commands::reveal_projects_dir,

@@ -43,7 +43,7 @@ export interface SearchHit {
 }
 
 export type FrameworkFilter = "ALL" | "IFRS" | "IAS" | "ASC";
-export type AppTab = "standards" | "evidence" | "projects" | "settings";
+export type AppTab = "standards" | "evidence" | "settings";
 
 export interface AiConfig {
   provider: string | null;
@@ -58,6 +58,15 @@ export interface ProjectsUiState {
   order: Record<string, string[]>;
   last_evidence_file: string | null;
   last_selected_folder: string | null;
+  ai_threads?: Record<string, AiConversationTurn[]>;
+  evidence_panel_collapsed?: boolean;
+}
+
+export interface AiConversationTurn {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp_secs: number;
+  kind: "create" | "continue" | "system";
 }
 
 export interface AppConfigResponse {

@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::Manager;
 
+use crate::models::AiConversationTurn;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectsUiState {
     #[serde(default)]
@@ -16,6 +18,10 @@ pub struct ProjectsUiState {
     pub last_evidence_file: Option<String>,
     #[serde(default)]
     pub last_selected_folder: Option<String>,
+    #[serde(default)]
+    pub ai_threads: HashMap<String, Vec<AiConversationTurn>>,
+    #[serde(default)]
+    pub evidence_panel_collapsed: bool,
 }
 
 impl ProjectsUiState {
@@ -42,6 +48,13 @@ impl ProjectsUiState {
         } else {
             self.order.insert(key, ordered);
         }
+    }
+
+    pub fn append_ai_turn(&mut self, relative_path: &str, turn: AiConversationTurn) {
+        self.ai_threads
+            .entry(relative_path.to_string())
+            .or_default()
+            .push(turn);
     }
 
     pub fn remove_path_references(&mut self, relative_path: &str) {

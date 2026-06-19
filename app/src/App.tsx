@@ -10,14 +10,12 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
-import { ProjectsPage } from "./pages/ProjectsPage";
 import type { AppTab, PackInfo, UpdateCheckResult } from "./types";
 
 function AppShell() {
   const { showToast } = useToast();
   const [packInfo, setPackInfo] = useState<PackInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<AppTab>("standards");
-  const [evidenceFilePath, setEvidenceFilePath] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AppTab>("evidence");
   const [loading, setLoading] = useState(true);
   const [downloadingInitial, setDownloadingInitial] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,11 +99,6 @@ function AppShell() {
     }
   };
 
-  const openInEvidence = (filePath: string) => {
-    setEvidenceFilePath(filePath);
-    setActiveTab("evidence");
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
@@ -126,7 +119,7 @@ function AppShell() {
           </div>
           {packInfo?.loaded && (
             <nav className="flex items-center gap-2">
-              {(["standards", "evidence", "projects", "settings"] as AppTab[]).map((tab) => (
+              {(["standards", "evidence", "settings"] as AppTab[]).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -138,7 +131,7 @@ function AppShell() {
                       : "text-slate-600 hover:bg-slate-100",
                   ].join(" ")}
                 >
-                  {tab === "standards" ? "准则库" : tab === "projects" ? "项目" : tab === "settings" ? "设置" : "Evidence"}
+                  {tab === "standards" ? "准则库" : tab === "settings" ? "设置" : "Evidence"}
                 </button>
               ))}
             </nav>
@@ -177,13 +170,7 @@ function AppShell() {
               <StandardsPage />
             </div>
             <div className={activeTab === "evidence" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
-              <EvidencePage
-                initialFilePath={evidenceFilePath}
-                onInitialFilePathConsumed={() => setEvidenceFilePath(null)}
-              />
-            </div>
-            <div className={activeTab === "projects" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
-              <ProjectsPage onOpenInEvidence={openInEvidence} />
+              <EvidencePage />
             </div>
           </>
         )}

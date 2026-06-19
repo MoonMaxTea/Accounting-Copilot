@@ -193,6 +193,14 @@ pub struct SimilarProjectMatch {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConversationTurn {
+    pub role: String,
+    pub content: String,
+    pub timestamp_secs: u64,
+    pub kind: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DeleteFolderResult {
     pub folder_relative: String,

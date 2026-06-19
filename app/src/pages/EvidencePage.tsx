@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  appendAiConversationTurn,
   continueProjectDocument,
   countProjectFolderEntries,
   createProjectFolder,
   deleteProjectFolder,
+  generateProjectDocument,
   getConfig,
   getStandard,
   listProjectFiles,
@@ -16,6 +18,7 @@ import {
   renameProjectFolder,
   renameProjectFile,
   restoreTrashItem,
+  saveEvidencePanelCollapsed,
   saveProjectsChildOrder,
   saveProjectsUiState,
   resolveCitation,
@@ -23,7 +26,7 @@ import {
   searchProjectFiles,
   toggleProjectPin,
 } from "../api";
-import { EvidenceStandardPanel } from "../components/EvidenceStandardPanel";
+import { EvidenceSidePanel } from "../components/EvidenceSidePanel";
 import { NotePanel } from "../components/NotePanel";
 import { ProjectBreadcrumb } from "../components/ProjectBreadcrumb";
 import {
@@ -33,6 +36,7 @@ import {
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
 import type {
+  AiConversationTurn,
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
@@ -53,7 +57,15 @@ const defaultUiState: ProjectsUiState = {
   order: {},
   last_evidence_file: null,
   last_selected_folder: null,
+  ai_threads: {},
+  evidence_panel_collapsed: false,
 };
+
+const DRAFT_THREAD_KEY = "__draft__";
+
+function nowSecs(): number {
+  return Math.floor(Date.now() / 1000);
+}
 
 export function EvidencePage({
   initialFilePath = null,
@@ -78,11 +90,26 @@ export function EvidencePage({
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashItems, setTrashItems] = useState<TrashEntry[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
-  const [followUpQuestion, setFollowUpQuestion] = useState("");
-  const [followUpFacts, setFollowUpFacts] = useState("");
-  const [continuing, setContinuing] = useState(false);
-  const [continueResult, setContinueResult] = useState<GenerateProjectResult | null>(null);
+  const [question, setQuestion] = useState("");
+  const [facts, setFacts] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [lastResult, setLastResult] = useState<GenerateProjectResult | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const restoredRef = useRef(false);
+
+  const threadKey = selected?.relative_path ?? DRAFT_THREAD_KEY;
+  const conversationTurns = useMemo(
+    () => projectsUi.ai_threads?.[threadKey] ?? [],
+    [projectsUi.ai_threads, threadKey],
+  );
+
+  const recordTurns = useCallback(async (relativePath: string, turns: AiConversationTurn[]) => {
+    let ui = projectsUi;
+    for (const turn of turns) {
+      ui = await appendAiConversationTurn(relativePath, turn);
+    }
+    setProjectsUi(ui);
+  }, [projectsUi]);
 
   const refreshSidebar = useCallback(async (query: string) => {
     setLoadingFiles(true);
@@ -133,7 +160,9 @@ export function EvidencePage({
     getConfig()
       .then((config) => {
         setProjectsDir(config.projects_dir);
-        setProjectsUi(config.projects_ui ?? defaultUiState);
+        const ui = config.projects_ui ?? defaultUiState;
+        setProjectsUi(ui);
+        setPanelCollapsed(ui.evidence_panel_collapsed ?? false);
       })
       .catch(() => undefined);
   }, []);
@@ -185,7 +214,7 @@ export function EvidencePage({
     if (!selected) {
       setNoteContent("");
       setScanResults([]);
-      setContinueResult(null);
+      setLastResult(null);
       return;
     }
 
@@ -288,37 +317,109 @@ export function EvidencePage({
     }
   };
 
+  const handleGenerate = async () => {
+    const trimmed = question.trim();
+    if (!trimmed) {
+      setError("请先输入要分析的问题。");
+      return;
+    }
+
+    setGenerating(true);
+    setError(null);
+    setLastResult(null);
+    try {
+      const userTurn: AiConversationTurn = {
+        role: "user",
+        content: facts.trim() ? `${trimmed}\n\n补充事实：${facts.trim()}` : trimmed,
+        timestamp_secs: nowSecs(),
+        kind: "create",
+      };
+      await recordTurns(DRAFT_THREAD_KEY, [userTurn]);
+
+      const generated = await generateProjectDocument(
+        trimmed,
+        facts.trim() || null,
+        selectedFolderRelative,
+      );
+      setLastResult(generated);
+      setQuestion("");
+      setFacts("");
+
+      const assistantTurn: AiConversationTurn = {
+        role: "assistant",
+        content: `已生成「${generated.project_name}」并保存至 ${generated.relative_path}`,
+        timestamp_secs: nowSecs(),
+        kind: "create",
+      };
+      await recordTurns(generated.relative_path, [userTurn, assistantTurn]);
+
+      const entries = await listProjectFiles();
+      const match = entries.find((entry) => entry.path === generated.file_path);
+      if (match) {
+        setSelected(match);
+        setSelectedFolderRelative(folderRelativeForSelection(match.relative_path, null));
+      }
+      showToast(`已保存「${generated.project_name}」`);
+      await refreshSidebar(searchQuery);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleContinue = async () => {
     if (!selected) {
       return;
     }
-    const trimmed = followUpQuestion.trim();
+    const trimmed = question.trim();
     if (!trimmed) {
       setError("请先输入追问内容。");
       return;
     }
 
-    setContinuing(true);
+    setGenerating(true);
     setError(null);
-    setContinueResult(null);
+    setLastResult(null);
     try {
+      const userTurn: AiConversationTurn = {
+        role: "user",
+        content: facts.trim() ? `${trimmed}\n\n补充事实：${facts.trim()}` : trimmed,
+        timestamp_secs: nowSecs(),
+        kind: "continue",
+      };
+      await recordTurns(selected.relative_path, [userTurn]);
+
       const updated = await continueProjectDocument(
         selected.path,
         trimmed,
-        followUpFacts.trim() || null,
+        facts.trim() || null,
       );
-      setContinueResult(updated);
+      setLastResult(updated);
       setNoteContent(updated.content);
       const scanned = await scanNoteCitations(updated.content);
       setScanResults(scanned);
-      setFollowUpQuestion("");
-      setFollowUpFacts("");
+      setQuestion("");
+      setFacts("");
+
+      const assistantTurn: AiConversationTurn = {
+        role: "assistant",
+        content: `已更新笔记「${updated.project_name}」`,
+        timestamp_secs: nowSecs(),
+        kind: "continue",
+      };
+      await recordTurns(selected.relative_path, [assistantTurn]);
       showToast("已更新项目笔记");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setContinuing(false);
+      setGenerating(false);
     }
+  };
+
+  const handleTogglePanel = (collapsed: boolean) => {
+    setPanelCollapsed(collapsed);
+    void saveEvidencePanelCollapsed(collapsed).then(setProjectsUi).catch(() => undefined);
   };
 
   const handleDeleteFolder = async (folderRelative: string) => {
@@ -350,8 +451,8 @@ export function EvidencePage({
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-950">
         <h2 className="text-lg font-semibold">尚未设置项目目录</h2>
         <p className="mt-2 text-sm leading-6">
-          请先在「设置」中选择 Obsidian Vault 中的 <strong>02 - 项目</strong> 文件夹，
-          然后回到 Evidence 分屏查看项目笔记。
+          请先在「设置」中选择 Obsidian Vault 的 <strong>02 - 项目</strong> 文件夹，
+          然后回到 Evidence 工作台。
         </p>
       </section>
     );
@@ -420,7 +521,14 @@ export function EvidencePage({
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(0,1fr)] gap-3">
+      <div
+        className={[
+          "grid min-h-0 flex-1 gap-3",
+          panelCollapsed
+            ? "grid-cols-[minmax(220px,240px)_minmax(0,1fr)]"
+            : "grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(280px,360px)]",
+        ].join(" ")}
+      >
         <ProjectFolderTree
           nodes={tree}
           searchResults={searchResults}
@@ -483,63 +591,30 @@ export function EvidencePage({
             await refreshSidebar(searchQuery);
           }}
         />
-        <div className="flex min-h-0 flex-col gap-3">
-          <NotePanel
-            title={selected?.title ?? "项目笔记"}
-            content={noteContent}
-            scanResults={scanResults}
-            loading={loadingNote}
-            onCitationClick={(citation) => void handleCitationClick(citation)}
-          />
-          {selected && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900">继续追问</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                在当前笔记「{selected.title}」基础上补充问题，AI 会直接更新该文件。
-              </p>
-              <label className="mt-3 block space-y-1">
-                <span className="text-xs font-medium text-slate-700">追问</span>
-                <textarea
-                  value={followUpQuestion}
-                  onChange={(event) => setFollowUpQuestion(event.target.value)}
-                  rows={3}
-                  placeholder="例如：若其中一方有 veto 权但不参与日常经营，结论会变吗？"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900 focus:ring-2"
-                />
-              </label>
-              <label className="mt-2 block space-y-1">
-                <span className="text-xs font-medium text-slate-700">补充事实（可选）</span>
-                <textarea
-                  value={followUpFacts}
-                  onChange={(event) => setFollowUpFacts(event.target.value)}
-                  rows={2}
-                  placeholder="例如：合同规定 A 对融资有一票否决…"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900 focus:ring-2"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={continuing}
-                onClick={() => void handleContinue()}
-                className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:bg-slate-400"
-              >
-                {continuing ? "正在更新笔记…" : "提交追问并更新"}
-              </button>
-              {continueResult && continueResult.validation.warnings.length > 0 && (
-                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  <p className="font-medium">校验警告（文件已更新）：</p>
-                  <ul className="mt-1 list-disc pl-4">
-                    {continueResult.validation.warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </section>
-          )}
-        </div>
-        <EvidenceStandardPanel
-          target={citationTarget}
+
+        <NotePanel
+          title={selected?.title ?? "项目笔记"}
+          content={noteContent}
+          scanResults={scanResults}
+          loading={loadingNote}
+          onCitationClick={(citation) => void handleCitationClick(citation)}
+        />
+
+        <EvidenceSidePanel
+          collapsed={panelCollapsed}
+          onToggleCollapsed={handleTogglePanel}
+          selected={selected}
+          selectedFolderRelative={selectedFolderRelative}
+          conversationTurns={conversationTurns}
+          question={question}
+          facts={facts}
+          onQuestionChange={setQuestion}
+          onFactsChange={setFacts}
+          generating={generating}
+          onGenerate={() => void handleGenerate()}
+          onContinue={() => void handleContinue()}
+          lastResult={lastResult}
+          citationTarget={citationTarget}
           highlight={highlight}
           missMessage={citationMiss}
           onOpenSuperseded={(standardId) => void handleOpenSuperseded(standardId)}

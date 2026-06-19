@@ -274,6 +274,27 @@ pub fn save_projects_ui_state(
 }
 
 #[tauri::command]
+pub fn save_evidence_panel_collapsed(
+    app: AppHandle,
+    collapsed: bool,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.evidence_panel_collapsed = collapsed;
+    })
+}
+
+#[tauri::command]
+pub fn append_ai_conversation_turn(
+    app: AppHandle,
+    relative_path: String,
+    turn: crate::models::AiConversationTurn,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.append_ai_turn(&relative_path, turn);
+    })
+}
+
+#[tauri::command]
 pub fn find_similar_projects(app: AppHandle, project_name: String) -> Result<Vec<SimilarProjectMatch>, String> {
     let root = config::ensure_projects_dir(&app)?;
     projects::find_similar_projects(&root, &project_name)

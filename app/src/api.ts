@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfigResponse,
   AiConfig,
+  AiConversationTurn,
   CitationScanResult,
   CitationTarget,
   DeleteFolderResult,
@@ -139,6 +140,20 @@ export function saveProjectsUiState(
   return invoke<ProjectsUiState>("save_projects_ui_state", {
     lastEvidenceFile,
     lastSelectedFolder,
+  });
+}
+
+export function saveEvidencePanelCollapsed(collapsed: boolean): Promise<ProjectsUiState> {
+  return invoke<ProjectsUiState>("save_evidence_panel_collapsed", { collapsed });
+}
+
+export function appendAiConversationTurn(
+  relativePath: string,
+  turn: AiConversationTurn,
+): Promise<ProjectsUiState> {
+  return invoke<ProjectsUiState>("append_ai_conversation_turn", {
+    relativePath,
+    turn,
   });
 }
 

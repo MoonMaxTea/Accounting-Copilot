@@ -78,6 +78,11 @@ pub fn build_system_prompt(
          ## 编写规范\n{guide}\n\n## 写作技能\n{skill}\n\n\
          ## 引用约束\n\
          只能引用以下 pack 段落（status=current{}）：\n{allowed_list}\n\n\
+         ## 分析约束（红线）\n\
+         - 准则英文原文：只能使用 user message 中「知识库提供的准则原文」逐字引用\n\
+         - 分析与结论：只能依据上述 pack 原文及 user message 中的 pack 段落进行推理，不得引入 pack 未提供的准则段落或凭模型记忆补充准则依据\n\
+         - 若 pack 未覆盖所需段落，必须写「知识库暂无该准则」，不得编造\n\
+         - 禁止联网或使用 pack 以外的准则来源\n\n\
          ## 输出格式（必须严格遵守）\n\
          1. 先输出短项目名（2-12 字中文，用于文件名与 # 标题）\n\
          2. 再输出完整 Markdown 正文\n\
