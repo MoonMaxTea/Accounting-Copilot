@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EvidenceStandardPanel } from "./EvidenceStandardPanel";
+import {
+  groupConversationRounds,
+  roundKindLabel,
+  truncatePreview,
+  type ConversationRound,
+} from "../lib/conversation";
 import type {
   AiConversationTurn,
   CitationHighlight,
@@ -37,6 +43,75 @@ function formatTurnTime(timestampSecs: number): string {
   });
 }
 
+function ConversationRoundItem({
+  round,
+  index,
+  expanded,
+  onToggle,
+}: {
+  round: ConversationRound;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg ring-1 ring-slate-200">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start gap-2 bg-white px-3 py-2 text-left hover:bg-slate-50"
+      >
+        <span className="mt-0.5 text-[10px] text-slate-400">{expanded ? "▼" : "▶"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-medium text-slate-700">
+            第 {index + 1} 轮 · {roundKindLabel(round.kind)} ·{" "}
+            {formatTurnTime(round.timestamp_secs)}
+          </span>
+          <span className="mt-1 block text-xs leading-5 text-slate-600">
+            {expanded ? "点击收起" : truncatePreview(round.userQuestion, 88)}
+          </span>
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="space-y-2 border-t border-slate-100 bg-slate-50 px-3 py-2">
+          <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
+            <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">你的问题</p>
+            <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">
+              {round.userQuestion}
+            </p>
+          </div>
+
+          {round.steps.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">知识库检索</p>
+              {round.steps.map((step, stepIndex) => (
+                <div
+                  key={`${step.timestamp_secs}-${stepIndex}`}
+                  className={[
+                    "rounded-lg px-3 py-2 text-xs leading-5",
+                    step.kind === "tool"
+                      ? "bg-sky-50 text-sky-950 ring-1 ring-sky-100"
+                      : "bg-emerald-50 text-emerald-950 ring-1 ring-emerald-100",
+                  ].join(" ")}
+                >
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+                    {step.kind === "tool" ? "知识库" : "AI"} ·{" "}
+                    {formatTurnTime(step.timestamp_secs)}
+                  </p>
+                  <p className="whitespace-pre-wrap">{step.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">该轮暂无知识库检索记录。</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EvidenceSidePanel({
   collapsed,
   onToggleCollapsed,
@@ -58,6 +133,7 @@ export function EvidenceSidePanel({
 }: EvidenceSidePanelProps) {
   const [assistantOpen, setAssistantOpen] = useState(true);
   const [standardOpen, setStandardOpen] = useState(true);
+  const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
 
   const saveLocationLabel = selectedFolderRelative ?? "根目录";
   const isContinueMode = Boolean(selected);
@@ -69,6 +145,24 @@ export function EvidenceSidePanel({
       ? "提交追问并更新"
       : "生成项目笔记";
 
+  const conversationRounds = useMemo(
+    () => groupConversationRounds(conversationTurns),
+    [conversationTurns],
+  );
+
+  const conversationScopeKey = selected?.relative_path ?? "__draft__";
+
+  useEffect(() => {
+    if (conversationRounds.length === 0) {
+      setExpandedRoundIds(new Set());
+      return;
+    }
+    const latest = conversationRounds[conversationRounds.length - 1];
+    if (latest) {
+      setExpandedRoundIds(new Set([latest.id]));
+    }
+  }, [conversationScopeKey, conversationRounds]);
+
   const handleSubmit = () => {
     if (isContinueMode) {
       onContinue();
@@ -79,10 +173,22 @@ export function EvidenceSidePanel({
 
   const historyLabel = useMemo(() => {
     if (selected) {
-      return `「${selected.title}」对话记录`;
+      return `「${selected.title}」对话记录（${conversationRounds.length} 轮）`;
     }
-    return "新建对话";
-  }, [selected]);
+    return `新建对话（${conversationRounds.length} 轮）`;
+  }, [selected, conversationRounds.length]);
+
+  const toggleRound = (roundId: string) => {
+    setExpandedRoundIds((current) => {
+      const next = new Set(current);
+      if (next.has(roundId)) {
+        next.delete(roundId);
+      } else {
+        next.add(roundId);
+      }
+      return next;
+    });
+  };
 
   if (collapsed) {
     return (
@@ -137,31 +243,41 @@ export function EvidenceSidePanel({
                   : `将在「${saveLocationLabel}」下新建项目笔记。先在左侧选中保存文件夹。`}
               </p>
 
-              <div className="max-h-44 space-y-2 overflow-auto rounded-xl bg-slate-50 p-3">
-                <p className="text-xs font-medium text-slate-700">{historyLabel}</p>
-                {conversationTurns.length === 0 ? (
-                  <p className="text-xs text-slate-500">暂无历史问题，在下方输入开始对话。</p>
-                ) : (
-                  conversationTurns.map((turn, index) => (
-                    <div
-                      key={`${turn.timestamp_secs}-${index}`}
-                      className={[
-                        "rounded-lg px-3 py-2 text-xs leading-5",
-                        turn.kind === "tool"
-                          ? "bg-sky-50 text-sky-950 ring-1 ring-sky-100"
-                          : turn.role === "user"
-                            ? "bg-white text-slate-800 ring-1 ring-slate-200"
-                            : "bg-emerald-50 text-emerald-950",
-                      ].join(" ")}
+              <div className="flex max-h-[min(42vh,520px)] min-h-[160px] flex-col overflow-hidden rounded-xl bg-slate-50 ring-1 ring-slate-100">
+                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                  <p className="text-xs font-medium text-slate-700">{historyLabel}</p>
+                  {conversationRounds.length > 1 && (
+                    <button
+                      type="button"
+                      className="text-[11px] text-slate-500 hover:text-slate-800"
+                      onClick={() => {
+                        if (expandedRoundIds.size === conversationRounds.length) {
+                          setExpandedRoundIds(new Set());
+                          return;
+                        }
+                        setExpandedRoundIds(new Set(conversationRounds.map((round) => round.id)));
+                      }}
                     >
-                      <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
-                        {turn.kind === "tool" ? "知识库" : turn.role === "user" ? "你" : "AI"} ·{" "}
-                        {formatTurnTime(turn.timestamp_secs)}
-                      </p>
-                      <p className="whitespace-pre-wrap">{turn.content}</p>
-                    </div>
-                  ))
-                )}
+                      {expandedRoundIds.size === conversationRounds.length ? "全部收起" : "全部展开"}
+                    </button>
+                  )}
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
+                  {conversationRounds.length === 0 ? (
+                    <p className="text-xs text-slate-500">暂无历史问题，在下方输入开始对话。</p>
+                  ) : (
+                    conversationRounds.map((round, index) => (
+                      <ConversationRoundItem
+                        key={round.id}
+                        round={round}
+                        index={index}
+                        expanded={expandedRoundIds.has(round.id)}
+                        onToggle={() => toggleRound(round.id)}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
 
               <label className="block space-y-1">

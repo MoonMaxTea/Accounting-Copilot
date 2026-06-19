@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use chrono::Local;
+use serde_json::Value;
 
 use crate::models::ProjectFileEntry;
 
@@ -561,6 +562,77 @@ mod tests {
         assert_eq!(turns[1].kind, "continue");
         assert!(turns[1].content.contains("融资"));
     }
+
+    #[test]
+    fn rebuilds_agent_session_activity_with_tool_steps() {
+        use crate::models::{AiAgentMessage, AiAgentToolCall};
+
+        let session = vec![
+            AiAgentMessage {
+                role: "user".to_string(),
+                content: Some("用户问题：\n50:50 持股如何判断？".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(vec![AiAgentToolCall {
+                    id: "call-1".to_string(),
+                    name: "search_local_pack".to_string(),
+                    arguments: r#"{"query":"joint control"}"#.to_string(),
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "user".to_string(),
+                content: Some(
+                    "用户追问（请更新项目笔记，输出完整新版 Markdown）：\n融资否决权？".to_string(),
+                ),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+        ];
+
+        let activity = conversation_activity_from_agent_session(&session);
+        assert_eq!(activity.len(), 3);
+        assert_eq!(activity[0].kind, "create");
+        assert_eq!(activity[1].kind, "tool");
+        assert!(activity[1].content.contains("搜索知识库"));
+        assert_eq!(activity[2].kind, "continue");
+    }
+
+    #[test]
+    fn merge_conversation_sources_keeps_stored_and_adds_missing_users() {
+        use crate::models::AiConversationTurn;
+
+        let stored = vec![AiConversationTurn {
+            role: "user".to_string(),
+            content: "第二问".to_string(),
+            timestamp_secs: 200,
+            kind: "continue".to_string(),
+        }];
+        let markdown = vec![
+            AiConversationTurn {
+                role: "user".to_string(),
+                content: "第一问".to_string(),
+                timestamp_secs: 100,
+                kind: "create".to_string(),
+            },
+            AiConversationTurn {
+                role: "user".to_string(),
+                content: "第二问".to_string(),
+                timestamp_secs: 200,
+                kind: "continue".to_string(),
+            },
+        ];
+
+        let merged = merge_conversation_sources(stored, Vec::new(), markdown);
+        assert_eq!(count_user_round_turns(&merged), 2);
+    }
 }
 
 pub fn sanitize_project_name(name: &str) -> String {
@@ -1004,6 +1076,205 @@ pub fn extract_conversation_from_markdown(content: &str) -> Vec<crate::models::A
     merge_conversation_turns(log_turns, question_turns)
 }
 
+fn is_agent_system_nudge(raw: &str) -> bool {
+    raw.contains("请根据以上工具检索")
+        || raw.contains("请继续调用工具")
+        || raw.contains("不要调用工具，直接输出")
+        || raw.contains("请继续调用工具补全")
+}
+
+fn parse_agent_user_turn(raw: &str) -> Option<(String, String)> {
+    if let Some(question) = raw.strip_prefix("用户问题：\n") {
+        let content = question
+            .split("\n\n补充事实：")
+            .next()
+            .unwrap_or(question)
+            .split("\n\n---\n\n当前项目笔记全文：")
+            .next()
+            .unwrap_or(question)
+            .trim()
+            .to_string();
+        if content.chars().count() >= 4 {
+            return Some(("create".to_string(), content));
+        }
+        return None;
+    }
+
+    if let Some(idx) = raw.find("用户追问") {
+        let body = raw[idx..]
+            .split_once('\n')
+            .map(|(_, rest)| rest)
+            .unwrap_or("");
+        let content = body
+            .split("\n\n补充事实：")
+            .next()
+            .unwrap_or(body)
+            .split("\n\n---\n\n当前项目笔记全文：")
+            .next()
+            .unwrap_or(body)
+            .trim()
+            .to_string();
+        if content.chars().count() >= 4 {
+            return Some(("continue".to_string(), content));
+        }
+    }
+
+    None
+}
+
+fn tool_activity_label_for_ui(tool_name: &str, arguments: &str) -> String {
+    match tool_name {
+        "search_local_pack" => {
+            let query = serde_json::from_str::<Value>(arguments)
+                .ok()
+                .and_then(|value| value.get("query").and_then(Value::as_str).map(str::to_string))
+                .unwrap_or_else(|| arguments.to_string());
+            format!("搜索知识库：{query}")
+        }
+        "get_pack_paragraph" => {
+            let citation = serde_json::from_str::<Value>(arguments)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("citation")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| arguments.to_string());
+            format!("读取段落：{citation}")
+        }
+        "list_standard_paragraphs" => {
+            let standard_id = serde_json::from_str::<Value>(arguments)
+                .ok()
+                .and_then(|value| {
+                    value
+                        .get("standard_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| arguments.to_string());
+            format!("列出段落索引：{standard_id}")
+        }
+        _ => format!("调用工具：{tool_name}"),
+    }
+}
+
+pub fn conversation_activity_from_agent_session(
+    session: &[crate::models::AiAgentMessage],
+) -> Vec<crate::models::AiConversationTurn> {
+    use crate::models::AiConversationTurn;
+
+    let mut turns = Vec::new();
+    let base = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+
+    for (index, message) in session.iter().enumerate() {
+        let timestamp_secs = base.saturating_sub((session.len().saturating_sub(index)) as u64 * 30);
+
+        match message.role.as_str() {
+            "user" => {
+                let Some(raw) = message.content.as_ref() else {
+                    continue;
+                };
+                if is_agent_system_nudge(raw) {
+                    continue;
+                }
+                let Some((kind, content)) = parse_agent_user_turn(raw) else {
+                    continue;
+                };
+                turns.push(AiConversationTurn {
+                    role: "user".to_string(),
+                    content,
+                    timestamp_secs,
+                    kind,
+                });
+            }
+            "assistant" => {
+                let Some(tool_calls) = message.tool_calls.as_ref() else {
+                    continue;
+                };
+                for tool_call in tool_calls {
+                    turns.push(AiConversationTurn {
+                        role: "assistant".to_string(),
+                        content: tool_activity_label_for_ui(
+                            &tool_call.name,
+                            &tool_call.arguments,
+                        ),
+                        timestamp_secs,
+                        kind: "tool".to_string(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    turns
+}
+
+fn count_user_round_turns(turns: &[crate::models::AiConversationTurn]) -> usize {
+    turns
+        .iter()
+        .filter(|turn| {
+            turn.role == "user" && (turn.kind == "create" || turn.kind == "continue")
+        })
+        .count()
+}
+
+fn user_round_signature(turn: &crate::models::AiConversationTurn) -> String {
+    format!("{}:{}", turn.kind, turn.content.trim())
+}
+
+fn supplement_missing_user_rounds(
+    mut primary: Vec<crate::models::AiConversationTurn>,
+    supplemental: Vec<crate::models::AiConversationTurn>,
+) -> Vec<crate::models::AiConversationTurn> {
+    let existing: std::collections::BTreeSet<String> = primary
+        .iter()
+        .filter(|turn| turn.role == "user")
+        .map(user_round_signature)
+        .collect();
+
+    let mut missing: Vec<crate::models::AiConversationTurn> = supplemental
+        .into_iter()
+        .filter(|turn| turn.role == "user" && !existing.contains(&user_round_signature(turn)))
+        .collect();
+
+    if missing.is_empty() {
+        return primary;
+    }
+
+    missing.sort_by_key(|turn| turn.timestamp_secs);
+    missing.append(&mut primary);
+    missing
+}
+
+pub fn merge_conversation_sources(
+    stored: Vec<crate::models::AiConversationTurn>,
+    session_activity: Vec<crate::models::AiConversationTurn>,
+    markdown_turns: Vec<crate::models::AiConversationTurn>,
+) -> Vec<crate::models::AiConversationTurn> {
+    let mut merged = if !stored.is_empty() {
+        stored
+    } else if !session_activity.is_empty() {
+        session_activity
+    } else {
+        markdown_turns.clone()
+    };
+
+    if merged.is_empty() {
+        return merged;
+    }
+
+    if count_user_round_turns(&merged) < count_user_round_turns(&markdown_turns) {
+        merged = supplement_missing_user_rounds(merged, markdown_turns);
+    }
+
+    merged
+}
+
 pub fn conversation_turns_from_agent_session(
     session: &[crate::models::AiAgentMessage],
 ) -> Vec<crate::models::AiConversationTurn> {
@@ -1040,13 +1311,17 @@ pub fn conversation_turns_from_agent_session(
                     .to_string(),
             )
         } else if let Some(idx) = raw.find("用户追问") {
-            let tail = &raw[idx..];
-            let question = tail
-                .split('\n')
+            let body = raw[idx..]
+                .split_once('\n')
+                .map(|(_, rest)| rest)
+                .unwrap_or("");
+            let question = body
+                .split("\n\n补充事实：")
                 .next()
-                .unwrap_or(tail)
-                .replace("用户追问（请更新项目笔记，输出完整新版 Markdown）：", "")
-                .replace("用户追问：", "")
+                .unwrap_or(body)
+                .split("\n\n---\n\n当前项目笔记全文：")
+                .next()
+                .unwrap_or(body)
                 .trim()
                 .to_string();
             ("continue".to_string(), question)

@@ -343,24 +343,39 @@ pub fn get_project_conversation(
     relative_path: String,
 ) -> Result<Vec<crate::models::AiConversationTurn>, String> {
     let config = config::load_config(&app)?;
-    if let Some(threads) = config.projects_ui.ai_threads.get(&relative_path) {
-        if !threads.is_empty() {
-            return Ok(threads.clone());
-        }
-    }
-    if let Some(session) = config.projects_ui.ai_agent_sessions.get(&relative_path) {
-        let turns = projects::conversation_turns_from_agent_session(session);
-        if !turns.is_empty() {
-            return Ok(turns);
-        }
-    }
+    let stored = config
+        .projects_ui
+        .ai_threads
+        .get(&relative_path)
+        .cloned()
+        .unwrap_or_default();
+    let session = config.projects_ui.agent_session(&relative_path);
+    let session_activity = projects::conversation_activity_from_agent_session(&session);
+
     if relative_path == DRAFT_AGENT_SESSION_KEY {
-        return Ok(Vec::new());
+        return Ok(projects::merge_conversation_sources(
+            stored,
+            session_activity,
+            Vec::new(),
+        ));
     }
-    let root = config::ensure_projects_dir(&app)?;
-    let file_path = root.join(&relative_path);
-    let content = projects::read_project_file(&root, &file_path)?;
-    Ok(projects::extract_conversation_from_markdown(&content))
+
+    let markdown_turns = match config::ensure_projects_dir(&app) {
+        Ok(root) => {
+            let file_path = root.join(&relative_path);
+            match projects::read_project_file(&root, &file_path) {
+                Ok(content) => projects::extract_conversation_from_markdown(&content),
+                Err(_) => Vec::new(),
+            }
+        }
+        Err(_) => Vec::new(),
+    };
+
+    Ok(projects::merge_conversation_sources(
+        stored,
+        session_activity,
+        markdown_turns,
+    ))
 }
 
 #[tauri::command]
