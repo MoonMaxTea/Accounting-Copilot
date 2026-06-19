@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::Path;
 
+use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::citations::{load_paragraphs, scan_citations};
+use crate::citations::{load_paragraphs, resolve_citation, scan_citations};
 use crate::config::AiConfig;
 use crate::models::{CitationScanResult, GenerateProjectResult, ProjectValidationReport};
 use crate::projects::{self, ParsedAiDocument};
@@ -80,9 +81,11 @@ pub fn build_system_prompt(
          ## 输出格式（必须严格遵守）\n\
          1. 先输出短项目名（2-12 字中文，用于文件名与 # 标题）\n\
          2. 再输出完整 Markdown 正文\n\
-         3. 使用以下分隔符，不要添加其它前言或结语：\n\
+         3. Markdown 正文必须以 YAML frontmatter 开头（tags、date、status、type、standards、related），格式见编写规范第三节\n\
+         4. 「准则原文（知识库）」节只能使用 user message 中「知识库提供的准则原文」的英文原文，禁止凭模型记忆或网络知识编写\n\
+         5. 使用以下分隔符，不要添加其它前言或结语：\n\
          {PROJECT_NAME_START}\n项目名\n{PROJECT_NAME_END}\n\
-         {MARKDOWN_START}\n# 项目名\n...\n{MARKDOWN_END}\n\n\
+         {MARKDOWN_START}\n---\n...\n---\n\n# 项目名\n...\n{MARKDOWN_END}\n\n\
          正文首个一级标题必须与项目名一致。引用格式示例：IFRS 11 §7-8、IAS 28 §16、ASC 740-10-25-5。",
         if allow_legacy { "，含 legacy" } else { "" },
     ))
@@ -94,6 +97,209 @@ pub fn build_user_prompt(question: &str, facts: Option<&str>) -> String {
         return format!("用户问题：\n{trimmed}");
     };
     format!("用户问题：\n{trimmed}\n\n补充事实：\n{facts_text}")
+}
+
+pub fn build_user_prompt_with_pack(
+    question: &str,
+    facts: Option<&str>,
+    pack_snippets: &[(String, String)],
+) -> String {
+    let mut prompt = build_user_prompt(question, facts);
+    if pack_snippets.is_empty() {
+        return prompt;
+    }
+
+    prompt.push_str(
+        "\n\n## 知识库提供的准则原文\n\
+         「准则原文（知识库）」节必须逐字使用以下英文原文；若某段落未列出，写「知识库暂无该准则」并勿编造。\n",
+    );
+    for (citation, snippet) in pack_snippets {
+        prompt.push_str(&format!("\n### {citation}\n{snippet}\n"));
+    }
+    prompt
+}
+
+pub fn build_continue_user_prompt(
+    existing_markdown: &str,
+    question: &str,
+    facts: Option<&str>,
+    pack_snippets: &[(String, String)],
+) -> String {
+    let mut prompt = format!(
+        "现有项目笔记（请在此基础上更新，输出完整新版 Markdown）：\n\n{existing_markdown}\n\n---\n\n用户追问：\n{}",
+        question.trim()
+    );
+    if let Some(facts_text) = facts.map(str::trim).filter(|value| !value.is_empty()) {
+        prompt.push_str(&format!("\n\n补充事实：\n{facts_text}"));
+    }
+    prompt.push_str(
+        "\n\n更新要求：\n\
+         - 保留 frontmatter 中的初稿 date\n\
+         - 在文末「日志」追加今日更新记录\n\
+         - 新增或修改的准则原文必须来自下方知识库片段\n\
+         - 输出格式与新建笔记相同（PROJECT_NAME + MARKDOWN 区块）",
+    );
+    if !pack_snippets.is_empty() {
+        prompt.push_str("\n\n## 知识库提供的准则原文\n");
+        for (citation, snippet) in pack_snippets {
+            prompt.push_str(&format!("\n### {citation}\n{snippet}\n"));
+        }
+    }
+    prompt
+}
+
+pub fn collect_relevant_pack_snippets(
+    content_dir: &Path,
+    question: &str,
+    facts: Option<&str>,
+    existing_content: Option<&str>,
+    allow_legacy: bool,
+    limit: usize,
+) -> Result<Vec<(String, String)>, String> {
+    let combined = format!(
+        "{question}\n{}\n{}",
+        facts.unwrap_or(""),
+        existing_content.unwrap_or("")
+    );
+    let entries = load_paragraphs(content_dir)?;
+    let mut scored: Vec<(i32, String, String)> = Vec::new();
+
+    for citation in scan_citations(&combined) {
+        if let Some(target) = resolve_citation(content_dir, &citation)? {
+            if target.paragraph_resolved
+                && (allow_legacy || target.status == "current")
+                && !target.snippet_en.trim().is_empty()
+            {
+                scored.push((
+                    100,
+                    format!("{} §{}", target.standard_id, target.paragraph),
+                    target.snippet_en,
+                ));
+            }
+        }
+    }
+
+    let standard_pattern =
+        Regex::new(r"(?i)(IFRS|IAS)\s+(\d+[A-Za-z]?)").map_err(|error| error.to_string())?;
+    for caps in standard_pattern.captures_iter(&combined) {
+        let standard_id = format!(
+            "{} {}",
+            caps.get(1).map(|value| value.as_str()).unwrap_or("IFRS").to_uppercase(),
+            caps.get(2).map(|value| value.as_str()).unwrap_or("")
+        );
+        for entry in &entries {
+            if !entry.standard_id.eq_ignore_ascii_case(&standard_id) {
+                continue;
+            }
+            if entry.status != "current" && !allow_legacy {
+                continue;
+            }
+            let citation = format!("{} §{}", entry.standard_id, entry.paragraph);
+            if let Some(target) = resolve_citation(content_dir, &citation)? {
+                if target.paragraph_resolved && !target.snippet_en.trim().is_empty() {
+                    scored.push((40, citation, target.snippet_en));
+                }
+            }
+        }
+    }
+
+    scored.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    let mut selected = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for (_, citation, snippet) in scored {
+        if seen.insert(citation.clone()) {
+            selected.push((citation, snippet));
+        }
+        if selected.len() >= limit {
+            break;
+        }
+    }
+    Ok(selected)
+}
+
+fn extract_citation_from_quote_header(line: &str) -> Option<String> {
+    let start = line.find("**")? + 2;
+    let rest = line.get(start..)?;
+    let end = rest.find('（')?;
+    Some(rest[..end].trim().to_string())
+}
+
+pub fn inject_pack_quotes(content_dir: &Path, markdown: &str) -> Result<(String, Vec<String>), String> {
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut warnings = Vec::new();
+    let mut index = 0;
+
+    while index < lines.len() {
+        let line = lines[index];
+        if line.contains("（知识库原文）") {
+            if let Some(citation) = extract_citation_from_quote_header(line) {
+                match resolve_citation(content_dir, &citation)? {
+                    Some(target)
+                        if target.paragraph_resolved && !target.snippet_en.trim().is_empty() =>
+                    {
+                        let label = format!("{} §{}", target.standard_id, target.paragraph);
+                        out_lines.push(format!("> **{label}（知识库原文）：**"));
+                        out_lines.push(">".to_string());
+                        for snippet_line in target.snippet_en.lines() {
+                            out_lines.push(format!("> {snippet_line}"));
+                        }
+                        index += 1;
+                        while index < lines.len()
+                            && (lines[index].starts_with('>')
+                                || (lines[index].trim().is_empty()
+                                    && index + 1 < lines.len()
+                                    && lines[index + 1].starts_with('>')))
+                        {
+                            index += 1;
+                        }
+                        continue;
+                    }
+                    Some(_) => {
+                        out_lines.push(line.to_string());
+                    }
+                    None => {
+                        warnings
+                            .push(format!("知识库暂无该段落，已保留 AI 原文：{citation}"));
+                        out_lines.push(line.to_string());
+                    }
+                }
+            } else {
+                out_lines.push(line.to_string());
+            }
+        } else {
+            out_lines.push(line.to_string());
+        }
+        index += 1;
+    }
+
+    Ok((out_lines.join("\n"), warnings))
+}
+
+fn finalize_project_markdown(
+    content_dir: &Path,
+    project_name: &str,
+    markdown: &str,
+    folder_relative: Option<&str>,
+    preserve_date: Option<&str>,
+    allow_legacy: bool,
+) -> Result<(String, ProjectValidationReport), String> {
+    let heading_aligned = projects::ensure_heading_matches_name(project_name, markdown);
+    let (with_pack_quotes, pack_warnings) = inject_pack_quotes(content_dir, &heading_aligned)?;
+    let with_frontmatter = projects::ensure_frontmatter(
+        &with_pack_quotes,
+        project_name,
+        folder_relative,
+        preserve_date,
+    );
+    let mut validation = validate_project_content(&with_frontmatter, content_dir, allow_legacy)?;
+    validation.warnings.extend(pack_warnings);
+    if !projects::has_yaml_frontmatter(&with_frontmatter) {
+        validation
+            .warnings
+            .push("缺少 YAML frontmatter（tags/date/status/type/standards）。".to_string());
+    }
+    Ok((with_frontmatter, validation))
 }
 
 pub fn parse_ai_response(raw: &str) -> Result<ParsedAiDocument, String> {
@@ -261,15 +467,24 @@ pub async fn generate_and_save_project(
     folder_relative: Option<&str>,
 ) -> Result<GenerateProjectResult, String> {
     let system_prompt = build_system_prompt(content_dir, ai.allow_legacy_citations)?;
-    let user_prompt = build_user_prompt(question, facts);
+    let pack_snippets = collect_relevant_pack_snippets(
+        content_dir,
+        question,
+        facts,
+        None,
+        ai.allow_legacy_citations,
+        24,
+    )?;
+    let user_prompt = build_user_prompt_with_pack(question, facts, &pack_snippets);
     let raw = call_openai(ai, &system_prompt, &user_prompt).await?;
     let parsed = parse_ai_response(&raw)?;
-    let normalized_markdown =
-        projects::ensure_heading_matches_name(&parsed.project_name, &parsed.markdown);
     let similar_projects = projects::find_similar_projects(projects_root, &parsed.project_name)?;
-    let mut validation = validate_project_content(
-        &normalized_markdown,
+    let (normalized_markdown, mut validation) = finalize_project_markdown(
         content_dir,
+        &parsed.project_name,
+        &parsed.markdown,
+        folder_relative,
+        None,
         ai.allow_legacy_citations,
     )?;
     for item in &similar_projects {
@@ -296,6 +511,65 @@ pub async fn generate_and_save_project(
     })
 }
 
+pub async fn continue_and_update_project(
+    projects_root: &Path,
+    content_dir: &Path,
+    ai: &AiConfig,
+    file_path: &Path,
+    question: &str,
+    facts: Option<&str>,
+) -> Result<GenerateProjectResult, String> {
+    let existing = projects::read_project_file(projects_root, file_path)?;
+    let preserve_date = projects::extract_frontmatter_date(&existing);
+    let project_name = projects::extract_title_for_entry(&existing, "项目");
+    let folder_relative = file_path
+        .parent()
+        .and_then(|parent| parent.strip_prefix(projects_root).ok())
+        .map(|value| value.to_string_lossy().replace('\\', "/"))
+        .filter(|value| !value.is_empty());
+
+    let system_prompt = format!(
+        "{}\n\n## 更新模式\n\
+         你正在更新已有项目笔记，不是新建。保留 frontmatter 中的初稿 date，在「日志」追加今日更新。",
+        build_system_prompt(content_dir, ai.allow_legacy_citations)?
+    );
+    let pack_snippets = collect_relevant_pack_snippets(
+        content_dir,
+        question,
+        facts,
+        Some(&existing),
+        ai.allow_legacy_citations,
+        24,
+    )?;
+    let user_prompt = build_continue_user_prompt(&existing, question, facts, &pack_snippets);
+    let raw = call_openai(ai, &system_prompt, &user_prompt).await?;
+    let parsed = parse_ai_response(&raw)?;
+    let resolved_name = if parsed.project_name.trim().is_empty() {
+        project_name.clone()
+    } else {
+        parsed.project_name.clone()
+    };
+    let (normalized_markdown, validation) = finalize_project_markdown(
+        content_dir,
+        &resolved_name,
+        &parsed.markdown,
+        folder_relative.as_deref(),
+        preserve_date.as_deref(),
+        ai.allow_legacy_citations,
+    )?;
+    let entry = projects::update_project_file(projects_root, file_path, &normalized_markdown)?;
+
+    Ok(GenerateProjectResult {
+        project_name: resolved_name,
+        file_path: entry.path.clone(),
+        relative_path: entry.relative_path.clone(),
+        title: entry.title.clone(),
+        content: normalized_markdown,
+        validation,
+        similar_projects: Vec::new(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,5 +589,16 @@ mod tests {
     fn build_user_prompt_includes_facts() {
         let prompt = build_user_prompt("如何判断合营？", Some("50:50 持股"));
         assert!(prompt.contains("50:50 持股"));
+    }
+
+    #[test]
+    fn build_user_prompt_with_pack_includes_snippets() {
+        let snippets = vec![(
+            "IFRS 11 §7".to_string(),
+            "Joint control is ...".to_string(),
+        )];
+        let prompt = build_user_prompt_with_pack("问题", None, &snippets);
+        assert!(prompt.contains("Joint control is"));
+        assert!(prompt.contains("IFRS 11 §7"));
     }
 }

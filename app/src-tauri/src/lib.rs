@@ -21,6 +21,7 @@ pub fn run() {
             commands::pick_projects_dir,
             commands::save_ai_config,
             commands::generate_project_document,
+            commands::continue_project_document,
             commands::list_project_tree,
             commands::create_project_folder,
             commands::rename_project_folder,

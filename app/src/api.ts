@@ -47,6 +47,18 @@ export function generateProjectDocument(
   });
 }
 
+export function continueProjectDocument(
+  filePath: string,
+  question: string,
+  facts: string | null = null,
+): Promise<GenerateProjectResult> {
+  return invoke<GenerateProjectResult>("continue_project_document", {
+    filePath,
+    question,
+    facts,
+  });
+}
+
 export function listProjectTree(): Promise<ProjectTreeNode[]> {
   return invoke<ProjectTreeNode[]>("list_project_tree");
 }

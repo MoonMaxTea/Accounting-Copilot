@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  continueProjectDocument,
   countProjectFolderEntries,
   createProjectFolder,
   deleteProjectFolder,
@@ -35,6 +36,7 @@ import type {
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
+  GenerateProjectResult,
   ProjectFileEntry,
   ProjectsUiState,
   ProjectTreeNode,
@@ -76,6 +78,10 @@ export function EvidencePage({
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashItems, setTrashItems] = useState<TrashEntry[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
+  const [followUpQuestion, setFollowUpQuestion] = useState("");
+  const [followUpFacts, setFollowUpFacts] = useState("");
+  const [continuing, setContinuing] = useState(false);
+  const [continueResult, setContinueResult] = useState<GenerateProjectResult | null>(null);
   const restoredRef = useRef(false);
 
   const refreshSidebar = useCallback(async (query: string) => {
@@ -179,6 +185,7 @@ export function EvidencePage({
     if (!selected) {
       setNoteContent("");
       setScanResults([]);
+      setContinueResult(null);
       return;
     }
 
@@ -278,6 +285,39 @@ export function EvidencePage({
       setHighlight(null);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  };
+
+  const handleContinue = async () => {
+    if (!selected) {
+      return;
+    }
+    const trimmed = followUpQuestion.trim();
+    if (!trimmed) {
+      setError("请先输入追问内容。");
+      return;
+    }
+
+    setContinuing(true);
+    setError(null);
+    setContinueResult(null);
+    try {
+      const updated = await continueProjectDocument(
+        selected.path,
+        trimmed,
+        followUpFacts.trim() || null,
+      );
+      setContinueResult(updated);
+      setNoteContent(updated.content);
+      const scanned = await scanNoteCitations(updated.content);
+      setScanResults(scanned);
+      setFollowUpQuestion("");
+      setFollowUpFacts("");
+      showToast("已更新项目笔记");
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setContinuing(false);
     }
   };
 
@@ -443,13 +483,61 @@ export function EvidencePage({
             await refreshSidebar(searchQuery);
           }}
         />
-        <NotePanel
-          title={selected?.title ?? "项目笔记"}
-          content={noteContent}
-          scanResults={scanResults}
-          loading={loadingNote}
-          onCitationClick={(citation) => void handleCitationClick(citation)}
-        />
+        <div className="flex min-h-0 flex-col gap-3">
+          <NotePanel
+            title={selected?.title ?? "项目笔记"}
+            content={noteContent}
+            scanResults={scanResults}
+            loading={loadingNote}
+            onCitationClick={(citation) => void handleCitationClick(citation)}
+          />
+          {selected && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900">继续追问</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                在当前笔记「{selected.title}」基础上补充问题，AI 会直接更新该文件。
+              </p>
+              <label className="mt-3 block space-y-1">
+                <span className="text-xs font-medium text-slate-700">追问</span>
+                <textarea
+                  value={followUpQuestion}
+                  onChange={(event) => setFollowUpQuestion(event.target.value)}
+                  rows={3}
+                  placeholder="例如：若其中一方有 veto 权但不参与日常经营，结论会变吗？"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900 focus:ring-2"
+                />
+              </label>
+              <label className="mt-2 block space-y-1">
+                <span className="text-xs font-medium text-slate-700">补充事实（可选）</span>
+                <textarea
+                  value={followUpFacts}
+                  onChange={(event) => setFollowUpFacts(event.target.value)}
+                  rows={2}
+                  placeholder="例如：合同规定 A 对融资有一票否决…"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900 focus:ring-2"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={continuing}
+                onClick={() => void handleContinue()}
+                className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:bg-slate-400"
+              >
+                {continuing ? "正在更新笔记…" : "提交追问并更新"}
+              </button>
+              {continueResult && continueResult.validation.warnings.length > 0 && (
+                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  <p className="font-medium">校验警告（文件已更新）：</p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {continueResult.validation.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
         <EvidenceStandardPanel
           target={citationTarget}
           highlight={highlight}

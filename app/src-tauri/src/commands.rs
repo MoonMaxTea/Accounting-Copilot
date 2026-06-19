@@ -116,6 +116,27 @@ pub async fn generate_project_document(
 }
 
 #[tauri::command]
+pub async fn continue_project_document(
+    app: AppHandle,
+    file_path: String,
+    question: String,
+    facts: Option<String>,
+) -> Result<GenerateProjectResult, String> {
+    let projects_root = config::ensure_projects_dir(&app)?;
+    let content_dir = content_dir(&app)?;
+    let config = config::load_config(&app)?;
+    ai::continue_and_update_project(
+        &projects_root,
+        &content_dir,
+        &config.ai,
+        std::path::Path::new(&file_path),
+        &question,
+        facts.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
 pub fn list_project_tree(app: AppHandle) -> Result<Vec<ProjectTreeNode>, String> {
     let root = config::ensure_projects_dir(&app)?;
     let ui = config::load_config(&app)?.projects_ui;

@@ -461,6 +461,17 @@ mod tests {
     }
 
     #[test]
+    fn ensure_frontmatter_adds_required_fields() {
+        let markdown = "# 合营安排判断\n\n正文 IFRS 11 §7-8";
+        let output = ensure_frontmatter(&markdown, "合营安排判断", Some("IFRS项目"), None);
+        assert!(has_yaml_frontmatter(&output));
+        assert!(output.contains("date:"));
+        assert!(output.contains("status: active"));
+        assert!(output.contains("type:"));
+        assert!(output.contains("\"IFRS 11\""));
+    }
+
+    #[test]
     fn creates_folder_and_moves_file() {
         let temp = tempfile::tempdir().expect("tempdir");
         let rel = create_project_folder(temp.path(), None, "合营分析").expect("create");
@@ -552,6 +563,141 @@ pub fn allocate_filepath(
         }
         suffix = Some(suffix.map(|value| value + 1).unwrap_or(2));
     }
+}
+
+pub fn has_yaml_frontmatter(content: &str) -> bool {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return false;
+    }
+    trimmed.lines().skip(1).any(|line| line.trim() == "---")
+}
+
+fn infer_note_type(folder_relative: Option<&str>, content: &str) -> &'static str {
+    if folder_relative.is_some_and(|value| value.contains("双准则对比")) {
+        return "C-双准则对比";
+    }
+    if content.contains("术语对照") || content.contains("双准则") {
+        return "C-双准则对比";
+    }
+    if content.contains("操作结论") || content.contains("决策分析") {
+        return "B-实务决策";
+    }
+    "A-概念梳理"
+}
+
+fn collect_standards_from_content(content: &str) -> Vec<String> {
+    let mut standards = Vec::new();
+    for citation in crate::citations::scan_citations(content) {
+        if let Some((standard_id, _)) = crate::citations::parse_citation(&citation) {
+            if !standards
+                .iter()
+                .any(|existing: &String| existing.eq_ignore_ascii_case(&standard_id))
+            {
+                standards.push(standard_id);
+            }
+        }
+    }
+    standards.sort_by(|left, right| left.to_lowercase().cmp(&right.to_lowercase()));
+    standards
+}
+
+fn build_frontmatter_tags(standards: &[String], project_name: &str) -> Vec<String> {
+    let mut tags = Vec::new();
+    let mut has_ifrs = false;
+    let mut has_us = false;
+
+    for standard in standards {
+        let lower = standard.to_lowercase();
+        if lower.starts_with("ifrs") || lower.starts_with("ias") {
+            has_ifrs = true;
+        }
+        if lower.starts_with("asc") {
+            has_us = true;
+        }
+        tags.push(lower.replace(' ', ""));
+    }
+
+    if has_ifrs {
+        tags.push("ifrs".to_string());
+    }
+    if has_us {
+        tags.push("us-gaap".to_string());
+    }
+
+    for token in project_name.split(|character: char| {
+        !character.is_alphanumeric() && character != ' '
+    }) {
+        let token = token.trim();
+        if token.chars().count() >= 2 && !token.chars().all(|character| character.is_ascii_digit()) {
+            let normalized = token.to_lowercase();
+            if !tags.contains(&normalized) {
+                tags.push(normalized);
+            }
+        }
+    }
+
+    tags.sort();
+    tags.dedup();
+    tags
+}
+
+pub fn extract_frontmatter_date(content: &str) -> Option<String> {
+    if !has_yaml_frontmatter(content) {
+        return None;
+    }
+
+    let trimmed = content.trim_start();
+    for line in trimmed.lines().skip(1) {
+        if line.trim() == "---" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("date:") {
+            return Some(value.trim().to_string());
+        }
+    }
+    None
+}
+
+pub fn ensure_frontmatter(
+    markdown: &str,
+    project_name: &str,
+    folder_relative: Option<&str>,
+    preserve_date: Option<&str>,
+) -> String {
+    if has_yaml_frontmatter(markdown) {
+        return markdown.to_string();
+    }
+
+    let standards = collect_standards_from_content(markdown);
+    let tags = build_frontmatter_tags(&standards, project_name);
+    let note_type = infer_note_type(folder_relative, markdown);
+    let date = preserve_date
+        .map(str::to_string)
+        .unwrap_or_else(|| Local::now().format("%Y-%m-%d").to_string());
+    let tags_yaml = tags.join(", ");
+    let standards_yaml = standards
+        .iter()
+        .map(|standard| format!("\"{standard}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        "---\ntags: [{tags_yaml}]\ndate: {date}\nstatus: active\ntype: {note_type}\nstandards: [{standards_yaml}]\nrelated: []\n---\n\n{markdown}"
+    )
+}
+
+pub fn update_project_file(
+    projects_root: &Path,
+    file_path: &Path,
+    markdown: &str,
+) -> Result<ProjectFileEntry, String> {
+    let validated = crate::config::validate_project_path(projects_root, file_path)?;
+    if !validated.is_file() {
+        return Err("只能更新 .md 项目笔记".to_string());
+    }
+    fs::write(&validated, markdown).map_err(|error| error.to_string())?;
+    file_entry_from_path(projects_root, &validated)
 }
 
 pub fn ensure_heading_matches_name(project_name: &str, markdown: &str) -> String {
