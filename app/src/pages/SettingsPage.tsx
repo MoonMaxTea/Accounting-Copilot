@@ -61,7 +61,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>({
     manifest_url:
-      "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json",
+      "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json",
     check_on_startup: true,
     auto_download_content: true,
     last_content_version: null,

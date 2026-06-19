@@ -4,7 +4,7 @@ set -euo pipefail
 
 export DISPLAY="${DISPLAY:-:1}"
 
-WIN=$(xdotool search --name "AccoutingStandards Desktop" 2>/dev/null | head -1 || true)
+WIN=$(xdotool search --name "Accounting Copilot" 2>/dev/null | head -1 || true)
 [[ -n "${WIN}" ]] || { echo "✗ 未找到应用窗口"; exit 1; }
 
 read -r POS_X POS_Y WIDTH HEIGHT < <(

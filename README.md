@@ -1,8 +1,8 @@
-# AccoutingStandards Desktop
+# Accounting Copilot
 
 双准则（IFRS + US GAAP）桌面证据工作台：**离线全量准则包** + **AI 写项目文档** + **引用对照原文** + **官网二次验证**。
 
-> **Product UI name:** Accounting Copilot · **Latest app:** see [Releases](https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases)
+> **Product UI name:** Accounting Copilot · **Latest app:** see [Releases](https://github.com/MoonMaxTea/Accounting-Copilot/releases)
 
 ## For developers & AI agents
 
@@ -18,7 +18,7 @@
 | 仓库 | 用途 |
 |------|------|
 | [AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) | Obsidian Vault：**准则正文**与项目笔记规范（内容源） |
-| **本仓库** | Tauri 桌面 App、准则注册表、content pack 构建与 GitHub Releases |
+| [**Accounting Copilot**](https://github.com/MoonMaxTea/Accounting-Copilot)（本仓库） | Tauri 桌面 App、准则注册表、content pack 构建与 GitHub Releases |
 
 ## 功能（规划）
 

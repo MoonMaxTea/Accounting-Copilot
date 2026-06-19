@@ -1,4 +1,4 @@
-# AccoutingStandards Desktop — 技术设计规格
+# Accounting Copilot — 技术设计规格
 
 > **状态**: Superpowers Brainstorming 产出 v1  
 > **日期**: 2026-06-18  
@@ -9,7 +9,7 @@
 
 ## 1. 执行摘要
 
-AccoutingStandards Desktop 是一个**离线优先的 Tauri 桌面应用**，从 Obsidian Vault（`AccoutingStandards-IFRS-USGaap`）构建 content pack，为用户提供 IFRS/IAS/ASC 准则浏览、Evidence 分屏、AI 写项目文档、GitHub Releases 更新能力。
+Accounting Copilot 是一个**离线优先的 Tauri 桌面应用**，从 Obsidian Vault（`AccoutingStandards-IFRS-USGaap`）构建 content pack，为用户提供 IFRS/IAS/ASC 准则浏览、Evidence 分屏、AI 写项目文档、GitHub Releases 更新能力。
 
 **推荐技术路线**：
 
@@ -104,7 +104,7 @@ Phase 4  自动更新 + CI Release 流水线
                              │ git clone @ ref (CI / pack-builder)
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Desktop Repo (Accounting-standards-Desktop)                    │
+│  Desktop Repo (Accounting-Copilot)                    │
 │  standards-registry.yaml ──► pack-builder ──► standards-pack.zip│
 │  src/ + src-tauri/ ◄── reads pack from AppData/content/         │
 └────────────────────────────┬────────────────────────────────────┘
@@ -120,7 +120,7 @@ Phase 4  自动更新 + CI Release 流水线
 ### 4.2 Monorepo 目录结构（目标态）
 
 ```
-Accounting-standards-Desktop/
+Accounting-Copilot/
 ├── package.json                 # pnpm workspace root
 ├── pnpm-workspace.yaml
 ├── app/                         # Tauri 前端 + Rust 壳

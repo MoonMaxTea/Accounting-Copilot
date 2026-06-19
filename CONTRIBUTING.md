@@ -12,8 +12,8 @@ Thank you for improving Accounting Copilot. AI agents should read [AGENTS.md](./
 ## Setup
 
 ```bash
-git clone https://github.com/MoonMaxTea/Accounting-standards-Desktop.git
-cd Accounting-standards-Desktop
+git clone https://github.com/MoonMaxTea/Accounting-Copilot.git
+cd Accounting-Copilot
 pnpm install
 pnpm app:dev
 ```

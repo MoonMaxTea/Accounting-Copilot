@@ -1,4 +1,4 @@
-# AGENTS.md — Accounting Copilot (Accounting Standards Desktop)
+# AGENTS.md — Accounting Copilot
 
 Guide for AI coding agents working in this repository. Read this before making changes.
 
@@ -7,7 +7,7 @@ Guide for AI coding agents working in this repository. Read this before making c
 | Item | Value |
 |------|--------|
 | **Product name** | Accounting Copilot |
-| **Repo** | `MoonMaxTea/Accounting-standards-Desktop` (often **private**) |
+| **Repo** | `MoonMaxTea/Accounting-Copilot` (often **private**) |
 | **Stack** | Tauri 2 + Rust + React 19 + TypeScript + Vite + Tailwind 4 |
 | **Package manager** | pnpm 9 (monorepo) |
 | **Current app version** | See `app/src-tauri/tauri.conf.json` (`version` field) |
@@ -63,7 +63,7 @@ pnpm app:build        # installers under app/src-tauri/target/release/bundle/
 
 **Linux GUI dev:** requires `DISPLAY` and WebKit/GTK deps (see CI workflow).
 
-**Simulate first install:** delete `~/.local/share/com.moonmaxtea.accounting-standards-desktop/content/` and clear `update.last_content_version` in `config.json`.
+**Simulate first install:** delete `~/.local/share/com.moonmaxtea.accounting-copilot/content/` and clear `update.last_content_version` in `config.json`.
 
 ---
 
@@ -141,7 +141,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and file-level det
 **Default manifest URL (Setup):**
 
 ```
-https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json
+https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json
 ```
 
 **Private repo / mainland China users:**
@@ -228,8 +228,8 @@ Product owner often communicates in **Chinese**. Keep **UI strings in English** 
 
 | OS | Path |
 |----|------|
-| Linux | `~/.local/share/com.moonmaxtea.accounting-standards-desktop/` |
-| Windows | `%APPDATA%\com.moonmaxtea.accounting-standards-desktop\` |
-| macOS | `~/Library/Application Support/com.moonmaxtea.accounting-standards-desktop/` |
+| Linux | `~/.local/share/com.moonmaxtea.accounting-copilot/` |
+| Windows | `%APPDATA%\com.moonmaxtea.accounting-copilot\` |
+| macOS | `~/Library/Application Support/com.moonmaxtea.accounting-copilot/` |
 
 Contains: `config.json`, `content/` (installed pack), `downloads/`, `trash/`.

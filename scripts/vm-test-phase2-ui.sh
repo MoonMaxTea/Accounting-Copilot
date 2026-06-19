@@ -4,9 +4,9 @@ set -euo pipefail
 
 export DISPLAY="${DISPLAY:-:1}"
 
-WIN=$(xdotool search --name "AccoutingStandards Desktop" 2>/dev/null | head -1 || true)
+WIN=$(xdotool search --name "Accounting Copilot" 2>/dev/null | head -1 || true)
 if [[ -z "${WIN}" ]]; then
-  echo "✗ 未找到 AccoutingStandards Desktop 窗口"
+  echo "✗ 未找到 Accounting Copilot 窗口"
   exit 1
 fi
 

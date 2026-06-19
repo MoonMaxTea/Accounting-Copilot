@@ -8,7 +8,7 @@ use app_lib::projects;
 
 fn app_data_root() -> PathBuf {
     std::env::var("HOME")
-        .map(|home| PathBuf::from(home).join(".local/share/com.moonmaxtea.accounting-standards-desktop"))
+        .map(|home| PathBuf::from(home).join(".local/share/com.moonmaxtea.accounting-copilot"))
         .unwrap_or_else(|_| PathBuf::from("/tmp/asd-app-data"))
 }
 

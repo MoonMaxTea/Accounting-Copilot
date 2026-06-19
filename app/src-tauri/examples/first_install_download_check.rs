@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use app_lib::update::{fetch_manifest, is_content_version_newer, sha256_file, ContentUpdateInfo};
 
 const MANIFEST_URL: &str =
-    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json";
+    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json";
 
 async fn download_pack_to_temp(
     content: &ContentUpdateInfo,
@@ -34,7 +34,7 @@ async fn download_pack_to_temp(
         response
     } else if let Some(token) = token {
         let release_url = format!(
-            "https://api.github.com/repos/MoonMaxTea/Accounting-standards-Desktop/releases/tags/{}",
+            "https://api.github.com/repos/MoonMaxTea/Accounting-Copilot/releases/tags/{}",
             content.release_tag
         );
         let release = client

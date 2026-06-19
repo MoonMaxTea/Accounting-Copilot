@@ -46,7 +46,7 @@
 
 ```json
 {
-  "name": "accounting-standards-desktop",
+  "name": "accounting-copilot",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {

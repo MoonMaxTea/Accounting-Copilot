@@ -134,7 +134,7 @@ Full list: `app/src-tauri/src/lib.rs`.
 
 | Package | Path | Role |
 |---------|------|------|
-| `@asd/desktop-app` | `app/` | Tauri desktop UI |
+| `@asd/accounting-copilot` | `app/` | Tauri desktop UI |
 | `@asd/pack-builder` | `tools/pack-builder/` | Build content zip |
 | `@asd/shared-types` | `packages/shared-types/` | Shared TS types |
 

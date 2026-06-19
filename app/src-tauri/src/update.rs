@@ -82,7 +82,7 @@ fn auth_error_hint(status: StatusCode) -> &'static str {
             "访问令牌无效或已过期。请重新生成 GitHub Token 并确保勾选 Contents 读取权限。"
         }
         StatusCode::FORBIDDEN => {
-            "访问令牌权限不足。Fine-grained Token 需对 Accounting-standards-Desktop 仓库勾选 Contents: Read-only。"
+            "访问令牌权限不足。Fine-grained Token 需对 Accounting-Copilot 仓库勾选 Contents: Read-only。"
         }
         StatusCode::NOT_FOUND => {
             "资源不存在，或私有仓库未配置有效访问令牌（raw.githubusercontent.com 不支持私有仓库 Token）。"
@@ -815,11 +815,11 @@ mod tests {
     #[test]
     fn parses_raw_github_manifest_url() {
         let parsed = parse_raw_github_url(
-            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json",
+            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json",
         )
         .expect("should parse");
         assert_eq!(parsed.0, "MoonMaxTea");
-        assert_eq!(parsed.1, "Accounting-standards-Desktop");
+        assert_eq!(parsed.1, "Accounting-Copilot");
         assert_eq!(parsed.2, "main");
         assert_eq!(parsed.3, "updates/manifest.json");
     }
@@ -827,7 +827,7 @@ mod tests {
     #[test]
     fn parses_raw_github_manifest_url_with_branch_slash() {
         let parsed = parse_raw_github_url(
-            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/cursor/phase4-auto-update-1b98/updates/manifest.json",
+            "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/cursor/phase4-auto-update-1b98/updates/manifest.json",
         )
         .expect("should parse");
         assert_eq!(parsed.2, "cursor/phase4-auto-update-1b98");
@@ -845,11 +845,11 @@ mod tests {
     #[test]
     fn parses_release_download_url() {
         let parsed = parse_release_download_url(
-            "https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
+            "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
         )
         .expect("should parse");
         assert_eq!(parsed.0, "MoonMaxTea");
-        assert_eq!(parsed.1, "Accounting-standards-Desktop");
+        assert_eq!(parsed.1, "Accounting-Copilot");
         assert_eq!(parsed.2, "content-2026.06.19");
         assert_eq!(parsed.3, "standards-pack-2026.06.19.zip");
     }

@@ -1,7 +1,7 @@
 [package]
-name = "accounting-standards-desktop"
-version = "0.1.7"
-description = "AccoutingStandards Desktop — IFRS & US GAAP offline standards browser"
+name = "accounting-copilot"
+version = "0.1.8"
+description = "Accounting Copilot — IFRS & US GAAP offline standards browser"
 authors = ["MoonMaxTea"]
 edition = "2021"
 

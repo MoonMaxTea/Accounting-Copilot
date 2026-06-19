@@ -14,7 +14,7 @@ interface SetupPageProps {
 
 const defaultUpdateConfig: UpdateConfig = {
   manifest_url:
-    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json",
+    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json",
   check_on_startup: true,
   auto_download_content: true,
   last_content_version: null,

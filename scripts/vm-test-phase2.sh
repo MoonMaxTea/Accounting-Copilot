@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-standards-desktop"
+APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-copilot"
 PROJECTS_DIR="${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault/02 - 项目"
 
 mkdir -p "${APP_DATA}"

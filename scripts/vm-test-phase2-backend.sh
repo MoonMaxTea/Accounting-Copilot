@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-standards-desktop"
+APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-copilot"
 CONTENT_DIR="${APP_DATA}/content"
 PROJECTS_DIR="${VAULT_PROJECTS:-${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault-live/02 - 项目}"
 
@@ -25,7 +25,7 @@ else
   bad "Rust 集成检查失败"
 fi
 
-if pgrep -f "target/debug/accounting-standards-desktop|target/release/accounting-standards-desktop" >/dev/null; then
+if pgrep -f "target/debug/accounting-copilot|target/release/accounting-copilot" >/dev/null; then
   ok "桌面应用进程运行中"
 else
   bad "桌面应用未运行"

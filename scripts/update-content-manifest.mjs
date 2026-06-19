@@ -21,7 +21,7 @@ const size = Number(readArg("--size"));
 const tag = readArg("--tag");
 const repo = process.argv.includes("--repo")
   ? readArg("--repo")
-  : "MoonMaxTea/Accounting-standards-Desktop";
+  : "MoonMaxTea/Accounting-Copilot";
 
 if (!Number.isFinite(size) || size <= 0) {
   throw new Error(`Invalid size: ${readArg("--size")}`);

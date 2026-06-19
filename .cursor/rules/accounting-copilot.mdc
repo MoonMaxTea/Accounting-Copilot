@@ -11,6 +11,7 @@ Read `/AGENTS.md` before coding.
 ## Must know
 
 - Monorepo: UI in `app/src/`, Rust in `app/src-tauri/`.
+- App data id: `com.moonmaxtea.accounting-copilot`.
 - Vite `base` must stay `"./"` (Tauri production).
 - Download progress: Tauri IPC `Channel`, not event-only listeners.
 - Private GitHub updates: token → `api.github.com` in `update.rs`.

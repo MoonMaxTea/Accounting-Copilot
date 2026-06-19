@@ -4,7 +4,7 @@
   "content": {
     "latest_version": "2026.06.19",
     "release_tag": "content-2026.06.19",
-    "pack_url": "https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
+    "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
     "pack_sha256": "db969a75d72e129f6026bf01c2d2ccde7b5079fed6d3d2f5fcbc583a60b38aaf",
     "pack_size_bytes": 12656838,
     "min_app_version": "0.1.0",

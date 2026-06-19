@@ -1,12 +1,12 @@
 {
-  "name": "accounting-standards-desktop",
+  "name": "accounting-copilot",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "test": "pnpm --filter @asd/shared-types build && pnpm -r test",
     "build": "pnpm -r build",
-    "app:dev": "pnpm --filter @asd/desktop-app tauri dev",
-    "app:build": "pnpm --filter @asd/desktop-app tauri build",
+    "app:dev": "pnpm --filter @asd/accounting-copilot tauri dev",
+    "app:build": "pnpm --filter @asd/accounting-copilot tauri build",
     "pack:build": "bash scripts/pack-build.sh",
     "validate:registry": "bash scripts/validate-registry.sh"
   },

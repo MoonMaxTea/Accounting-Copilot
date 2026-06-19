@@ -79,7 +79,7 @@ Vault 侧**可选**仅在 README 增加一行指向 Desktop 仓库，**非必须
 ## 三、App 仓库目录结构（建议）
 
 ```
-AccoutingStandards-Desktop/
+Accounting-Copilot/
 ├── docs/
 │   └── DESIGN.md                 ← 本文档迁移目标
 ├── standards-registry.yaml       ← 准则元数据（status、官网链接）
@@ -261,7 +261,7 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 | 类型 | Tag 示例 | 资产 |
 |------|----------|------|
 | Content only | `content-2026.06.18` | `standards-pack-2026.06.18.zip` |
-| App | `app-v1.0.0` | `YourApp_1.0.0_x64-setup.exe` 等 |
+| App | `app-v1.0.0` | `Accounting.Copilot_1.0.0_x64-setup.exe` 等 |
 | 联合发版 | `v1.0.0+content-2026.06.18` | 两者皆有 |
 
 **原则**：content 可独立于 app 发版；发 content 后必须更新 `updates/manifest.json` 的 `content` 段。
@@ -274,8 +274,8 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 
 | 路径 | 说明 |
 |------|------|
-| `{AppData}/YourApp/content/` | 准则 pack（应用更新） |
-| `{AppData}/YourApp/config.json` | 用户项目目录、AI Key、更新通道 |
+| `{AppData}/Accounting Copilot/content/` | 准则 pack（应用更新） |
+| `{AppData}/Accounting Copilot/config.json` | 用户项目目录、AI Key、更新通道 |
 | `{用户自选}/.../02 - 项目/` | 项目笔记（默认不在 AppData） |
 
 `config.json` 示例：
@@ -284,7 +284,7 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 {
   "projects_dir": "/Users/me/Documents/AccountingProjects/02 - 项目",
   "update": {
-    "manifest_url": "https://raw.githubusercontent.com/MoonMaxTea/AccoutingStandards-Desktop/main/updates/manifest.json",
+    "manifest_url": "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json",
     "check_on_startup": true,
     "last_content_version": "2026.06.18"
   },
@@ -317,9 +317,9 @@ stateDiagram-v2
 
 **Applying 细则：**
 
-1. 下载至 `{AppData}/YourApp/downloads/pack-{version}.zip`
+1. 下载至 `{AppData}/Accounting Copilot/downloads/pack-{version}.zip`
 2. 校验 `pack_sha256`
-3. 解压到 `{AppData}/YourApp/content.new/`
+3. 解压到 `{AppData}/Accounting Copilot/content.new/`
 4. 验证 `pack-manifest.json` + `registry.json` 可读
 5. 原子替换：`content/` → `content.bak/`，`content.new/` → `content/`
 6. 重建或加载 `index/search.sqlite`
@@ -534,4 +534,4 @@ App 版本：1.0.0
 ## 日志
 
 - 2026-06-18：初稿 — 桌面 Only、GitHub Releases、全量 pack、旧准则、官网链接、AI 写文档
-- 2026-06-18：迁移至 AccoutingStandards-Desktop 仓库；registry 130 条骨架
+- 2026-06-18：迁移至 Accounting-Copilot 仓库；registry 130 条骨架

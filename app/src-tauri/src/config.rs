@@ -152,7 +152,7 @@ impl ProjectsUiState {
 }
 
 const DEFAULT_MANIFEST_URL: &str =
-    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json";
+    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateConfig {

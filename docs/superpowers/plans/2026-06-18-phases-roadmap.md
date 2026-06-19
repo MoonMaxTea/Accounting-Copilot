@@ -1,4 +1,4 @@
-# AccoutingStandards Desktop — 实施路线图
+# Accounting Copilot — 实施路线图
 
 > **日期**: 2026-06-18  
 > **设计规格**: [2026-06-18-desktop-app-design.md](../specs/2026-06-18-desktop-app-design.md)  

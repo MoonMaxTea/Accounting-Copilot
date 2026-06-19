@@ -75,7 +75,7 @@ pub fn build_system_prompt(
     };
 
     Ok(format!(
-        "你是 AccoutingStandards Desktop 的项目笔记写作助手。\n\n\
+        "你是 Accounting Copilot 的项目笔记写作助手。\n\n\
          ## 编写规范\n{guide}\n\n## 写作技能\n{skill}\n\n\
          ## 引用约束\n\
          只能引用以下 pack 段落（status=current{}）：\n{allowed_list}\n\n\

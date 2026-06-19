@@ -4,7 +4,7 @@
   "content": {
     "latest_version": "2026.06.18",
     "release_tag": "content-2026.06.18",
-    "pack_url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/content-2026.06.18/standards-pack-2026.06.18.zip",
+    "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.18/standards-pack-2026.06.18.zip",
     "pack_sha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
     "pack_size_bytes": 52428800,
     "min_app_version": "1.0.0",
@@ -17,11 +17,11 @@
     "min_content_version": "2026.06.01",
     "platforms": {
       "windows-x86_64": {
-        "url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/app-v1.0.0/YourApp_1.0.0_x64-setup.exe",
+        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v1.0.0/Accounting.Copilot_1.0.0_x64-setup.exe",
         "signature": "BASE64_TAURI_UPDATER_SIGNATURE"
       },
       "darwin-aarch64": {
-        "url": "https://github.com/MoonMaxTea/AccoutingStandards-Desktop/releases/download/app-v1.0.0/YourApp_1.0.0_aarch64.dmg",
+        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v1.0.0/Accounting.Copilot_1.0.0_aarch64.dmg",
         "signature": "BASE64_TAURI_UPDATER_SIGNATURE"
       }
     },
