@@ -116,7 +116,7 @@ function AppShell() {
           </div>
           {packInfo?.loaded && (
             <nav className="flex items-center gap-2">
-              {(["standards", "evidence", "settings"] as AppTab[]).map((tab) => (
+              {(["evidence", "standards", "settings"] as AppTab[]).map((tab) => (
                 <button
                   key={tab}
                   type="button"
