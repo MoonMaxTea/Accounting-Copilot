@@ -68,6 +68,7 @@ export function EvidencePage({
   const [scanResults, setScanResults] = useState<CitationScanResult[]>([]);
   const [citationTarget, setCitationTarget] = useState<CitationTarget | null>(null);
   const [highlight, setHighlight] = useState<CitationHighlight | null>(null);
+  const [citationMiss, setCitationMiss] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [loadingNote, setLoadingNote] = useState(false);
@@ -216,12 +217,24 @@ export function EvidencePage({
 
   const handleCitationClick = async (citation: string) => {
     setError(null);
+    setCitationMiss(null);
     try {
       const target = await resolveCitation(citation);
       if (!target) {
-        setCitationTarget(null);
+        setCitationMiss(`未在本地 pack 找到引用：${citation}`);
+        setCitationTarget({
+          citation,
+          standard_id: "",
+          paragraph: "",
+          pack_path: "",
+          char_start: 0,
+          char_end: 0,
+          snippet_en: "",
+          status: "current",
+          resolved: false,
+        });
         setHighlight(null);
-        setError(`未在本地 pack 找到引用：${citation}`);
+        showToast(`未找到引用：${citation}`, "info");
         return;
       }
       setCitationTarget(target);
@@ -231,8 +244,11 @@ export function EvidencePage({
         snippet_en: target.snippet_en,
         paragraph: target.paragraph,
       });
+      showToast(`已打开 ${target.standard_id} §${target.paragraph}`, "info");
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      const message = caught instanceof Error ? caught.message : String(caught);
+      setError(message);
+      showToast(message, "error");
     }
   };
 
@@ -429,6 +445,7 @@ export function EvidencePage({
         <EvidenceStandardPanel
           target={citationTarget}
           highlight={highlight}
+          missMessage={citationMiss}
           onOpenSuperseded={(standardId) => void handleOpenSuperseded(standardId)}
         />
       </div>

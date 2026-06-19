@@ -5,6 +5,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::models::CitationTarget;
+use crate::pack::{load_registry, read_standard_body};
 
 #[derive(Debug, Deserialize)]
 struct ParagraphsFile {
@@ -65,11 +66,24 @@ pub fn resolve_citation(content_dir: &Path, citation: &str) -> Result<Option<Cit
         return Ok(None);
     };
 
+    if let Some(target) = resolve_from_index(content_dir, citation, &standard_id, &paragraph)? {
+        return Ok(Some(target));
+    }
+
+    resolve_via_body_search(content_dir, citation, &standard_id, &paragraph)
+}
+
+fn resolve_from_index(
+    content_dir: &Path,
+    citation: &str,
+    standard_id: &str,
+    paragraph: &str,
+) -> Result<Option<CitationTarget>, String> {
     let entries = load_paragraphs(content_dir)?;
-    let normalized = paragraph.split('-').next().unwrap_or(&paragraph).to_string();
+    let normalized = paragraph.split('-').next().unwrap_or(paragraph);
 
     let matched = entries.iter().find(|entry| {
-        entry.standard_id.eq_ignore_ascii_case(&standard_id)
+        entry.standard_id.eq_ignore_ascii_case(standard_id)
             && (entry.paragraph == paragraph
                 || entry.paragraph_normalized == normalized
                 || entry.paragraph_normalized == paragraph)
@@ -90,6 +104,98 @@ pub fn resolve_citation(content_dir: &Path, citation: &str) -> Result<Option<Cit
         status: entry.status.clone(),
         resolved: true,
     }))
+}
+
+fn resolve_via_body_search(
+    content_dir: &Path,
+    citation: &str,
+    standard_id: &str,
+    paragraph: &str,
+) -> Result<Option<CitationTarget>, String> {
+    let registry = load_registry(content_dir)?;
+    let Some(record) = registry
+        .standards
+        .iter()
+        .find(|entry| entry.id.eq_ignore_ascii_case(standard_id))
+    else {
+        return Ok(None);
+    };
+
+    let body = read_standard_body(content_dir, &record.pack_path)?;
+    let normalized = paragraph.split('-').next().unwrap_or(paragraph);
+
+    let Some((char_start, char_end, snippet_en)) = find_paragraph_in_body(&body, normalized) else {
+        return Ok(None);
+    };
+
+    Ok(Some(CitationTarget {
+        citation: citation.trim().to_string(),
+        standard_id: record.id.clone(),
+        paragraph: paragraph.to_string(),
+        pack_path: record.pack_path.clone(),
+        char_start,
+        char_end,
+        snippet_en,
+        status: record.status.clone(),
+        resolved: true,
+    }))
+}
+
+fn find_paragraph_in_body(body: &str, paragraph: &str) -> Option<(u64, u64, String)> {
+    if let Some(found) = find_paragraph_via_toc(body, paragraph) {
+        return Some(found);
+    }
+
+    let heading = Regex::new(&format!(
+        r"(?im)^(?:Paragraph|§)\s*{}\b",
+        regex::escape(paragraph)
+    ))
+    .ok()?;
+    let matched = heading.find(body)?;
+    let start = matched.start() as u64;
+    let end = body[matched.start()..]
+        .find("\n\n")
+        .map(|offset| matched.start() as u64 + offset as u64)
+        .unwrap_or((matched.end() + 120).min(body.len()) as u64);
+    let snippet = snippet_from(body, start as usize);
+    Some((start, end, snippet))
+}
+
+fn find_paragraph_via_toc(body: &str, paragraph: &str) -> Option<(u64, u64, String)> {
+    let toc = &body[..body.len().min(12_000)];
+    let toc_line = Regex::new(&format!(r"(?m)^(.+?)\s+{}\s*$", regex::escape(paragraph))).ok()?;
+    let caps = toc_line.captures(toc)?;
+    let title = caps.get(1)?.as_str().trim();
+    if title.len() < 3 || should_skip_toc_title(title) {
+        return None;
+    }
+
+    let heading = Regex::new(&format!(r"(?m)^{}\s*$", regex::escape(title))).ok()?;
+    let matched = heading.find(body)?;
+    let start = matched.start() as u64;
+    let end = body[matched.start()..]
+        .find("\n\n")
+        .map(|offset| matched.start() as u64 + offset as u64)
+        .unwrap_or((matched.end() + 240).min(body.len()) as u64);
+    Some((start, end, snippet_from(body, start as usize)))
+}
+
+fn should_skip_toc_title(title: &str) -> bool {
+    let upper = title.to_ascii_uppercase();
+    upper.contains("IFRS")
+        || upper.contains("CONTENTS")
+        || upper.contains("APPEND")
+        || upper.contains("APPROVAL")
+        || upper.starts_with("FOR THE")
+        || upper.starts_with("INTERNATIONAL FINANCIAL")
+}
+
+fn snippet_from(body: &str, start: usize) -> String {
+    body[start..body.len().min(start + 120)]
+        .replace('\n', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub fn scan_citations(content: &str) -> Vec<String> {
@@ -143,5 +249,34 @@ mod tests {
             .expect("target");
         assert_eq!(resolved.standard_id, "IFRS 11");
         assert_eq!(resolved.char_start, 10);
+    }
+
+    #[test]
+    fn resolves_ifrs_citation_via_toc_fallback() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(temp.path().join("index")).expect("mkdir");
+        fs::create_dir_all(temp.path().join("current/IFRS")).expect("mkdir standards");
+        fs::write(
+            temp.path().join("index/paragraphs.json"),
+            r#"{"entries":[]}"#,
+        )
+        .expect("write paragraphs");
+        fs::write(
+            temp.path().join("registry.json"),
+            r#"{"schema_version":1,"content_version":"2026.06.19","standards":[{"id":"IFRS 11","title":"Joint Arrangements","framework":"IFRS","status":"current","official_url":"https://example.com","pack_path":"current/IFRS/ifrs11.md"}]}"#,
+        )
+        .expect("write registry");
+        fs::write(
+            temp.path().join("current/IFRS/ifrs11.md"),
+            "CONTENTS\nJoint control 7\n\nJoint control\nJoint control is contractually agreed sharing of control.\n",
+        )
+        .expect("write body");
+
+        let resolved = resolve_citation(temp.path(), "IFRS 11 §7")
+            .expect("resolve")
+            .expect("target");
+        assert_eq!(resolved.standard_id, "IFRS 11");
+        assert!(resolved.char_start > 0);
+        assert!(resolved.snippet_en.contains("Joint control"));
     }
 }

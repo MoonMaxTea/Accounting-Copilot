@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { Components } from "react-markdown";
+import { parseNoteFrontmatter } from "../lib/markdown";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { NoteMetadata } from "./NoteMetadata";
 import {
   citationFromKey,
   injectCitationLinks,
@@ -110,12 +112,17 @@ export function NotePanel({
   loading,
   onCitationClick,
 }: NotePanelProps) {
+  const { frontmatter, body } = useMemo(
+    () => parseNoteFrontmatter(content),
+    [content],
+  );
+
   const unresolved = useMemo(
     () => scanResults.filter((item) => !item.resolved),
     [scanResults],
   );
 
-  const linkedContent = useMemo(() => injectCitationLinks(content), [content]);
+  const linkedContent = useMemo(() => injectCitationLinks(body), [body]);
 
   const components = useMemo<Components>(
     () => ({
@@ -137,7 +144,6 @@ export function NotePanel({
           );
         }
 
-        // Obsidian vault links and other markdown links must not navigate away.
         return (
           <button
             type="button"
@@ -164,14 +170,32 @@ export function NotePanel({
       </header>
 
       {unresolved.length > 0 && (
-        <div className="border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-sm text-amber-900">
-          <p className="font-medium">以下引用未在本地 pack 中找到，请检查版本或到官网核对：</p>
-          <ul className="mt-2 list-disc pl-5">
-            {unresolved.map((item) => (
-              <li key={item.citation}>{item.citation}</li>
-            ))}
-          </ul>
-        </div>
+        <details className="group border-b border-amber-200 bg-amber-50">
+          <summary className="cursor-pointer list-none px-5 py-2.5 text-sm font-medium text-amber-900 marker:content-none [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-2">
+              <span className="text-xs text-amber-700 transition group-open:rotate-90">▶</span>
+              {unresolved.length} 处引用未在本地 pack 中找到（点击展开）
+            </span>
+          </summary>
+          <div className="border-t border-amber-200 px-5 py-2.5 text-sm text-amber-900">
+            <p className="mb-2 text-xs text-amber-800">
+              这些引用可能来自知识库全文检索；桌面版 pack 尚未索引到对应段落，或需更新 content pack。
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              {unresolved.map((item) => (
+                <li key={item.citation}>
+                  <button
+                    type="button"
+                    className="text-left underline decoration-amber-400 underline-offset-2 hover:text-amber-950"
+                    onClick={() => onCitationClick(item.citation)}
+                  >
+                    {item.citation}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
       )}
 
       <div
@@ -186,7 +210,10 @@ export function NotePanel({
       >
         {loading && <p className="text-sm text-slate-500">正在加载笔记…</p>}
         {!loading && (
-          <MarkdownPreview content={linkedContent} components={components} />
+          <>
+            {frontmatter && <NoteMetadata metadata={frontmatter} />}
+            <MarkdownPreview content={linkedContent} components={components} />
+          </>
         )}
       </div>
     </section>
