@@ -16,6 +16,27 @@ use crate::projects;
 use crate::trash::{TrashEntry, TrashStore};
 use crate::update;
 
+const DRAFT_AGENT_SESSION_KEY: &str = "__draft__";
+
+fn persist_agent_run(
+    app: &AppHandle,
+    from_session_key: &str,
+    to_session_key: &str,
+    session: Vec<crate::models::AiAgentMessage>,
+    activity: Vec<crate::models::AiConversationTurn>,
+) -> Result<(), String> {
+    config::update_projects_ui(app, |ui| {
+        if from_session_key != to_session_key {
+            ui.ai_agent_sessions.remove(from_session_key);
+        }
+        ui.set_agent_session(to_session_key, session);
+        for turn in activity {
+            ui.append_ai_turn(to_session_key, turn);
+        }
+    })?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_pack_info(app: AppHandle) -> Result<PackInfo, String> {
     pack::get_pack_info(&app)
@@ -104,15 +125,25 @@ pub async fn generate_project_document(
     let projects_root = config::ensure_projects_dir(&app)?;
     let content_dir = content_dir(&app)?;
     let config = config::load_config(&app)?;
-    ai::generate_and_save_project(
+    let prior_session = config.projects_ui.agent_session(DRAFT_AGENT_SESSION_KEY);
+    let (result, session, activity) = ai::generate_and_save_project(
         &projects_root,
         &content_dir,
         &config.ai,
         &question,
         facts.as_deref(),
         folder_relative.as_deref(),
+        prior_session,
     )
-    .await
+    .await?;
+    persist_agent_run(
+        &app,
+        DRAFT_AGENT_SESSION_KEY,
+        &result.relative_path,
+        session,
+        activity,
+    )?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -125,15 +156,31 @@ pub async fn continue_project_document(
     let projects_root = config::ensure_projects_dir(&app)?;
     let content_dir = content_dir(&app)?;
     let config = config::load_config(&app)?;
-    ai::continue_and_update_project(
+    let validated = config::validate_project_path(&projects_root, std::path::Path::new(&file_path))?;
+    let relative_path = validated
+        .strip_prefix(&projects_root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let prior_session = config.projects_ui.agent_session(&relative_path);
+    let (result, session, activity) = ai::continue_and_update_project(
         &projects_root,
         &content_dir,
         &config.ai,
         std::path::Path::new(&file_path),
         &question,
         facts.as_deref(),
+        prior_session,
     )
-    .await
+    .await?;
+    persist_agent_run(
+        &app,
+        &relative_path,
+        &relative_path,
+        session,
+        activity,
+    )?;
+    Ok(result)
 }
 
 #[tauri::command]

@@ -201,6 +201,25 @@ pub struct AiConversationTurn {
     pub kind: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiAgentToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiAgentMessage {
+    pub role: String,
+    pub content: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Option<Vec<AiAgentToolCall>>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DeleteFolderResult {
     pub folder_relative: String,

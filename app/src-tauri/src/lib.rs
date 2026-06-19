@@ -6,6 +6,7 @@ mod models;
 pub mod pack;
 pub mod projects;
 pub mod ai;
+pub mod ai_agent;
 mod trash;
 mod update;
 

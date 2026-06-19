@@ -59,6 +59,7 @@ export interface ProjectsUiState {
   last_evidence_file: string | null;
   last_selected_folder: string | null;
   ai_threads?: Record<string, AiConversationTurn[]>;
+  ai_agent_sessions?: Record<string, unknown[]>;
   evidence_panel_collapsed?: boolean;
 }
 
@@ -66,7 +67,7 @@ export interface AiConversationTurn {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp_secs: number;
-  kind: "create" | "continue" | "system";
+  kind: "create" | "continue" | "system" | "tool";
 }
 
 export interface AppConfigResponse {

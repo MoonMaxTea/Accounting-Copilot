@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  appendAiConversationTurn,
   continueProjectDocument,
   countProjectFolderEntries,
   createProjectFolder,
@@ -36,7 +35,6 @@ import {
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
 import type {
-  AiConversationTurn,
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
@@ -46,11 +44,6 @@ import type {
   ProjectTreeNode,
   TrashEntry,
 } from "../types";
-
-interface EvidencePageProps {
-  initialFilePath?: string | null;
-  onInitialFilePathConsumed?: () => void;
-}
 
 const defaultUiState: ProjectsUiState = {
   pinned: [],
@@ -63,14 +56,7 @@ const defaultUiState: ProjectsUiState = {
 
 const DRAFT_THREAD_KEY = "__draft__";
 
-function nowSecs(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
-export function EvidencePage({
-  initialFilePath = null,
-  onInitialFilePathConsumed,
-}: EvidencePageProps) {
+export function EvidencePage() {
   const { showToast } = useToast();
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [projectsUi, setProjectsUi] = useState<ProjectsUiState>(defaultUiState);
@@ -103,13 +89,10 @@ export function EvidencePage({
     [projectsUi.ai_threads, threadKey],
   );
 
-  const recordTurns = useCallback(async (relativePath: string, turns: AiConversationTurn[]) => {
-    let ui = projectsUi;
-    for (const turn of turns) {
-      ui = await appendAiConversationTurn(relativePath, turn);
-    }
-    setProjectsUi(ui);
-  }, [projectsUi]);
+  const refreshProjectsUi = useCallback(async () => {
+    const config = await getConfig();
+    setProjectsUi(config.projects_ui ?? defaultUiState);
+  }, []);
 
   const refreshSidebar = useCallback(async (query: string) => {
     setLoadingFiles(true);
@@ -172,19 +155,6 @@ export function EvidencePage({
   }, [refreshSidebar, searchQuery]);
 
   useEffect(() => {
-    if (initialFilePath) {
-      listProjectFiles()
-        .then((entries) => {
-          const match = entries.find((entry) => entry.path === initialFilePath);
-          if (match) {
-            setSelected(match);
-            onInitialFilePathConsumed?.();
-          }
-        })
-        .catch(() => undefined);
-      return;
-    }
-
     if (restoredRef.current || !projectsUi.last_evidence_file) {
       return;
     }
@@ -201,7 +171,7 @@ export function EvidencePage({
         }
       })
       .catch(() => undefined);
-  }, [initialFilePath, onInitialFilePathConsumed, projectsUi.last_evidence_file, projectsUi.last_selected_folder]);
+  }, [projectsUi.last_evidence_file, projectsUi.last_selected_folder]);
 
   useEffect(() => {
     if (!selected && !selectedFolderRelative) {
@@ -328,14 +298,6 @@ export function EvidencePage({
     setError(null);
     setLastResult(null);
     try {
-      const userTurn: AiConversationTurn = {
-        role: "user",
-        content: facts.trim() ? `${trimmed}\n\n补充事实：${facts.trim()}` : trimmed,
-        timestamp_secs: nowSecs(),
-        kind: "create",
-      };
-      await recordTurns(DRAFT_THREAD_KEY, [userTurn]);
-
       const generated = await generateProjectDocument(
         trimmed,
         facts.trim() || null,
@@ -344,14 +306,7 @@ export function EvidencePage({
       setLastResult(generated);
       setQuestion("");
       setFacts("");
-
-      const assistantTurn: AiConversationTurn = {
-        role: "assistant",
-        content: `已生成「${generated.project_name}」并保存至 ${generated.relative_path}`,
-        timestamp_secs: nowSecs(),
-        kind: "create",
-      };
-      await recordTurns(generated.relative_path, [userTurn, assistantTurn]);
+      await refreshProjectsUi();
 
       const entries = await listProjectFiles();
       const match = entries.find((entry) => entry.path === generated.file_path);
@@ -382,14 +337,6 @@ export function EvidencePage({
     setError(null);
     setLastResult(null);
     try {
-      const userTurn: AiConversationTurn = {
-        role: "user",
-        content: facts.trim() ? `${trimmed}\n\n补充事实：${facts.trim()}` : trimmed,
-        timestamp_secs: nowSecs(),
-        kind: "continue",
-      };
-      await recordTurns(selected.relative_path, [userTurn]);
-
       const updated = await continueProjectDocument(
         selected.path,
         trimmed,
@@ -401,14 +348,7 @@ export function EvidencePage({
       setScanResults(scanned);
       setQuestion("");
       setFacts("");
-
-      const assistantTurn: AiConversationTurn = {
-        role: "assistant",
-        content: `已更新笔记「${updated.project_name}」`,
-        timestamp_secs: nowSecs(),
-        kind: "continue",
-      };
-      await recordTurns(selected.relative_path, [assistantTurn]);
+      await refreshProjectsUi();
       showToast("已更新项目笔记");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));

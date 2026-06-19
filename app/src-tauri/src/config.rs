@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::Manager;
 
-use crate::models::AiConversationTurn;
+use crate::models::{AiAgentMessage, AiConversationTurn};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectsUiState {
@@ -20,6 +20,8 @@ pub struct ProjectsUiState {
     pub last_selected_folder: Option<String>,
     #[serde(default)]
     pub ai_threads: HashMap<String, Vec<AiConversationTurn>>,
+    #[serde(default)]
+    pub ai_agent_sessions: HashMap<String, Vec<AiAgentMessage>>,
     #[serde(default)]
     pub evidence_panel_collapsed: bool,
 }
@@ -57,6 +59,32 @@ impl ProjectsUiState {
             .push(turn);
     }
 
+    pub fn agent_session(&self, session_key: &str) -> Vec<AiAgentMessage> {
+        self.ai_agent_sessions
+            .get(session_key)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn set_agent_session(&mut self, session_key: &str, messages: Vec<AiAgentMessage>) {
+        if messages.is_empty() {
+            self.ai_agent_sessions.remove(session_key);
+        } else {
+            self.ai_agent_sessions
+                .insert(session_key.to_string(), messages);
+        }
+    }
+
+    pub fn migrate_agent_session(&mut self, from_key: &str, to_key: &str) {
+        if from_key == to_key {
+            return;
+        }
+        let Some(messages) = self.ai_agent_sessions.remove(from_key) else {
+            return;
+        };
+        self.ai_agent_sessions.insert(to_key.to_string(), messages);
+    }
+
     pub fn remove_path_references(&mut self, relative_path: &str) {
         self.pinned.retain(|item| item != relative_path);
         self.last_evidence_file = self
@@ -70,6 +98,8 @@ impl ProjectsUiState {
             paths.retain(|item| item != relative_path);
         }
         self.order.retain(|_, paths| !paths.is_empty());
+        self.ai_threads.remove(relative_path);
+        self.ai_agent_sessions.remove(relative_path);
     }
 
     pub fn migrate_path(&mut self, old_relative: &str, new_relative: &str) {
@@ -87,6 +117,13 @@ impl ProjectsUiState {
                     *path = new_relative.to_string();
                 }
             }
+        }
+        if let Some(turns) = self.ai_threads.remove(old_relative) {
+            self.ai_threads.insert(new_relative.to_string(), turns);
+        }
+        if let Some(session) = self.ai_agent_sessions.remove(old_relative) {
+            self.ai_agent_sessions
+                .insert(new_relative.to_string(), session);
         }
     }
 

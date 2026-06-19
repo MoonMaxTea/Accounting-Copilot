@@ -7,13 +7,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::citations::{load_paragraphs, resolve_citation, scan_citations};
 use crate::config::AiConfig;
-use crate::models::{CitationScanResult, GenerateProjectResult, ProjectValidationReport};
+use crate::ai_agent::{AgentMode, AgentRunInput, run_standards_agent};
+use crate::models::{AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult, ProjectValidationReport};
 use crate::projects::{self, ParsedAiDocument};
 
-const PROJECT_NAME_START: &str = "<<<PROJECT_NAME>>>";
-const PROJECT_NAME_END: &str = "<<<END_PROJECT_NAME>>>";
-const MARKDOWN_START: &str = "<<<MARKDOWN>>>";
-const MARKDOWN_END: &str = "<<<END_MARKDOWN>>>";
+pub(crate) const PROJECT_NAME_START: &str = "<<<PROJECT_NAME>>>";
+pub(crate) const PROJECT_NAME_END: &str = "<<<END_PROJECT_NAME>>>";
+pub(crate) const MARKDOWN_START: &str = "<<<MARKDOWN>>>";
+pub(crate) const MARKDOWN_END: &str = "<<<END_MARKDOWN>>>";
 
 #[derive(Debug, Deserialize)]
 struct OpenAiResponse {
@@ -470,19 +471,21 @@ pub async fn generate_and_save_project(
     question: &str,
     facts: Option<&str>,
     folder_relative: Option<&str>,
-) -> Result<GenerateProjectResult, String> {
-    let system_prompt = build_system_prompt(content_dir, ai.allow_legacy_citations)?;
-    let pack_snippets = collect_relevant_pack_snippets(
+    prior_session: Vec<AiAgentMessage>,
+) -> Result<(GenerateProjectResult, Vec<AiAgentMessage>, Vec<AiConversationTurn>), String> {
+    let agent_output = run_standards_agent(
         content_dir,
-        question,
-        facts,
-        None,
-        ai.allow_legacy_citations,
-        24,
-    )?;
-    let user_prompt = build_user_prompt_with_pack(question, facts, &pack_snippets);
-    let raw = call_openai(ai, &system_prompt, &user_prompt).await?;
-    let parsed = parse_ai_response(&raw)?;
+        ai,
+        AgentRunInput {
+            mode: AgentMode::Create,
+            question,
+            facts,
+            existing_markdown: None,
+            prior_messages: prior_session,
+        },
+    )
+    .await?;
+    let parsed = parse_ai_response(&agent_output.raw_response)?;
     let similar_projects = projects::find_similar_projects(projects_root, &parsed.project_name)?;
     let (normalized_markdown, mut validation) = finalize_project_markdown(
         content_dir,
@@ -505,15 +508,19 @@ pub async fn generate_and_save_project(
         folder_relative,
     )?;
 
-    Ok(GenerateProjectResult {
-        project_name: parsed.project_name,
-        file_path: entry.path.clone(),
-        relative_path: entry.relative_path.clone(),
-        title: entry.title.clone(),
-        content: normalized_markdown,
-        validation,
-        similar_projects,
-    })
+    Ok((
+        GenerateProjectResult {
+            project_name: parsed.project_name,
+            file_path: entry.path.clone(),
+            relative_path: entry.relative_path.clone(),
+            title: entry.title.clone(),
+            content: normalized_markdown,
+            validation,
+            similar_projects,
+        },
+        agent_output.session_messages,
+        agent_output.activity_log,
+    ))
 }
 
 pub async fn continue_and_update_project(
@@ -523,7 +530,8 @@ pub async fn continue_and_update_project(
     file_path: &Path,
     question: &str,
     facts: Option<&str>,
-) -> Result<GenerateProjectResult, String> {
+    prior_session: Vec<AiAgentMessage>,
+) -> Result<(GenerateProjectResult, Vec<AiAgentMessage>, Vec<AiConversationTurn>), String> {
     let existing = projects::read_project_file(projects_root, file_path)?;
     let preserve_date = projects::extract_frontmatter_date(&existing);
     let project_name = projects::extract_title_for_entry(&existing, "项目");
@@ -533,22 +541,19 @@ pub async fn continue_and_update_project(
         .map(|value| value.to_string_lossy().replace('\\', "/"))
         .filter(|value| !value.is_empty());
 
-    let system_prompt = format!(
-        "{}\n\n## 更新模式\n\
-         你正在更新已有项目笔记，不是新建。保留 frontmatter 中的初稿 date，在「日志」追加今日更新。",
-        build_system_prompt(content_dir, ai.allow_legacy_citations)?
-    );
-    let pack_snippets = collect_relevant_pack_snippets(
+    let agent_output = run_standards_agent(
         content_dir,
-        question,
-        facts,
-        Some(&existing),
-        ai.allow_legacy_citations,
-        24,
-    )?;
-    let user_prompt = build_continue_user_prompt(&existing, question, facts, &pack_snippets);
-    let raw = call_openai(ai, &system_prompt, &user_prompt).await?;
-    let parsed = parse_ai_response(&raw)?;
+        ai,
+        AgentRunInput {
+            mode: AgentMode::Continue,
+            question,
+            facts,
+            existing_markdown: Some(&existing),
+            prior_messages: prior_session,
+        },
+    )
+    .await?;
+    let parsed = parse_ai_response(&agent_output.raw_response)?;
     let resolved_name = if parsed.project_name.trim().is_empty() {
         project_name.clone()
     } else {
@@ -564,15 +569,19 @@ pub async fn continue_and_update_project(
     )?;
     let entry = projects::update_project_file(projects_root, file_path, &normalized_markdown)?;
 
-    Ok(GenerateProjectResult {
-        project_name: resolved_name,
-        file_path: entry.path.clone(),
-        relative_path: entry.relative_path.clone(),
-        title: entry.title.clone(),
-        content: normalized_markdown,
-        validation,
-        similar_projects: Vec::new(),
-    })
+    Ok((
+        GenerateProjectResult {
+            project_name: resolved_name,
+            file_path: entry.path.clone(),
+            relative_path: entry.relative_path.clone(),
+            title: entry.title.clone(),
+            content: normalized_markdown,
+            validation,
+            similar_projects: Vec::new(),
+        },
+        agent_output.session_messages,
+        agent_output.activity_log,
+    ))
 }
 
 #[cfg(test)]

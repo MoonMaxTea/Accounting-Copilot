@@ -147,13 +147,16 @@ export function EvidenceSidePanel({
                       key={`${turn.timestamp_secs}-${index}`}
                       className={[
                         "rounded-lg px-3 py-2 text-xs leading-5",
-                        turn.role === "user"
-                          ? "bg-white text-slate-800 ring-1 ring-slate-200"
-                          : "bg-emerald-50 text-emerald-950",
+                        turn.kind === "tool"
+                          ? "bg-sky-50 text-sky-950 ring-1 ring-sky-100"
+                          : turn.role === "user"
+                            ? "bg-white text-slate-800 ring-1 ring-slate-200"
+                            : "bg-emerald-50 text-emerald-950",
                       ].join(" ")}
                     >
                       <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
-                        {turn.role === "user" ? "你" : "AI"} · {formatTurnTime(turn.timestamp_secs)}
+                        {turn.kind === "tool" ? "知识库" : turn.role === "user" ? "你" : "AI"} ·{" "}
+                        {formatTurnTime(turn.timestamp_secs)}
                       </p>
                       <p className="whitespace-pre-wrap">{turn.content}</p>
                     </div>

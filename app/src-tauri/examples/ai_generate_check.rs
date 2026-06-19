@@ -39,13 +39,14 @@ async fn main() {
     println!("projects: {}", projects_root.display());
     println!("question: {question}");
 
-    let result = ai::generate_and_save_project(
+    let (result, _session, _activity) = ai::generate_and_save_project(
         &projects_root,
         &content_dir,
         &app_config.ai,
         &question,
         facts.as_deref(),
         Some("IFRS项目"),
+        Vec::new(),
     )
     .await
     .expect("generate project");
