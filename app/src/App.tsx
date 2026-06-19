@@ -163,12 +163,16 @@ function AppShell() {
           <SettingsPage packInfo={packInfo} onPackUpdated={setPackInfo} />
         ) : (
           <>
-            <div className={activeTab === "standards" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
-              <StandardsPage />
-            </div>
-            <div className={activeTab === "evidence" ? "h-[calc(100vh-8.5rem)]" : "hidden"}>
-              <EvidencePage />
-            </div>
+            {activeTab === "standards" && (
+              <div className="h-[calc(100vh-8.5rem)]">
+                <StandardsPage />
+              </div>
+            )}
+            {activeTab === "evidence" && (
+              <div className="h-[calc(100vh-8.5rem)]">
+                <EvidencePage />
+              </div>
+            )}
           </>
         )}
       </main>
