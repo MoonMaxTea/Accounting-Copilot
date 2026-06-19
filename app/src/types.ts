@@ -64,6 +64,34 @@ export interface ProjectFileEntry {
   modified_secs: number;
 }
 
+export type ProjectTreeFolder = {
+  kind: "folder";
+  name: string;
+  path: string;
+  relative_path: string;
+  children: ProjectTreeNode[];
+};
+
+export type ProjectTreeFile = {
+  kind: "file";
+  name: string;
+  path: string;
+  relative_path: string;
+  title: string;
+  modified_secs: number;
+};
+
+export type ProjectTreeNode = ProjectTreeFolder | ProjectTreeFile;
+
+export function treeFileToEntry(node: ProjectTreeFile): ProjectFileEntry {
+  return {
+    path: node.path,
+    relative_path: node.relative_path,
+    title: node.title,
+    modified_secs: node.modified_secs,
+  };
+}
+
 export interface CitationRef {
   standardId: string;
   paragraph: string;

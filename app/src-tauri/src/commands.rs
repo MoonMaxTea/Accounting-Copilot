@@ -8,7 +8,7 @@ use crate::config::{self, AiConfig};
 use crate::db;
 use crate::models::{
     AppConfigResponse, CitationScanResult, CitationTarget, GenerateProjectResult, PackInfo,
-    ProjectFileEntry, SearchHit, StandardDetail, StandardSummary,
+    ProjectFileEntry, ProjectTreeNode, SearchHit, StandardDetail, StandardSummary,
 };
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
 use crate::projects;
@@ -94,6 +94,7 @@ pub async fn generate_project_document(
     app: AppHandle,
     question: String,
     facts: Option<String>,
+    folder_relative: Option<String>,
 ) -> Result<GenerateProjectResult, String> {
     let projects_root = config::ensure_projects_dir(&app)?;
     let content_dir = content_dir(&app)?;
@@ -104,8 +105,49 @@ pub async fn generate_project_document(
         &config.ai,
         &question,
         facts.as_deref(),
+        folder_relative.as_deref(),
     )
     .await
+}
+
+#[tauri::command]
+pub fn list_project_tree(app: AppHandle) -> Result<Vec<ProjectTreeNode>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::list_project_tree(&root)
+}
+
+#[tauri::command]
+pub fn create_project_folder(
+    app: AppHandle,
+    parent_relative: Option<String>,
+    name: String,
+) -> Result<String, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::create_project_folder(&root, parent_relative.as_deref(), &name)
+}
+
+#[tauri::command]
+pub fn rename_project_folder(
+    app: AppHandle,
+    folder_relative: String,
+    new_name: String,
+) -> Result<String, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::rename_project_folder(&root, &folder_relative, &new_name)
+}
+
+#[tauri::command]
+pub fn move_project_file(
+    app: AppHandle,
+    file_path: String,
+    target_folder_relative: Option<String>,
+) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::move_project_file(
+        &root,
+        PathBuf::from(file_path).as_path(),
+        target_folder_relative.as_deref(),
+    )
 }
 
 #[tauri::command]

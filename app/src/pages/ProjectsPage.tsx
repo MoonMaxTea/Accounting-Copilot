@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  createProjectFolder,
   generateProjectDocument,
   getConfig,
-  listProjectFiles,
+  listProjectTree,
+  moveProjectFile,
+  renameProjectFolder,
   revealProjectsDir,
   revealProjectFile,
   searchProjectFiles,
 } from "../api";
-import { ProjectFileTree } from "../components/ProjectFileTree";
 import { MarkdownPreview } from "../components/MarkdownPreview";
-import type { GenerateProjectResult, ProjectFileEntry } from "../types";
+import { ProjectFolderTree } from "../components/ProjectFolderTree";
+import type { GenerateProjectResult, ProjectFileEntry, ProjectTreeNode } from "../types";
 
 interface ProjectsPageProps {
   onOpenInEvidence: (filePath: string) => void;
@@ -17,7 +20,9 @@ interface ProjectsPageProps {
 
 export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
-  const [files, setFiles] = useState<ProjectFileEntry[]>([]);
+  const [tree, setTree] = useState<ProjectTreeNode[]>([]);
+  const [searchResults, setSearchResults] = useState<ProjectFileEntry[] | null>(null);
+  const [selectedFolderRelative, setSelectedFolderRelative] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [question, setQuestion] = useState("");
@@ -26,17 +31,23 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
   const [result, setResult] = useState<GenerateProjectResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshFiles = useCallback(async (query: string) => {
+  const refreshSidebar = useCallback(async (query: string) => {
     setLoadingFiles(true);
     setError(null);
     try {
-      const entries = query.trim()
-        ? await searchProjectFiles(query.trim())
-        : await listProjectFiles();
-      setFiles(entries);
+      if (query.trim()) {
+        const entries = await searchProjectFiles(query.trim());
+        setSearchResults(entries);
+        setTree([]);
+      } else {
+        const nodes = await listProjectTree();
+        setTree(nodes);
+        setSearchResults(null);
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
-      setFiles([]);
+      setTree([]);
+      setSearchResults([]);
     } finally {
       setLoadingFiles(false);
     }
@@ -49,8 +60,8 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
   }, []);
 
   useEffect(() => {
-    void refreshFiles(searchQuery);
-  }, [refreshFiles, searchQuery]);
+    void refreshSidebar(searchQuery);
+  }, [refreshSidebar, searchQuery]);
 
   const handleGenerate = async () => {
     const trimmed = question.trim();
@@ -66,15 +77,18 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
       const generated = await generateProjectDocument(
         trimmed,
         facts.trim() || null,
+        selectedFolderRelative,
       );
       setResult(generated);
-      await refreshFiles(searchQuery);
+      await refreshSidebar(searchQuery);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setGenerating(false);
     }
   };
+
+  const saveLocationLabel = selectedFolderRelative ?? "根目录";
 
   if (!projectsDir) {
     return (
@@ -102,15 +116,31 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
             />
           </label>
           <div className="min-h-0 flex-1">
-            <ProjectFileTree
-              files={files}
+            <ProjectFolderTree
+              nodes={tree}
+              searchResults={searchResults}
               selectedPath={null}
+              selectedFolderRelative={selectedFolderRelative}
               loading={loadingFiles}
-              onSelect={(entry) => onOpenInEvidence(entry.path)}
+              onSelectFile={(entry) => onOpenInEvidence(entry.path)}
+              onSelectFolder={setSelectedFolderRelative}
+              onCreateFolder={async (parentRelative, name) => {
+                await createProjectFolder(name, parentRelative);
+                await refreshSidebar(searchQuery);
+              }}
+              onRenameFolder={async (folderRelative, newName) => {
+                const updated = await renameProjectFolder(folderRelative, newName);
+                await refreshSidebar(searchQuery);
+                return updated;
+              }}
+              onMoveFile={async (filePath, targetFolderRelative) => {
+                await moveProjectFile(filePath, targetFolderRelative);
+                await refreshSidebar(searchQuery);
+              }}
             />
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-500">
-            点击历史项目可在 Evidence 中打开。
+            选中文件夹后，新建 AI 笔记会保存到该文件夹。拖拽笔记可归类。
             <button
               type="button"
               onClick={() => void revealProjectsDir()}
@@ -125,7 +155,9 @@ export function ProjectsPage({ onOpenInEvidence }: ProjectsPageProps) {
           <header className="border-b border-slate-200 px-6 py-4">
             <h2 className="text-xl font-semibold text-slate-900">新建项目笔记</h2>
             <p className="mt-1 text-sm text-slate-500">
-              输入问题后 AI 会自动生成项目名，并直接保存为 <code>{`{项目名}-{日期}.md`}</code>
+              输入问题后 AI 会自动生成项目名，并直接保存到
+              <strong className="mx-1 text-slate-800">{saveLocationLabel}</strong>
+              ，文件名格式 <code>{`{项目名}-{日期}.md`}</code>
             </p>
           </header>
 

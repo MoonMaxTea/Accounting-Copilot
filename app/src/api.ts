@@ -7,6 +7,7 @@ import type {
   GenerateProjectResult,
   PackInfo,
   ProjectFileEntry,
+  ProjectTreeNode,
   SearchHit,
   StandardDetail,
   StandardSummary,
@@ -39,10 +40,40 @@ export function saveAiConfig(ai: AiConfig): Promise<AppConfigResponse> {
 export function generateProjectDocument(
   question: string,
   facts: string | null,
+  folderRelative: string | null = null,
 ): Promise<GenerateProjectResult> {
   return invoke<GenerateProjectResult>("generate_project_document", {
     question,
     facts,
+    folderRelative,
+  });
+}
+
+export function listProjectTree(): Promise<ProjectTreeNode[]> {
+  return invoke<ProjectTreeNode[]>("list_project_tree");
+}
+
+export function createProjectFolder(
+  name: string,
+  parentRelative: string | null = null,
+): Promise<string> {
+  return invoke<string>("create_project_folder", { name, parentRelative });
+}
+
+export function renameProjectFolder(
+  folderRelative: string,
+  newName: string,
+): Promise<string> {
+  return invoke<string>("rename_project_folder", { folderRelative, newName });
+}
+
+export function moveProjectFile(
+  filePath: string,
+  targetFolderRelative: string | null,
+): Promise<ProjectFileEntry> {
+  return invoke<ProjectFileEntry>("move_project_file", {
+    filePath,
+    targetFolderRelative,
   });
 }
 

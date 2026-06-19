@@ -242,6 +242,7 @@ pub async fn generate_and_save_project(
     ai: &AiConfig,
     question: &str,
     facts: Option<&str>,
+    folder_relative: Option<&str>,
 ) -> Result<GenerateProjectResult, String> {
     let system_prompt = build_system_prompt(content_dir, ai.allow_legacy_citations)?;
     let user_prompt = build_user_prompt(question, facts);
@@ -258,6 +259,7 @@ pub async fn generate_and_save_project(
         projects_root,
         &parsed.project_name,
         &normalized_markdown,
+        folder_relative,
     )?;
 
     Ok(GenerateProjectResult {

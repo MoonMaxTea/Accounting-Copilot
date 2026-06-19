@@ -102,6 +102,24 @@ pub struct ProjectFileEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ProjectTreeNode {
+    Folder {
+        name: String,
+        path: String,
+        relative_path: String,
+        children: Vec<ProjectTreeNode>,
+    },
+    File {
+        name: String,
+        path: String,
+        relative_path: String,
+        title: String,
+        modified_secs: u64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct CitationTarget {
     pub citation: String,
     pub standard_id: String,
