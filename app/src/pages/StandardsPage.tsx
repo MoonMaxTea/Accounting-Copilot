@@ -108,7 +108,7 @@ export function StandardsPage() {
   const emptyMessage = emptyStandardsMessage(primary, market);
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       <SearchBar onSelectHit={openStandardById} />
 
       <StandardsCategoryNav
@@ -122,9 +122,9 @@ export function StandardsPage() {
         onIncludeLegacyChange={setIncludeLegacy}
       />
 
-      {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="shrink-0 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 overflow-hidden">
         <div className="min-h-0 overflow-auto">
           {loading ? (
             <p className="rounded-2xl bg-white p-6 text-sm text-slate-500">正在加载准则列表…</p>
@@ -137,10 +137,12 @@ export function StandardsPage() {
             />
           )}
         </div>
+        <div className="min-h-0 overflow-hidden">
         <StandardDetailPanel
           summary={selectedSummary}
           onOpenSuperseded={openStandardById}
         />
+        </div>
       </div>
     </div>
   );
