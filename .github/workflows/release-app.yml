@@ -42,9 +42,43 @@ jobs:
       - name: Build desktop app
         run: pnpm app:build
 
-      - name: Publish GitHub Release
+      - name: Publish Linux assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             app/src-tauri/target/release/bundle/deb/*.deb
             app/src-tauri/target/release/bundle/appimage/*.AppImage
+
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build shared workspace packages
+        run: pnpm --filter @asd/shared-types build
+
+      - name: Build desktop app
+        run: pnpm app:build
+
+      - name: Publish Windows assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/src-tauri/target/release/bundle/nsis/*-setup.exe
+            app/src-tauri/target/release/bundle/msi/*.msi
