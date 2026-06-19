@@ -12,7 +12,9 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 use crate::config::{self, UpdateConfig};
-use crate::models::{ContentUpdateInfo, PackInfo, UpdateCheckResult};
+use crate::models::{PackInfo, UpdateCheckResult};
+
+pub use crate::models::ContentUpdateInfo;
 use crate::pack;
 
 const USER_AGENT: &str = "Accounting-Copilot/0.1.0";
@@ -197,10 +199,10 @@ async fn download_release_asset_via_github_api(
 }
 
 #[derive(Debug, Deserialize)]
-struct UpdatesManifest {
+pub struct UpdatesManifest {
     #[allow(dead_code)]
-    schema_version: u32,
-    content: Option<ContentUpdateInfo>,
+    pub schema_version: u32,
+    pub content: Option<ContentUpdateInfo>,
 }
 
 pub fn parse_semver_triplet(version: &str) -> Option<(u32, u32, u32)> {

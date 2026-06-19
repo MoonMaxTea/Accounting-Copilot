@@ -30,3 +30,8 @@ sha2 = "0.10"
 [dev-dependencies]
 tempfile = "3.14"
 tokio = { version = "1", features = ["rt", "macros"] }
+
+[[example]]
+name = "first_install_download_check"
+path = "examples/first_install_download_check.rs"
+required-features = []

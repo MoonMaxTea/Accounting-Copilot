@@ -8,7 +8,7 @@ pub mod projects;
 pub mod ai;
 pub mod ai_agent;
 mod trash;
-mod update;
+pub mod update;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
