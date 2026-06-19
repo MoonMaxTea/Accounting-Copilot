@@ -22,14 +22,18 @@ function BrandMark({ className = "h-8 w-8" }: { className?: string }) {
         strokeWidth="1"
         opacity="0.55"
       />
-      <path
-        d="M11 27V13h4.2c2.8 0 4.6 1.5 4.6 3.9 0 2.1-1.3 3.4-3.2 3.7L21.8 27H18l-2.8-5.6H14.2V27H11Zm3.2-8.3h1c1.2 0 1.9-.6 1.9-1.6 0-1-.7-1.6-1.9-1.6h-1v3.2Z"
+      <text
+        x="20"
+        y="24.5"
+        textAnchor="middle"
         fill="#F8FAFC"
-      />
-      <path
-        d="M22.5 27V13H27l3.4 9.1h.1L33.8 13H38v14h-3.2v-9.2h-.1L31 27h-2.9l-3.6-9.2h-.1V27h-3.2Z"
-        fill="#F8FAFC"
-      />
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="13"
+        fontWeight="700"
+        letterSpacing="0.8"
+      >
+        AC
+      </text>
       <path d="M9 31.5h22" stroke="#9AA8B8" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
