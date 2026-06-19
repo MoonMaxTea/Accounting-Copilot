@@ -1,8 +1,48 @@
+use std::path::PathBuf;
+
 use tauri::AppHandle;
 
+use crate::ai;
+use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, scan_citations};
+use crate::config::{self, AiConfig};
 use crate::db;
-use crate::models::{PackInfo, SearchHit, StandardDetail, StandardSummary};
+use crate::models::{
+    AppConfigResponse, CitationScanResult, CitationTarget, DeleteFolderResult,
+    GenerateProjectResult, PackInfo, ProjectFileEntry, ProjectTreeNode, SearchHit,
+    SimilarProjectMatch, StandardDetail, StandardSummary, UpdateCheckResult,
+};
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
+use crate::projects;
+use crate::trash::{TrashEntry, TrashStore};
+use crate::update;
+
+const DRAFT_AGENT_SESSION_KEY: &str = "__draft__";
+
+fn persist_agent_run(
+    app: &AppHandle,
+    from_session_key: &str,
+    to_session_key: &str,
+    session: Vec<crate::models::AiAgentMessage>,
+    activity: Vec<crate::models::AiConversationTurn>,
+) -> Result<(), String> {
+    config::update_projects_ui(app, |ui| {
+        if from_session_key != to_session_key {
+            ui.ai_agent_sessions.remove(from_session_key);
+            if let Some(draft_turns) = ui.ai_threads.remove(from_session_key) {
+                let merged = ui
+                    .ai_threads
+                    .entry(to_session_key.to_string())
+                    .or_default();
+                merged.extend(draft_turns);
+            }
+        }
+        ui.set_agent_session(to_session_key, session);
+        for turn in activity {
+            ui.append_ai_turn(to_session_key, turn);
+        }
+    })?;
+    Ok(())
+}
 
 #[tauri::command]
 pub fn get_pack_info(app: AppHandle) -> Result<PackInfo, String> {
@@ -35,6 +75,425 @@ pub async fn pick_and_import_content_pack(app: AppHandle) -> Result<PackInfo, St
         .to_string();
 
     import_content_pack(app, zip_path)
+}
+
+#[tauri::command]
+pub fn get_config(app: AppHandle) -> Result<AppConfigResponse, String> {
+    let config = config::load_config(&app)?;
+    Ok(AppConfigResponse {
+        projects_dir: config.projects_dir,
+        ai: config.ai,
+        projects_ui: config.projects_ui,
+        update: config.update,
+    })
+}
+
+#[tauri::command]
+pub fn save_projects_dir(app: AppHandle, projects_dir: String) -> Result<AppConfigResponse, String> {
+    let mut config = config::load_config(&app)?;
+    config.projects_dir = Some(projects_dir);
+    config::save_config(&app, &config)?;
+    get_config(app)
+}
+
+#[tauri::command]
+pub async fn pick_projects_dir(app: AppHandle) -> Result<AppConfigResponse, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let selection = app.dialog().file().blocking_pick_folder();
+    let Some(path) = selection else {
+        return Err("选择已取消".to_string());
+    };
+
+    let folder = path
+        .into_path()
+        .map_err(|error| error.to_string())?
+        .display()
+        .to_string();
+
+    save_projects_dir(app, folder)
+}
+
+#[tauri::command]
+pub fn save_ai_config(app: AppHandle, ai: AiConfig) -> Result<AppConfigResponse, String> {
+    let mut config = config::load_config(&app)?;
+    config.ai = ai;
+    config::save_config(&app, &config)?;
+    get_config(app)
+}
+
+#[tauri::command]
+pub async fn generate_project_document(
+    app: AppHandle,
+    question: String,
+    facts: Option<String>,
+    folder_relative: Option<String>,
+) -> Result<GenerateProjectResult, String> {
+    let projects_root = config::ensure_projects_dir(&app)?;
+    let content_dir = content_dir(&app)?;
+    let config = config::load_config(&app)?;
+    let prior_session = config.projects_ui.agent_session(DRAFT_AGENT_SESSION_KEY);
+    let (result, session, activity) = ai::generate_and_save_project(
+        &projects_root,
+        &content_dir,
+        &config.ai,
+        &question,
+        facts.as_deref(),
+        folder_relative.as_deref(),
+        prior_session,
+    )
+    .await?;
+    persist_agent_run(
+        &app,
+        DRAFT_AGENT_SESSION_KEY,
+        &result.relative_path,
+        session,
+        activity,
+    )?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn continue_project_document(
+    app: AppHandle,
+    file_path: String,
+    question: String,
+    facts: Option<String>,
+) -> Result<GenerateProjectResult, String> {
+    let projects_root = config::ensure_projects_dir(&app)?;
+    let content_dir = content_dir(&app)?;
+    let config = config::load_config(&app)?;
+    let validated = config::validate_project_path(&projects_root, std::path::Path::new(&file_path))?;
+    let relative_path = validated
+        .strip_prefix(&projects_root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let prior_session = config.projects_ui.agent_session(&relative_path);
+    let (result, session, activity) = ai::continue_and_update_project(
+        &projects_root,
+        &content_dir,
+        &config.ai,
+        std::path::Path::new(&file_path),
+        &question,
+        facts.as_deref(),
+        prior_session,
+    )
+    .await?;
+    persist_agent_run(
+        &app,
+        &relative_path,
+        &relative_path,
+        session,
+        activity,
+    )?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn list_project_tree(app: AppHandle) -> Result<Vec<ProjectTreeNode>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let ui = config::load_config(&app)?.projects_ui;
+    projects::list_project_tree(&root, Some(&ui))
+}
+
+#[tauri::command]
+pub fn create_project_folder(
+    app: AppHandle,
+    parent_relative: Option<String>,
+    name: String,
+) -> Result<String, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::create_project_folder(&root, parent_relative.as_deref(), &name)
+}
+
+#[tauri::command]
+pub fn rename_project_folder(
+    app: AppHandle,
+    folder_relative: String,
+    new_name: String,
+) -> Result<String, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::rename_project_folder(&root, &folder_relative, &new_name)
+}
+
+#[tauri::command]
+pub fn rename_project_file(
+    app: AppHandle,
+    file_path: String,
+    new_name: String,
+) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let validated = config::validate_project_path(&root, PathBuf::from(&file_path).as_path())?;
+    let old_relative = validated
+        .strip_prefix(&root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let entry = projects::rename_project_file(&root, validated.as_path(), &new_name)?;
+    config::update_projects_ui(&app, |ui| {
+        ui.migrate_path(&old_relative, &entry.relative_path);
+    })?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn move_project_file(
+    app: AppHandle,
+    file_path: String,
+    target_folder_relative: Option<String>,
+) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let validated = config::validate_project_path(&root, PathBuf::from(&file_path).as_path())?;
+    let old_relative = validated
+        .strip_prefix(&root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let entry = projects::move_project_file(
+        &root,
+        validated.as_path(),
+        target_folder_relative.as_deref(),
+    )?;
+    config::update_projects_ui(&app, |ui| {
+        ui.migrate_path(&old_relative, &entry.relative_path);
+    })?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn count_project_folder_entries(app: AppHandle, folder_relative: String) -> Result<usize, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::count_folder_entries(&root, &folder_relative)
+}
+
+#[tauri::command]
+pub fn delete_project_folder(app: AppHandle, folder_relative: String) -> Result<DeleteFolderResult, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    let result = projects::delete_project_folder(&root, &folder_relative, &mut trash, &app)?;
+    config::update_projects_ui(&app, |ui| {
+        ui.remove_folder_prefix(&folder_relative);
+    })?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn move_project_file_to_trash(app: AppHandle, file_path: String) -> Result<TrashEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    let entry = trash.move_project_file(&app, &root, PathBuf::from(file_path).as_path())?;
+    config::update_projects_ui(&app, |ui| {
+        ui.remove_path_references(&entry.original_relative_path);
+    })?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn list_trash_items(app: AppHandle) -> Result<Vec<TrashEntry>, String> {
+    Ok(TrashStore::load(&app)?.list())
+}
+
+#[tauri::command]
+pub fn restore_trash_item(app: AppHandle, id: String) -> Result<ProjectFileEntry, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let mut trash = TrashStore::load(&app)?;
+    trash.restore(&app, &root, &id)
+}
+
+#[tauri::command]
+pub fn purge_trash_item(app: AppHandle, id: String) -> Result<(), String> {
+    let mut trash = TrashStore::load(&app)?;
+    trash.purge(&app, &id)
+}
+
+#[tauri::command]
+pub fn save_projects_child_order(
+    app: AppHandle,
+    parent_relative: Option<String>,
+    ordered_relative_paths: Vec<String>,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.set_child_order(parent_relative.as_deref(), ordered_relative_paths);
+    })
+}
+
+#[tauri::command]
+pub fn toggle_project_pin(app: AppHandle, relative_path: String) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.toggle_pin(&relative_path);
+    })
+}
+
+#[tauri::command]
+pub fn save_projects_ui_state(
+    app: AppHandle,
+    last_evidence_file: Option<String>,
+    last_selected_folder: Option<String>,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.last_evidence_file = last_evidence_file;
+        ui.last_selected_folder = last_selected_folder;
+    })
+}
+
+#[tauri::command]
+pub fn save_evidence_panel_collapsed(
+    app: AppHandle,
+    collapsed: bool,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.evidence_panel_collapsed = collapsed;
+    })
+}
+
+#[tauri::command]
+pub fn get_project_conversation(
+    app: AppHandle,
+    relative_path: String,
+) -> Result<Vec<crate::models::AiConversationTurn>, String> {
+    let config = config::load_config(&app)?;
+    let stored = config
+        .projects_ui
+        .ai_threads
+        .get(&relative_path)
+        .cloned()
+        .unwrap_or_default();
+    let session = config.projects_ui.agent_session(&relative_path);
+    let session_activity = projects::conversation_activity_from_agent_session(&session);
+
+    if relative_path == DRAFT_AGENT_SESSION_KEY {
+        return Ok(projects::merge_conversation_sources(
+            stored,
+            session_activity,
+            Vec::new(),
+        ));
+    }
+
+    let markdown_turns = match config::ensure_projects_dir(&app) {
+        Ok(root) => {
+            let file_path = root.join(&relative_path);
+            match projects::read_project_file(&root, &file_path) {
+                Ok(content) => projects::extract_conversation_from_markdown(&content),
+                Err(_) => Vec::new(),
+            }
+        }
+        Err(_) => Vec::new(),
+    };
+
+    Ok(projects::merge_conversation_sources(
+        stored,
+        session_activity,
+        markdown_turns,
+    ))
+}
+
+#[tauri::command]
+pub fn append_ai_conversation_turn(
+    app: AppHandle,
+    relative_path: String,
+    turn: crate::models::AiConversationTurn,
+) -> Result<crate::config::ProjectsUiState, String> {
+    config::update_projects_ui(&app, |ui| {
+        ui.append_ai_turn(&relative_path, turn);
+    })
+}
+
+#[tauri::command]
+pub fn find_similar_projects(app: AppHandle, project_name: String) -> Result<Vec<SimilarProjectMatch>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::find_similar_projects(&root, &project_name)
+}
+
+#[tauri::command]
+pub fn reveal_project_file(app: AppHandle, path: String) -> Result<(), String> {
+    let root = config::ensure_projects_dir(&app)?;
+    let validated = config::validate_project_path(&root, PathBuf::from(path).as_path())?;
+    let Some(parent) = validated.parent() else {
+        return Err("无法定位文件所在文件夹".to_string());
+    };
+
+    open_path_in_file_manager(parent)
+}
+
+fn open_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|error| format!("无法打开文件夹: {error}"))?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err("当前平台暂不支持打开文件夹".to_string())
+}
+
+#[tauri::command]
+pub fn reveal_projects_dir(app: AppHandle) -> Result<(), String> {
+    let root = config::ensure_projects_dir(&app)?;
+    open_path_in_file_manager(&root)
+}
+
+#[tauri::command]
+pub fn list_project_files(app: AppHandle) -> Result<Vec<ProjectFileEntry>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::list_project_files(&root)
+}
+
+#[tauri::command]
+pub fn search_project_files(app: AppHandle, query: String) -> Result<Vec<ProjectFileEntry>, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::search_project_files(&root, &query)
+}
+
+#[tauri::command]
+pub fn read_project_file(app: AppHandle, path: String) -> Result<String, String> {
+    let root = config::ensure_projects_dir(&app)?;
+    projects::read_project_file(&root, PathBuf::from(path).as_path())
+}
+
+#[tauri::command]
+pub fn resolve_citation(app: AppHandle, citation: String) -> Result<Option<CitationTarget>, String> {
+    let dir = content_dir(&app)?;
+    resolve_in_pack(&dir, &citation)
+}
+
+#[tauri::command]
+pub fn scan_note_citations(app: AppHandle, content: String) -> Result<Vec<CitationScanResult>, String> {
+    let dir = content_dir(&app)?;
+    let citations = scan_citations(&content);
+    let mut results = Vec::new();
+
+    for citation in citations {
+        let target = resolve_in_pack(&dir, &citation)?;
+        results.push(CitationScanResult {
+            citation: citation.clone(),
+            resolved: target.is_some(),
+            target,
+        });
+    }
+
+    Ok(results)
 }
 
 #[tauri::command]
@@ -101,12 +560,43 @@ pub fn search_standards(
 #[tauri::command]
 pub fn open_official_url(app: AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+
+    let trimmed = url.trim();
+    if !trimmed.starts_with("https://") {
+        return Err("出于安全考虑，只能打开 https 开头的官网链接。".to_string());
+    }
+
     app.opener()
-        .open_url(url, None::<&str>)
+        .open_url(trimmed, None::<&str>)
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn get_app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub async fn check_content_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
+    update::check_updates(&app).await
+}
+
+#[tauri::command]
+pub async fn download_and_apply_content_update(app: AppHandle) -> Result<PackInfo, String> {
+    update::download_and_apply_content_update(&app).await
+}
+
+#[tauri::command]
+pub fn save_update_config(
+    app: AppHandle,
+    update: crate::config::UpdateConfig,
+) -> Result<AppConfigResponse, String> {
+    update::save_update_settings(&app, update)?;
+    get_config(app)
+}
+
+#[tauri::command]
+pub fn paragraphs_index_loaded(app: AppHandle) -> Result<usize, String> {
+    let dir = content_dir(&app)?;
+    Ok(count_paragraphs(&dir)?)
 }

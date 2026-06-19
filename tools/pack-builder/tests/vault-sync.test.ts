@@ -48,8 +48,17 @@ describe('syncVaultFiles', () => {
 
 describe('syncWritingSpec', () => {
   it('copies writing spec files when present', () => {
-    const vault = path.join(__dirname, 'fixtures/vault');
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'vault-'));
     const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'staging-'));
+
+    const guideDir = path.join(vault, '02 - 项目');
+    fs.mkdirSync(guideDir, { recursive: true });
+    fs.writeFileSync(path.join(guideDir, '项目编写说明.md'), '# guide');
+
+    const skillDir = path.join(vault, '.cursor/skills/writing-accounting-standards-notes');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# skill');
+
     const result = syncWritingSpec(vault, staging);
     expect(result.copied).toContain('writing-spec/项目编写说明.md');
     expect(result.copied).toContain('writing-spec/SKILL.md');
