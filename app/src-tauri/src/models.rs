@@ -95,6 +95,14 @@ pub struct AppConfigResponse {
     pub update: crate::config::UpdateConfig,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ContentDownloadProgress {
+    pub phase: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentUpdateInfo {
     pub latest_version: String,

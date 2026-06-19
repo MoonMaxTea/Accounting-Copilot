@@ -9,15 +9,21 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
+use tauri::Emitter;
 use tauri::Manager;
 
 use crate::config::{self, UpdateConfig};
-use crate::models::{PackInfo, UpdateCheckResult};
+use crate::models::{ContentDownloadProgress, PackInfo, UpdateCheckResult};
 
 pub use crate::models::ContentUpdateInfo;
 use crate::pack;
 
 const USER_AGENT: &str = "Accounting-Copilot/0.1.0";
+const CONTENT_DOWNLOAD_PROGRESS_EVENT: &str = "content-download-progress";
+
+fn emit_content_download_progress(app: &AppHandle, progress: ContentDownloadProgress) {
+    let _ = app.emit(CONTENT_DOWNLOAD_PROGRESS_EVENT, progress);
+}
 
 fn build_http_client() -> Result<Client, String> {
     Client::builder()
@@ -490,15 +496,71 @@ pub async fn download_content_pack(
         }
     };
 
+    let total_bytes = if content.pack_size_bytes > 0 {
+        content.pack_size_bytes
+    } else {
+        response.content_length().unwrap_or(0)
+    };
+
     let mut file = File::create(&destination).map_err(|error| error.to_string())?;
     let mut stream = response.bytes_stream();
     let mut downloaded_bytes: u64 = 0;
+    let mut last_reported_percent = 0u64;
+
+    emit_content_download_progress(
+        app,
+        ContentDownloadProgress {
+            phase: "downloading".to_string(),
+            downloaded_bytes: 0,
+            total_bytes,
+            message: None,
+        },
+    );
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|error| format!("读取下载内容失败: {error}"))?;
         downloaded_bytes += chunk.len() as u64;
         file.write_all(&chunk)
             .map_err(|error| error.to_string())?;
+
+        if total_bytes > 0 {
+            let percent = ((downloaded_bytes * 100).min(total_bytes * 100)) / total_bytes;
+            if percent > last_reported_percent {
+                emit_content_download_progress(
+                    app,
+                    ContentDownloadProgress {
+                        phase: "downloading".to_string(),
+                        downloaded_bytes,
+                        total_bytes,
+                        message: None,
+                    },
+                );
+                last_reported_percent = percent;
+            }
+        } else if downloaded_bytes / (512 * 1024) > last_reported_percent {
+            emit_content_download_progress(
+                app,
+                ContentDownloadProgress {
+                    phase: "downloading".to_string(),
+                    downloaded_bytes,
+                    total_bytes: 0,
+                    message: None,
+                },
+            );
+            last_reported_percent = downloaded_bytes / (512 * 1024);
+        }
+    }
+
+    if total_bytes > 0 {
+        emit_content_download_progress(
+            app,
+            ContentDownloadProgress {
+                phase: "downloading".to_string(),
+                downloaded_bytes: total_bytes,
+                total_bytes,
+                message: None,
+            },
+        );
     }
 
     if content.pack_size_bytes > 0 && downloaded_bytes != content.pack_size_bytes {
@@ -508,6 +570,16 @@ pub async fn download_content_pack(
             content.pack_size_bytes, downloaded_bytes
         ));
     }
+
+    emit_content_download_progress(
+        app,
+        ContentDownloadProgress {
+            phase: "verifying".to_string(),
+            downloaded_bytes,
+            total_bytes,
+            message: Some("Verifying download…".to_string()),
+        },
+    );
 
     let actual_sha256 = sha256_file(&destination)?;
     if !actual_sha256.eq_ignore_ascii_case(&content.pack_sha256) {
@@ -523,6 +595,16 @@ pub fn apply_downloaded_content_pack(
     zip_path: &Path,
     content_version: &str,
 ) -> Result<PackInfo, String> {
+    emit_content_download_progress(
+        app,
+        ContentDownloadProgress {
+            phase: "installing".to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            message: Some("Installing standards pack…".to_string()),
+        },
+    );
+
     let pack_info = pack::import_content_pack(app, zip_path)?;
     config::update_config(app, |config| {
         config.update.last_content_version = Some(content_version.to_string());
@@ -531,18 +613,58 @@ pub fn apply_downloaded_content_pack(
 }
 
 pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackInfo, String> {
+    emit_content_download_progress(
+        app,
+        ContentDownloadProgress {
+            phase: "checking".to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            message: Some("Checking for updates…".to_string()),
+        },
+    );
+
     let check = check_updates(app).await?;
     if check.status == "app_update_required" {
+        emit_content_download_progress(
+            app,
+            ContentDownloadProgress {
+                phase: "idle".to_string(),
+                downloaded_bytes: 0,
+                total_bytes: 0,
+                message: None,
+            },
+        );
         return Err(check
             .message
             .unwrap_or_else(|| "请先升级 App，再更新准则库。".to_string()));
     }
     let Some(content) = check.available_content else {
+        emit_content_download_progress(
+            app,
+            ContentDownloadProgress {
+                phase: "idle".to_string(),
+                downloaded_bytes: 0,
+                total_bytes: 0,
+                message: None,
+            },
+        );
         return Err("当前已是最新准则库".to_string());
     };
 
     let zip_path = download_content_pack(app, &content).await?;
-    apply_downloaded_content_pack(app, &zip_path, &content.latest_version)
+    let pack_info = apply_downloaded_content_pack(app, &zip_path, &content.latest_version)?;
+
+    emit_content_download_progress(
+        app,
+        ContentDownloadProgress {
+            phase: "idle".to_string(),
+            downloaded_bytes: 0,
+            total_bytes: 0,
+            message: None,
+        },
+    );
+
+    Ok(pack_info)
 }
 
 pub fn save_update_settings(app: &AppHandle, update: UpdateConfig) -> Result<crate::config::AppConfig, String> {

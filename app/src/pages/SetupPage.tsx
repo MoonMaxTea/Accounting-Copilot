@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getConfig, saveUpdateConfig } from "../api";
+import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
 import { Wordmark } from "../components/Wordmark";
+import { useContentDownloadProgress } from "../hooks/useContentDownloadProgress";
 import type { UpdateConfig } from "../types";
 
 interface SetupPageProps {
@@ -35,6 +37,7 @@ export function SetupPage({
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>(defaultUpdateConfig);
   const [savingToken, setSavingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
+  const downloadProgress = useContentDownloadProgress(downloading);
 
   useEffect(() => {
     getConfig()
@@ -143,8 +146,9 @@ export function SetupPage({
             onClick={() => void handleDownload()}
             className="btn-primary ui-focus-ring rounded-lg px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
           >
-            {downloading ? "Checking and downloading…" : "Download standards pack"}
+            {downloading ? "Downloading…" : "Download standards pack"}
           </button>
+          {downloading && <ContentDownloadProgressBar progress={downloadProgress} />}
         </div>
 
         <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">

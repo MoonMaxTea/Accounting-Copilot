@@ -97,6 +97,13 @@ export interface ContentUpdateInfo {
   vault_commit: string | null;
 }
 
+export interface ContentDownloadProgress {
+  phase: "checking" | "downloading" | "verifying" | "installing" | "idle" | string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  message: string | null;
+}
+
 export interface UpdateCheckResult {
   status: "up_to_date" | "content_available" | "error" | string;
   current_content_version: string | null;

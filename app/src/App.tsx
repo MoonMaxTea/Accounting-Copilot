@@ -41,6 +41,7 @@ function AppShell() {
   const [activeTab, setActiveTab] = useState<AppTab>("evidence");
   const [loading, setLoading] = useState(true);
   const [downloadingInitial, setDownloadingInitial] = useState(false);
+  const [downloadingStartup, setDownloadingStartup] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheckResult | null>(null);
 
@@ -80,6 +81,7 @@ function AppShell() {
           return;
         }
         if (config.update.auto_download_content) {
+          setDownloadingStartup(true);
           try {
             const updated = await applyContentUpdate();
             showToast(
@@ -90,6 +92,8 @@ function AppShell() {
             );
           } catch {
             setStartupUpdate(result);
+          } finally {
+            setDownloadingStartup(false);
           }
         } else {
           setStartupUpdate(result);
@@ -206,7 +210,7 @@ function AppShell() {
         ) : !packInfo?.loaded ? (
           <SetupPage
             onDownloadInitial={handleDownloadInitial}
-            downloading={downloadingInitial}
+            downloading={downloadingInitial || downloadingStartup}
             error={error}
             onOpenSettings={() => setActiveTab("settings")}
           />

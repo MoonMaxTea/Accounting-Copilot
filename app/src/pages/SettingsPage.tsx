@@ -8,6 +8,8 @@ import {
   saveAiConfig,
   saveUpdateConfig,
 } from "../api";
+import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
+import { useContentDownloadProgress } from "../hooks/useContentDownloadProgress";
 import type { AiConfig, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
 
 interface SettingsPageProps {
@@ -81,6 +83,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [savingUpdateConfig, setSavingUpdateConfig] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const downloadProgress = useContentDownloadProgress(applyingUpdate);
 
   useEffect(() => {
     getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -262,10 +265,12 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
               onClick={() => void handleApplyUpdate()}
               className="ui-focus-ring rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
             >
-              {applyingUpdate ? "Downloading and installing…" : "Download and install"}
+              {applyingUpdate ? "Downloading…" : "Download and install"}
             </button>
           )}
         </div>
+
+        {applyingUpdate && <ContentDownloadProgressBar progress={downloadProgress} />}
 
         <div className="mt-5 space-y-4 border-t border-slate-100 pt-5">
           <label className="flex items-center gap-2 text-sm text-slate-700">
