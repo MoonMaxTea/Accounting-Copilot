@@ -466,7 +466,7 @@ export function EvidencePage() {
           "grid min-h-0 flex-1 gap-3",
           panelCollapsed
             ? "grid-cols-[minmax(220px,240px)_minmax(0,1fr)]"
-            : "grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(280px,360px)]",
+            : "grid-cols-[minmax(220px,240px)_minmax(0,1fr)_minmax(0,1fr)]",
         ].join(" ")}
       >
         <ProjectFolderTree

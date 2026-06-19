@@ -15,7 +15,7 @@ use crate::db;
 use crate::models::{AiAgentMessage, AiAgentToolCall, AiConversationTurn};
 
 const MAX_TOOL_ROUNDS: usize = 12;
-const MAX_SESSION_MESSAGES: usize = 48;
+const MAX_SESSION_MESSAGES: usize = 80;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AgentMode {
@@ -190,7 +190,11 @@ fn trim_session(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
     if messages.len() <= MAX_SESSION_MESSAGES {
         return messages;
     }
-    messages[messages.len() - MAX_SESSION_MESSAGES..].to_vec()
+    let mut start = messages.len().saturating_sub(MAX_SESSION_MESSAGES);
+    while start < messages.len() && messages[start].role == "tool" {
+        start += 1;
+    }
+    messages[start..].to_vec()
 }
 
 fn to_api_message(message: &AiAgentMessage) -> ApiChatMessage {
@@ -372,13 +376,15 @@ async fn call_chat_with_tools(
         .build()
         .map_err(|error| error.to_string())?;
 
-    let payload = json!({
+    let mut payload = json!({
         "model": model,
         "messages": messages,
-        "tools": tools,
-        "tool_choice": "auto",
         "temperature": 0.2,
     });
+    if !tools.is_empty() {
+        payload["tools"] = json!(tools);
+        payload["tool_choice"] = json!("auto");
+    }
 
     let response = client
         .post(&endpoint)
@@ -496,7 +502,7 @@ pub async fn run_standards_agent(
             break;
         }
         if _round + 1 >= MAX_TOOL_ROUNDS {
-            return Err("Agent 工具调用轮次已达上限，请缩小问题范围后重试。".to_string());
+            break;
         }
 
         let nudge = AiAgentMessage {
@@ -511,6 +517,28 @@ pub async fn run_standards_agent(
         };
         session.push(nudge.clone());
         api_messages.push(to_api_message(&nudge));
+    }
+
+    if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
+        let synthesis_user = AiAgentMessage {
+            role: "user".to_string(),
+            content: Some(format!(
+                "请根据以上工具检索到的 pack 原文，输出最终项目笔记。\n\
+                 必须包含 {PROJECT_NAME_START}…{PROJECT_NAME_END} 与 {MARKDOWN_START}…{MARKDOWN_END} 区块。\n\
+                 不要调用工具，直接输出完整 Markdown。"
+            )),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        };
+        session.push(synthesis_user.clone());
+        api_messages.push(to_api_message(&synthesis_user));
+
+        let assistant = call_chat_with_tools(ai, &api_messages, &[]).await?;
+        let stored_assistant = from_api_message(&assistant);
+        session.push(stored_assistant);
+        api_messages.push(assistant.clone());
+        final_raw = assistant.content.unwrap_or_default();
     }
 
     if final_raw.trim().is_empty() {

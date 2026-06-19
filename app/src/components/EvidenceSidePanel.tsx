@@ -103,7 +103,7 @@ export function EvidenceSidePanel({
   }
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-[280px] max-w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">功能区</h2>
@@ -225,7 +225,7 @@ export function EvidenceSidePanel({
             <span className="text-xs text-slate-400">{standardOpen ? "收起" : "展开"}</span>
           </button>
           {standardOpen && (
-            <div className="min-h-[240px] border-t border-slate-100">
+            <div className="min-h-[min(50vh,520px)] border-t border-slate-100">
               <EvidenceStandardPanel
                 target={citationTarget}
                 highlight={highlight}
