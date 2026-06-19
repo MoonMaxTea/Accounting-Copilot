@@ -80,17 +80,14 @@ pub fn get_pack_info(app: &AppHandle) -> Result<PackInfo, String> {
     pack_info_from_dir(&dir)
 }
 
-pub fn import_content_pack(app: &AppHandle, zip_path: &Path) -> Result<PackInfo, String> {
+pub fn import_content_pack_at(data_root: &Path, zip_path: &Path) -> Result<PackInfo, String> {
     if !zip_path.is_file() {
         return Err(format!("Zip file not found: {}", zip_path.display()));
     }
 
-    let content_path = content_dir(app)?;
-    let parent = content_path
-        .parent()
-        .ok_or_else(|| "Unable to resolve app data directory".to_string())?;
-    let staging_path = parent.join("content.new");
-    let backup_path = parent.join("content.bak");
+    let content_path = data_root.join("content");
+    let staging_path = data_root.join("content.new");
+    let backup_path = data_root.join("content.bak");
 
     if staging_path.exists() {
         fs::remove_dir_all(&staging_path).map_err(|error| error.to_string())?;
@@ -125,6 +122,14 @@ pub fn import_content_pack(app: &AppHandle, zip_path: &Path) -> Result<PackInfo,
     }
 
     pack_info_from_dir(&content_path)
+}
+
+pub fn import_content_pack(app: &AppHandle, zip_path: &Path) -> Result<PackInfo, String> {
+    let data_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    import_content_pack_at(&data_root, zip_path)
 }
 
 fn extract_zip(zip_path: &Path, destination: &Path) -> Result<(), String> {

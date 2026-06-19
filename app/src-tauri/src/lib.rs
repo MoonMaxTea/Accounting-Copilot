@@ -3,7 +3,7 @@ mod commands;
 mod config;
 mod db;
 mod models;
-mod pack;
+pub mod pack;
 pub mod projects;
 mod ai;
 mod trash;

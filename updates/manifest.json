@@ -1,7 +1,16 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-18T00:00:00Z",
-  "content": null,
+  "generated_at": "2026-06-19T02:51:34.413Z",
+  "content": {
+    "latest_version": "2026.06.19",
+    "release_tag": "content-2026.06.19",
+    "pack_url": "https://github.com/MoonMaxTea/Accounting-standards-Desktop/releases/download/content-2026.06.19/standards-pack-2026.06.19.zip",
+    "pack_sha256": "9fb65f97b79c1c8fe918a1f4e0b988addb2c2fdeba23d88aec30edaff8f9f398",
+    "pack_size_bytes": 12627617,
+    "min_app_version": "0.1.0",
+    "release_notes": "- Content pack 2026.06.19\n- Built by CI",
+    "vault_commit": null
+  },
   "app": null,
   "_comment": "Phase 4 首次 content/app Release 后由 CI 填充。示例见 examples/updates-manifest.example.json"
 }

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-standards-desktop"
 CONTENT_DIR="${APP_DATA}/content"
-PROJECTS_DIR="${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault/02 - 项目"
+PROJECTS_DIR="${VAULT_PROJECTS:-${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault/02 - 项目}"
 
 pass=0
 fail=0
@@ -32,7 +32,14 @@ else
 fi
 
 DEMO="${PROJECTS_DIR}/Evidence演示-合营安排.md"
-[[ -f "${DEMO}" ]] && ok "演示笔记 fixture 就绪" || bad "演示笔记缺失"
+REAL="${PROJECTS_DIR}/IFRS项目/合营联营会计处理/合营联营定义与会计处理.md"
+if [[ -f "${DEMO}" ]]; then
+  ok "演示笔记 fixture 就绪"
+elif [[ -f "${REAL}" ]]; then
+  ok "真实 Vault 项目笔记就绪"
+else
+  bad "演示笔记缺失"
+fi
 
 echo
 echo "通过: ${pass}  失败: ${fail}"
