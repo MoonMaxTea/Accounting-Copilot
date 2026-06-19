@@ -23,14 +23,6 @@ export function getPackInfo(): Promise<PackInfo> {
   return invoke<PackInfo>("get_pack_info");
 }
 
-export function pickAndImportContentPack(): Promise<PackInfo> {
-  return invoke<PackInfo>("pick_and_import_content_pack");
-}
-
-export function importContentPack(zipPath: string): Promise<PackInfo> {
-  return invoke<PackInfo>("import_content_pack", { zipPath });
-}
-
 export function getConfig(): Promise<AppConfigResponse> {
   return invoke<AppConfigResponse>("get_config");
 }

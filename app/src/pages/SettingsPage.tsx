@@ -4,7 +4,6 @@ import {
   downloadAndApplyContentUpdate,
   getAppVersion,
   getConfig,
-  pickAndImportContentPack,
   pickProjectsDir,
   saveAiConfig,
   saveUpdateConfig,
@@ -23,6 +22,39 @@ function formatCheckedAt(secs: number | null): string {
   return new Date(secs * 1000).toLocaleString("zh-CN");
 }
 
+function updateStatusLabel(result: UpdateCheckResult | null): string | null {
+  if (!result) {
+    return null;
+  }
+  if (result.message) {
+    return result.message;
+  }
+  switch (result.status) {
+    case "up_to_date":
+      return "准则库已是最新版本。";
+    case "content_available":
+      return "发现新的准则库版本。";
+    case "app_update_required":
+      return "需要先升级 App。";
+    case "error":
+      return "检查更新失败。";
+    default:
+      return null;
+  }
+}
+
+function updateStatusClass(status: string): string {
+  switch (status) {
+    case "content_available":
+      return "border-emerald-200 bg-emerald-50 text-emerald-950";
+    case "error":
+    case "app_update_required":
+      return "border-amber-200 bg-amber-50 text-amber-950";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
 export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [appVersion, setAppVersion] = useState("0.1.0");
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
@@ -30,23 +62,25 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
     manifest_url:
       "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json",
     check_on_startup: true,
+    auto_download_content: true,
     last_content_version: null,
     last_update_check_secs: null,
+    access_token: null,
   });
   const [aiConfig, setAiConfig] = useState<AiConfig>({
     provider: "openai",
     api_key: null,
+    base_url: "https://api.openai.com/v1",
     model: "gpt-4o",
     allow_legacy_citations: false,
   });
   const [updateStatus, setUpdateStatus] = useState<UpdateCheckResult | null>(null);
-  const [importing, setImporting] = useState(false);
   const [pickingProjectsDir, setPickingProjectsDir] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
   const [savingUpdateConfig, setSavingUpdateConfig] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -59,31 +93,17 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       .catch(() => undefined);
   }, []);
 
-  const handleReimport = async () => {
-    setImporting(true);
-    setMessage(null);
-    try {
-      const updated = await pickAndImportContentPack();
-      onPackUpdated(updated);
-      setMessage("准则库已重新导入。");
-    } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setImporting(false);
-    }
-  };
-
   const handlePickProjectsDir = async () => {
     setPickingProjectsDir(true);
-    setMessage(null);
+    setNotice(null);
     try {
       const config = await pickProjectsDir();
       setProjectsDir(config.projects_dir);
-      setMessage("项目目录已更新。");
+      setNotice("项目目录已更新。");
     } catch (caught: unknown) {
       const text = caught instanceof Error ? caught.message : String(caught);
       if (text !== "选择已取消") {
-        setMessage(text);
+        setNotice(text);
       }
     } finally {
       setPickingProjectsDir(false);
@@ -92,13 +112,13 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   const handleSaveAiConfig = async () => {
     setSavingAi(true);
-    setMessage(null);
+    setNotice(null);
     try {
       const config = await saveAiConfig(aiConfig);
       setAiConfig(config.ai);
-      setMessage("AI 设置已保存。");
+      setNotice("AI 设置已保存。");
     } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : String(caught));
+      setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setSavingAi(false);
     }
@@ -106,7 +126,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
-    setMessage(null);
+    setNotice(null);
     try {
       const result = await checkContentUpdates();
       setUpdateStatus(result);
@@ -114,17 +134,8 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         ...current,
         last_update_check_secs: result.checked_at_secs,
       }));
-      if (result.status === "up_to_date") {
-        setMessage("准则库已是最新版本。");
-      } else if (result.status === "content_available") {
-        setMessage("发现新的准则库版本。");
-      } else if (result.status === "app_update_required") {
-        setMessage(result.message ?? "请先升级 App，再更新准则库。");
-      } else {
-        setMessage(result.message ?? "检查更新失败。");
-      }
     } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : String(caught));
+      setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setCheckingUpdates(false);
     }
@@ -132,7 +143,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   const handleApplyUpdate = async () => {
     setApplyingUpdate(true);
-    setMessage(null);
+    setNotice(null);
     try {
       const updated = await downloadAndApplyContentUpdate();
       onPackUpdated(updated);
@@ -141,9 +152,9 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         ...current,
         last_content_version: updated.content_version,
       }));
-      setMessage(`准则库已更新至 ${updated.content_version ?? "最新版本"}。`);
+      setNotice(`准则库已更新至 ${updated.content_version ?? "最新版本"}。`);
     } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : String(caught));
+      setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setApplyingUpdate(false);
     }
@@ -151,19 +162,20 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   const handleSaveUpdateConfig = async () => {
     setSavingUpdateConfig(true);
-    setMessage(null);
+    setNotice(null);
     try {
       const config = await saveUpdateConfig(updateConfig);
       setUpdateConfig(config.update);
-      setMessage("更新设置已保存。");
+      setNotice("更新设置已保存。");
     } catch (caught: unknown) {
-      setMessage(caught instanceof Error ? caught.message : String(caught));
+      setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setSavingUpdateConfig(false);
     }
   };
 
   const availableUpdate = updateStatus?.available_content ?? null;
+  const statusText = updateStatusLabel(updateStatus);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -192,7 +204,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">准则库更新</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          应用会从 GitHub 上的更新清单检查是否有新的准则库 pack，下载后会自动校验并替换本地内容。
+          准则库只能通过官方更新渠道安装，应用会自动校验格式与完整性。不支持手动导入 zip。
         </p>
         <dl className="mt-4 grid gap-3 text-sm text-slate-700">
           <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
@@ -210,6 +222,14 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
             </dd>
           </div>
         </dl>
+
+        {updateStatus && statusText && (
+          <div
+            className={`mt-4 rounded-xl border px-4 py-3 text-sm ${updateStatusClass(updateStatus.status)}`}
+          >
+            <p className="font-medium">{statusText}</p>
+          </div>
+        )}
 
         {availableUpdate && (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
@@ -260,6 +280,19 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
             />
             启动时自动检查更新
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={updateConfig.auto_download_content}
+              onChange={(event) =>
+                setUpdateConfig((current) => ({
+                  ...current,
+                  auto_download_content: event.target.checked,
+                }))
+              }
+            />
+            发现新准则库时自动下载并安装
+          </label>
           <label className="block space-y-2 text-sm">
             <span className="font-medium text-slate-800">更新清单 URL</span>
             <input
@@ -273,6 +306,25 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
               }
               className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
             />
+          </label>
+          <label className="block space-y-2 text-sm">
+            <span className="font-medium text-slate-800">GitHub 访问令牌（可选）</span>
+            <input
+              type="password"
+              value={updateConfig.access_token ?? ""}
+              onChange={(event) =>
+                setUpdateConfig((current) => ({
+                  ...current,
+                  access_token: event.target.value || null,
+                }))
+              }
+              placeholder="私有仓库 Release / raw 文件需要填写"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            />
+            <span className="block text-xs leading-5 text-slate-500">
+              App 可公开，准则库可放在私有仓库：在此填写有 read 权限的 GitHub Token，即可下载私有 Release 中的 pack。
+              Token 仅保存在本机。
+            </span>
           </label>
           <button
             type="button"
@@ -309,11 +361,45 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900">AI 写作</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          API Key 仅保存在本机 <code className="rounded bg-slate-100 px-1.5 py-0.5">config.json</code> 中，不会上传。
+          支持 OpenAI 及兼容 OpenAI Chat Completions 接口的服务（如 DeepSeek、本地 Ollama 等）。
+          API Key 与 Base URL 仅保存在本机 <code className="rounded bg-slate-100 px-1.5 py-0.5">config.json</code> 中。
         </p>
         <div className="mt-4 space-y-4">
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">OpenAI API Key</span>
+            <span className="font-medium text-slate-800">Provider（提供方名称）</span>
+            <input
+              type="text"
+              value={aiConfig.provider ?? "openai"}
+              onChange={(event) =>
+                setAiConfig((current) => ({
+                  ...current,
+                  provider: event.target.value || "openai",
+                }))
+              }
+              placeholder="openai / deepseek / ollama …"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            />
+          </label>
+          <label className="block space-y-2 text-sm">
+            <span className="font-medium text-slate-800">Base URL</span>
+            <input
+              type="url"
+              value={aiConfig.base_url ?? "https://api.openai.com/v1"}
+              onChange={(event) =>
+                setAiConfig((current) => ({
+                  ...current,
+                  base_url: event.target.value || "https://api.openai.com/v1",
+                }))
+              }
+              placeholder="https://api.openai.com/v1"
+              className="w-full rounded-xl border border-slate-300 px-4 py-2 outline-none ring-slate-900 focus:ring-2"
+            />
+            <span className="block text-xs text-slate-500">
+              需兼容 OpenAI 的 <code>/chat/completions</code> 接口。Ollama 示例：http://127.0.0.1:11434/v1
+            </span>
+          </label>
+          <label className="block space-y-2 text-sm">
+            <span className="font-medium text-slate-800">API Key</span>
             <input
               type="password"
               value={aiConfig.api_key ?? ""}
@@ -328,7 +414,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
             />
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">模型</span>
+            <span className="font-medium text-slate-800">模型名称</span>
             <input
               type="text"
               value={aiConfig.model ?? "gpt-4o"}
@@ -365,22 +451,11 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">准则库维护</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          如果你拿到了新的 <code className="rounded bg-slate-100 px-1.5 py-0.5">standards-pack-*.zip</code>，
-          也可以在这里手动重新导入，替换本地准则库。
+      {notice && (
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+          {notice}
         </p>
-        <button
-          type="button"
-          disabled={importing}
-          onClick={() => void handleReimport()}
-          className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
-        >
-          {importing ? "正在导入…" : "重新导入准则库 zip"}
-        </button>
-        {message && <p className="mt-3 text-sm text-slate-600">{message}</p>}
-      </section>
+      )}
     </div>
   );
 }

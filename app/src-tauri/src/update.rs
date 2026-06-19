@@ -10,9 +10,24 @@ use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use tauri::Manager;
 
-use crate::config::{self, AppConfig, UpdateConfig};
+use crate::config::{self, UpdateConfig};
 use crate::models::{ContentUpdateInfo, PackInfo, UpdateCheckResult};
 use crate::pack;
+
+fn build_http_client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+fn authorized_get(client: &Client, url: &str, access_token: Option<&str>) -> reqwest::RequestBuilder {
+    let request = client.get(url);
+    match access_token.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(token) => request.bearer_auth(token),
+        None => request,
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct UpdatesManifest {
@@ -88,20 +103,30 @@ pub fn download_path(app: &AppHandle, version: &str) -> Result<PathBuf, String> 
     Ok(downloads_dir(app)?.join(format!("pack-{version}.zip")))
 }
 
-pub async fn fetch_manifest(manifest_url: &str) -> Result<UpdatesManifest, String> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|error| error.to_string())?;
+pub async fn fetch_manifest(
+    manifest_url: &str,
+    access_token: Option<&str>,
+) -> Result<UpdatesManifest, String> {
+    let client = build_http_client()?;
 
-    let response = client
-        .get(manifest_url)
+    let response = authorized_get(&client, manifest_url, access_token)
+        .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
         .map_err(|error| format!("无法获取更新清单: {error}"))?;
 
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(
+            "无法读取更新清单（404）。若清单或准则包在私有仓库，请在设置中填写 GitHub 访问令牌。"
+                .to_string(),
+        );
+    }
+
     if !response.status().is_success() {
-        return Err(format!("更新清单返回错误: {}", response.status()));
+        return Err(format!(
+            "更新清单返回错误: {}。私有仓库需配置访问令牌。",
+            response.status()
+        ));
     }
 
     response
@@ -138,7 +163,14 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         .map(|value| value.as_secs())
         .unwrap_or(0);
 
-    let manifest = match fetch_manifest(&config.update.manifest_url).await {
+    let access_token = config
+        .update
+        .access_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let manifest = match fetch_manifest(&config.update.manifest_url, access_token).await {
         Ok(value) => value,
         Err(error) => {
             let _ = config::update_config(app, |saved| {
@@ -158,10 +190,18 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
     let mut message: Option<String> = None;
     let mut available: Option<ContentUpdateInfo> = None;
 
-    if let Some(content) = manifest.content {
+    if manifest.content.is_none() {
+        status = "error".to_string();
+        message = Some("更新清单中尚未发布准则库版本，请稍后再试或联系管理员。".to_string());
+    } else if let Some(content) = manifest.content {
         if is_content_version_newer(&content.latest_version, current.as_deref()) {
             if app_meets_min_version(&running_app_version, content.min_app_version.as_deref()) {
                 status = "content_available".to_string();
+                message = Some(format!(
+                    "发现新准则库版本 {}（当前 {}）。",
+                    content.latest_version,
+                    current.as_deref().unwrap_or("未导入")
+                ));
                 available = Some(content);
             } else {
                 status = "app_update_required".to_string();
@@ -171,6 +211,11 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
                     running_app_version
                 ));
             }
+        } else {
+            message = Some(format!(
+                "准则库已是最新版本（{}）。",
+                current.as_deref().unwrap_or("未记录")
+            ));
         }
     }
 
@@ -193,20 +238,33 @@ pub async fn download_content_pack(
 ) -> Result<PathBuf, String> {
     fs::create_dir_all(downloads_dir(app)?).map_err(|error| error.to_string())?;
     let destination = download_path(app, &content.latest_version)?;
+    let config = config::load_config(app)?;
+    let access_token = config
+        .update
+        .access_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|error| error.to_string())?;
+    let client = build_http_client()?;
 
-    let response = client
-        .get(&content.pack_url)
+    let response = authorized_get(&client, &content.pack_url, access_token)
         .send()
         .await
         .map_err(|error| format!("下载准则库失败: {error}"))?;
 
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(
+            "无法下载准则库（404）。若 Release 在私有仓库，请在设置中填写 GitHub 访问令牌。"
+                .to_string(),
+        );
+    }
+
     if !response.status().is_success() {
-        return Err(format!("下载准则库失败: {}", response.status()));
+        return Err(format!(
+            "下载准则库失败: {}。私有仓库需配置访问令牌。",
+            response.status()
+        ));
     }
 
     let mut file = File::create(&destination).map_err(|error| error.to_string())?;
@@ -264,10 +322,15 @@ pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackIn
     apply_downloaded_content_pack(app, &zip_path, &content.latest_version)
 }
 
-pub fn save_update_settings(app: &AppHandle, update: UpdateConfig) -> Result<AppConfig, String> {
+pub fn save_update_settings(app: &AppHandle, update: UpdateConfig) -> Result<crate::config::AppConfig, String> {
     config::update_config(app, |config| {
         config.update.manifest_url = update.manifest_url;
         config.update.check_on_startup = update.check_on_startup;
+        config.update.auto_download_content = update.auto_download_content;
+        config.update.access_token = update
+            .access_token
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
     })
 }
 

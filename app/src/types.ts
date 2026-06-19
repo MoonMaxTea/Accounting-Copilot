@@ -48,6 +48,7 @@ export type AppTab = "standards" | "evidence" | "projects" | "settings";
 export interface AiConfig {
   provider: string | null;
   api_key: string | null;
+  base_url: string | null;
   model: string | null;
   allow_legacy_citations: boolean;
 }
@@ -69,8 +70,10 @@ export interface AppConfigResponse {
 export interface UpdateConfig {
   manifest_url: string;
   check_on_startup: boolean;
+  auto_download_content: boolean;
   last_content_version: string | null;
   last_update_check_secs: number | null;
+  access_token: string | null;
 }
 
 export interface ContentUpdateInfo {

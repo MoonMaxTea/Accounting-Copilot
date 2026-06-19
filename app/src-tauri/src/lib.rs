@@ -16,8 +16,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_pack_info,
-            commands::import_content_pack,
-            commands::pick_and_import_content_pack,
             commands::get_config,
             commands::save_projects_dir,
             commands::pick_projects_dir,

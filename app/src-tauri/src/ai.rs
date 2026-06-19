@@ -129,18 +129,34 @@ pub async fn call_openai(
     system_prompt: &str,
     user_prompt: &str,
 ) -> Result<String, String> {
+    let provider = ai
+        .provider
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("openai");
+
     let api_key = ai
         .api_key
         .as_ref()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "请先在「设置」中配置 OpenAI API Key。".to_string())?;
+        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?;
 
     let model = ai
         .model
         .as_deref()
         .filter(|value| !value.is_empty())
         .unwrap_or("gpt-4o");
+
+    let base_url = ai
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("https://api.openai.com/v1")
+        .trim_end_matches('/');
+
+    let endpoint = format!("{base_url}/chat/completions");
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -163,29 +179,29 @@ pub async fn call_openai(
     };
 
     let response = client
-        .post("https://api.openai.com/v1/chat/completions")
+        .post(&endpoint)
         .bearer_auth(api_key)
         .json(&request)
         .send()
         .await
-        .map_err(|error| format!("OpenAI 请求失败: {error}"))?;
+        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("OpenAI 返回错误 ({status}): {body}"));
+        return Err(format!("{provider} 返回错误 ({status}): {body}"));
     }
 
     let payload: OpenAiResponse = response
         .json()
         .await
-        .map_err(|error| format!("无法解析 OpenAI 响应: {error}"))?;
+        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
 
     payload
         .choices
         .first()
         .map(|choice| choice.message.content.clone())
-        .ok_or_else(|| "OpenAI 响应为空".to_string())
+        .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
 pub fn validate_project_content(

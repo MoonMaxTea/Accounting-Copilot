@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { getPackInfo, pickAndImportContentPack, getConfig, checkContentUpdates } from "./api";
-import { ToastProvider } from "./components/Toast";
+import {
+  checkContentUpdates,
+  downloadAndApplyContentUpdate,
+  getConfig,
+  getPackInfo,
+} from "./api";
+import { ToastProvider, useToast } from "./components/Toast";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
@@ -8,12 +13,13 @@ import { EvidencePage } from "./pages/EvidencePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import type { AppTab, PackInfo, UpdateCheckResult } from "./types";
 
-function App() {
+function AppShell() {
+  const { showToast } = useToast();
   const [packInfo, setPackInfo] = useState<PackInfo | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("standards");
   const [evidenceFilePath, setEvidenceFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
+  const [downloadingInitial, setDownloadingInitial] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheckResult | null>(null);
 
@@ -21,6 +27,13 @@ function App() {
     const info = await getPackInfo();
     setPackInfo(info);
     return info;
+  }, []);
+
+  const applyContentUpdate = useCallback(async () => {
+    const updated = await downloadAndApplyContentUpdate();
+    setPackInfo(updated);
+    setStartupUpdate(null);
+    return updated;
   }, []);
 
   useEffect(() => {
@@ -32,39 +45,59 @@ function App() {
   }, [refreshPackInfo]);
 
   useEffect(() => {
-    if (loading || !packInfo?.loaded) {
+    if (loading) {
       return;
     }
 
     getConfig()
-      .then((config) => {
+      .then(async (config) => {
         if (!config.update.check_on_startup) {
-          return null;
+          return;
         }
-        return checkContentUpdates();
-      })
-      .then((result) => {
-        if (result?.status === "content_available") {
+        const result = await checkContentUpdates();
+        if (result.status !== "content_available") {
+          return;
+        }
+        if (config.update.auto_download_content) {
+          try {
+            const updated = await applyContentUpdate();
+            showToast(
+              packInfo?.loaded
+                ? `准则库已更新至 ${updated.content_version ?? "最新版本"}`
+                : `准则库已安装 ${updated.content_version ?? ""}`,
+              "success",
+            );
+          } catch {
+            setStartupUpdate(result);
+          }
+        } else {
           setStartupUpdate(result);
         }
       })
       .catch(() => undefined);
-  }, [loading, packInfo?.loaded]);
+  }, [applyContentUpdate, loading, packInfo?.loaded, showToast]);
 
-  const handlePickImport = async () => {
-    setImporting(true);
+  const handleDownloadInitial = async () => {
+    setDownloadingInitial(true);
     setError(null);
     try {
-      const updated = await pickAndImportContentPack();
-      setPackInfo(updated);
-      setActiveTab("standards");
-    } catch (caught: unknown) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      if (message !== "Import cancelled") {
-        setError(message);
+      const result = await checkContentUpdates();
+      if (result.status === "content_available") {
+        const updated = await downloadAndApplyContentUpdate();
+        setPackInfo(updated);
+        setActiveTab("standards");
+        showToast(`准则库已安装 ${updated.content_version ?? ""}`, "success");
+        return;
       }
+      if (result.status === "up_to_date" && result.current_content_version) {
+        setError("服务器未提供比当前更高的版本；若本地尚未安装，请联系管理员发布 content pack。");
+        return;
+      }
+      setError(result.message ?? "暂时无法下载准则库，请检查网络或访问令牌。");
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setImporting(false);
+      setDownloadingInitial(false);
     }
   };
 
@@ -82,8 +115,7 @@ function App() {
   }
 
   return (
-    <ToastProvider>
-      <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between px-3 py-3 sm:px-4">
           <div>
@@ -94,54 +126,21 @@ function App() {
           </div>
           {packInfo?.loaded && (
             <nav className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("standards")}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-medium",
-                  activeTab === "standards"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100",
-                ].join(" ")}
-              >
-                准则库
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("evidence")}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-medium",
-                  activeTab === "evidence"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100",
-                ].join(" ")}
-              >
-                Evidence
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("projects")}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-medium",
-                  activeTab === "projects"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100",
-                ].join(" ")}
-              >
-                项目
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("settings")}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-medium",
-                  activeTab === "settings"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100",
-                ].join(" ")}
-              >
-                设置
-              </button>
+              {(["standards", "evidence", "projects", "settings"] as AppTab[]).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={[
+                    "rounded-full px-4 py-2 text-sm font-medium capitalize",
+                    activeTab === tab
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-600 hover:bg-slate-100",
+                  ].join(" ")}
+                >
+                  {tab === "standards" ? "准则库" : tab === "projects" ? "项目" : tab === "settings" ? "设置" : "Evidence"}
+                </button>
+              ))}
             </nav>
           )}
         </div>
@@ -166,8 +165,8 @@ function App() {
         )}
         {!packInfo?.loaded ? (
           <SetupPage
-            onPickImport={handlePickImport}
-            importing={importing}
+            onDownloadInitial={handleDownloadInitial}
+            downloading={downloadingInitial}
             error={error}
           />
         ) : activeTab === "settings" ? (
@@ -189,7 +188,14 @@ function App() {
           </>
         )}
       </main>
-      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ToastProvider>
+      <AppShell />
     </ToastProvider>
   );
 }

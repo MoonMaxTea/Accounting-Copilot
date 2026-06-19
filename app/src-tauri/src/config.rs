@@ -110,8 +110,12 @@ pub struct UpdateConfig {
     pub manifest_url: String,
     #[serde(default = "default_check_on_startup")]
     pub check_on_startup: bool,
+    #[serde(default)]
+    pub auto_download_content: bool,
     pub last_content_version: Option<String>,
     pub last_update_check_secs: Option<u64>,
+    #[serde(default)]
+    pub access_token: Option<String>,
 }
 
 fn default_manifest_url() -> String {
@@ -127,8 +131,10 @@ impl Default for UpdateConfig {
         Self {
             manifest_url: default_manifest_url(),
             check_on_startup: true,
+            auto_download_content: true,
             last_content_version: None,
             last_update_check_secs: None,
+            access_token: None,
         }
     }
 }
@@ -148,6 +154,7 @@ pub struct AppConfig {
 pub struct AiConfig {
     pub provider: Option<String>,
     pub api_key: Option<String>,
+    pub base_url: Option<String>,
     pub model: Option<String>,
     #[serde(default)]
     pub allow_legacy_citations: bool,
@@ -160,6 +167,7 @@ impl Default for AppConfig {
             ai: AiConfig {
                 provider: Some("openai".to_string()),
                 api_key: None,
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 model: Some("gpt-4o".to_string()),
                 allow_legacy_citations: false,
             },
