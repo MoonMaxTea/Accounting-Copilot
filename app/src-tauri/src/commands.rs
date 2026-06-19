@@ -244,11 +244,21 @@ pub fn move_project_file(
     target_folder_relative: Option<String>,
 ) -> Result<ProjectFileEntry, String> {
     let root = config::ensure_projects_dir(&app)?;
-    projects::move_project_file(
+    let validated = config::validate_project_path(&root, PathBuf::from(&file_path).as_path())?;
+    let old_relative = validated
+        .strip_prefix(&root)
+        .map_err(|error| error.to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let entry = projects::move_project_file(
         &root,
-        PathBuf::from(file_path).as_path(),
+        validated.as_path(),
         target_folder_relative.as_deref(),
-    )
+    )?;
+    config::update_projects_ui(&app, |ui| {
+        ui.migrate_path(&old_relative, &entry.relative_path);
+    })?;
+    Ok(entry)
 }
 
 #[tauri::command]

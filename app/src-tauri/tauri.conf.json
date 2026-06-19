@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AccoutingStandards Desktop",
+  "productName": "AccountingStandards Desktop",
   "version": "0.1.0",
   "identifier": "com.moonmaxtea.accounting-standards-desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "AccoutingStandards Desktop",
+        "title": "AccountingStandards Desktop",
         "width": 1280,
         "height": 840,
         "minWidth": 960,

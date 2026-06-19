@@ -102,7 +102,7 @@ function AppShell() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
-        正在启动 AccoutingStandards Desktop…
+        正在启动 AccountingStandards Desktop…
       </div>
     );
   }
@@ -113,7 +113,7 @@ function AppShell() {
         <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between px-3 py-3 sm:px-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-              AccoutingStandards Desktop
+              AccountingStandards Desktop
             </p>
             <h1 className="text-lg font-semibold text-slate-900">双准则证据工作台</h1>
           </div>
