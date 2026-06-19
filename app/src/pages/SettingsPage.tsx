@@ -118,6 +118,8 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         setMessage("准则库已是最新版本。");
       } else if (result.status === "content_available") {
         setMessage("发现新的准则库版本。");
+      } else if (result.status === "app_update_required") {
+        setMessage(result.message ?? "请先升级 App，再更新准则库。");
       } else {
         setMessage(result.message ?? "检查更新失败。");
       }

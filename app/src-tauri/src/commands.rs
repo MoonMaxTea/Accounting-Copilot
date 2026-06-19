@@ -413,8 +413,14 @@ pub fn search_standards(
 #[tauri::command]
 pub fn open_official_url(app: AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+
+    let trimmed = url.trim();
+    if !trimmed.starts_with("https://") {
+        return Err("出于安全考虑，只能打开 https 开头的官网链接。".to_string());
+    }
+
     app.opener()
-        .open_url(url, None::<&str>)
+        .open_url(trimmed, None::<&str>)
         .map_err(|error| error.to_string())
 }
 

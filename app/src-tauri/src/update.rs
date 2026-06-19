@@ -1,8 +1,9 @@
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -20,12 +21,16 @@ struct UpdatesManifest {
     content: Option<ContentUpdateInfo>,
 }
 
-pub fn parse_content_version(version: &str) -> Option<(u32, u32, u32)> {
+pub fn parse_semver_triplet(version: &str) -> Option<(u32, u32, u32)> {
     let mut parts = version.split('.');
-    let year = parts.next()?.parse().ok()?;
-    let month = parts.next()?.parse().ok()?;
-    let day = parts.next()?.parse().ok()?;
-    Some((year, month, day))
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    Some((major, minor, patch))
+}
+
+pub fn parse_content_version(version: &str) -> Option<(u32, u32, u32)> {
+    parse_semver_triplet(version)
 }
 
 pub fn is_content_version_newer(latest: &str, current: Option<&str>) -> bool {
@@ -42,7 +47,23 @@ pub fn is_content_version_newer(latest: &str, current: Option<&str>) -> bool {
     }
 }
 
+pub fn app_meets_min_version(app_version: &str, min_app_version: Option<&str>) -> bool {
+    let Some(required) = min_app_version.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+
+    match (
+        parse_semver_triplet(app_version),
+        parse_semver_triplet(required),
+    ) {
+        (Some(current), Some(minimum)) => current >= minimum,
+        _ => true,
+    }
+}
+
 pub fn sha256_file(path: &Path) -> Result<String, String> {
+    use std::io::Read;
+
     let mut file = File::open(path).map_err(|error| error.to_string())?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 8192];
@@ -104,9 +125,14 @@ pub fn current_content_version(app: &AppHandle) -> Result<Option<String>, String
     Ok(pack_info.content_version)
 }
 
+pub fn app_version(app: &AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String> {
     let config = config::load_config(app)?;
     let current = current_content_version(app)?;
+    let running_app_version = app_version(app);
     let checked_at_secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
@@ -128,15 +154,25 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         }
     };
 
-    let available = manifest.content.filter(|content| {
-        is_content_version_newer(&content.latest_version, current.as_deref())
-    });
+    let mut status = "up_to_date".to_string();
+    let mut message: Option<String> = None;
+    let mut available: Option<ContentUpdateInfo> = None;
 
-    let status = if available.is_some() {
-        "content_available".to_string()
-    } else {
-        "up_to_date".to_string()
-    };
+    if let Some(content) = manifest.content {
+        if is_content_version_newer(&content.latest_version, current.as_deref()) {
+            if app_meets_min_version(&running_app_version, content.min_app_version.as_deref()) {
+                status = "content_available".to_string();
+                available = Some(content);
+            } else {
+                status = "app_update_required".to_string();
+                message = Some(format!(
+                    "新的准则库需要 App 版本 {} 或更高，您当前是 {}。请先升级 App，再更新准则库。",
+                    content.min_app_version.as_deref().unwrap_or("未知"),
+                    running_app_version
+                ));
+            }
+        }
+    }
 
     let _ = config::update_config(app, |saved| {
         saved.update.last_update_check_secs = Some(checked_at_secs);
@@ -146,7 +182,7 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         status,
         current_content_version: current,
         available_content: available,
-        message: None,
+        message,
         checked_at_secs,
     })
 }
@@ -173,22 +209,24 @@ pub async fn download_content_pack(
         return Err(format!("下载准则库失败: {}", response.status()));
     }
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| format!("读取下载内容失败: {error}"))?;
+    let mut file = File::create(&destination).map_err(|error| error.to_string())?;
+    let mut stream = response.bytes_stream();
+    let mut downloaded_bytes: u64 = 0;
 
-    if content.pack_size_bytes > 0 && bytes.len() as u64 != content.pack_size_bytes {
-        return Err(format!(
-            "下载大小不匹配：期望 {} 字节，实际 {} 字节",
-            content.pack_size_bytes,
-            bytes.len()
-        ));
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| format!("读取下载内容失败: {error}"))?;
+        downloaded_bytes += chunk.len() as u64;
+        file.write_all(&chunk)
+            .map_err(|error| error.to_string())?;
     }
 
-    let mut file = File::create(&destination).map_err(|error| error.to_string())?;
-    file.write_all(&bytes)
-        .map_err(|error| error.to_string())?;
+    if content.pack_size_bytes > 0 && downloaded_bytes != content.pack_size_bytes {
+        let _ = fs::remove_file(&destination);
+        return Err(format!(
+            "下载大小不匹配：期望 {} 字节，实际 {} 字节",
+            content.pack_size_bytes, downloaded_bytes
+        ));
+    }
 
     let actual_sha256 = sha256_file(&destination)?;
     if !actual_sha256.eq_ignore_ascii_case(&content.pack_sha256) {
@@ -213,6 +251,11 @@ pub fn apply_downloaded_content_pack(
 
 pub async fn download_and_apply_content_update(app: &AppHandle) -> Result<PackInfo, String> {
     let check = check_updates(app).await?;
+    if check.status == "app_update_required" {
+        return Err(check
+            .message
+            .unwrap_or_else(|| "请先升级 App，再更新准则库。".to_string()));
+    }
     let Some(content) = check.available_content else {
         return Err("当前已是最新准则库".to_string());
     };
@@ -242,5 +285,12 @@ mod tests {
     #[test]
     fn treats_missing_current_as_update_available() {
         assert!(is_content_version_newer("2026.06.18", None));
+    }
+
+    #[test]
+    fn checks_min_app_version() {
+        assert!(app_meets_min_version("0.2.0", Some("0.1.0")));
+        assert!(app_meets_min_version("0.1.0", Some("0.1.0")));
+        assert!(!app_meets_min_version("0.1.0", Some("1.0.0")));
     }
 }
