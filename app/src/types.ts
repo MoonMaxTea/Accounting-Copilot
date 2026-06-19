@@ -63,6 +63,33 @@ export interface AppConfigResponse {
   projects_dir: string | null;
   ai: AiConfig;
   projects_ui: ProjectsUiState;
+  update: UpdateConfig;
+}
+
+export interface UpdateConfig {
+  manifest_url: string;
+  check_on_startup: boolean;
+  last_content_version: string | null;
+  last_update_check_secs: number | null;
+}
+
+export interface ContentUpdateInfo {
+  latest_version: string;
+  release_tag: string;
+  pack_url: string;
+  pack_sha256: string;
+  pack_size_bytes: number;
+  min_app_version: string | null;
+  release_notes: string | null;
+  vault_commit: string | null;
+}
+
+export interface UpdateCheckResult {
+  status: "up_to_date" | "content_available" | "error" | string;
+  current_content_version: string | null;
+  available_content: ContentUpdateInfo | null;
+  message: string | null;
+  checked_at_secs: number;
 }
 
 export interface ProjectFileEntry {

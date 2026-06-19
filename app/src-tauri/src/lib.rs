@@ -7,6 +7,7 @@ mod pack;
 pub mod projects;
 mod ai;
 mod trash;
+mod update;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,6 +50,9 @@ pub fn run() {
             commands::search_standards,
             commands::open_official_url,
             commands::get_app_version,
+            commands::check_content_updates,
+            commands::download_and_apply_content_update,
+            commands::save_update_config,
             commands::paragraphs_index_loaded,
         ])
         .run(tauri::generate_context!())

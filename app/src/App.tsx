@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { getPackInfo, pickAndImportContentPack } from "./api";
+import { getPackInfo, pickAndImportContentPack, getConfig, checkContentUpdates } from "./api";
 import { ToastProvider } from "./components/Toast";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
-import type { AppTab, PackInfo } from "./types";
+import type { AppTab, PackInfo, UpdateCheckResult } from "./types";
 
 function App() {
   const [packInfo, setPackInfo] = useState<PackInfo | null>(null);
@@ -15,6 +15,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startupUpdate, setStartupUpdate] = useState<UpdateCheckResult | null>(null);
 
   const refreshPackInfo = useCallback(async () => {
     const info = await getPackInfo();
@@ -29,6 +30,26 @@ function App() {
       })
       .finally(() => setLoading(false));
   }, [refreshPackInfo]);
+
+  useEffect(() => {
+    if (loading || !packInfo?.loaded) {
+      return;
+    }
+
+    getConfig()
+      .then((config) => {
+        if (!config.update.check_on_startup) {
+          return null;
+        }
+        return checkContentUpdates();
+      })
+      .then((result) => {
+        if (result?.status === "content_available") {
+          setStartupUpdate(result);
+        }
+      })
+      .catch(() => undefined);
+  }, [loading, packInfo?.loaded]);
 
   const handlePickImport = async () => {
     setImporting(true);
@@ -127,6 +148,22 @@ function App() {
       </header>
 
       <main className="mx-auto w-full max-w-[min(1920px,calc(100%-1rem))] px-3 py-4 sm:px-4">
+        {startupUpdate?.available_content && packInfo?.loaded && activeTab !== "settings" && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+            <p>
+              发现新的准则库版本{" "}
+              <strong>{startupUpdate.available_content.latest_version}</strong>
+              ，可在设置页下载安装。
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveTab("settings")}
+              className="rounded-lg bg-emerald-900 px-3 py-1.5 text-white hover:bg-emerald-800"
+            >
+              前往设置
+            </button>
+          </div>
+        )}
         {!packInfo?.loaded ? (
           <SetupPage
             onPickImport={handlePickImport}

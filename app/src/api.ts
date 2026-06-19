@@ -15,6 +15,8 @@ import type {
   StandardDetail,
   StandardSummary,
   TrashEntry,
+  UpdateCheckResult,
+  UpdateConfig,
 } from "./types";
 
 export function getPackInfo(): Promise<PackInfo> {
@@ -200,4 +202,16 @@ export function openOfficialUrl(url: string): Promise<void> {
 
 export function getAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
+}
+
+export function checkContentUpdates(): Promise<UpdateCheckResult> {
+  return invoke<UpdateCheckResult>("check_content_updates");
+}
+
+export function downloadAndApplyContentUpdate(): Promise<PackInfo> {
+  return invoke<PackInfo>("download_and_apply_content_update");
+}
+
+export function saveUpdateConfig(update: UpdateConfig): Promise<AppConfigResponse> {
+  return invoke<AppConfigResponse>("save_update_config", { update });
 }

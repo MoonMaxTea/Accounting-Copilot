@@ -20,6 +20,24 @@ pub fn is_valid_pack(path: &Path) -> bool {
     path.join("registry.json").is_file()
 }
 
+pub fn validate_staged_pack(path: &Path) -> Result<(), String> {
+    if !is_valid_pack(path) {
+        return Err("Invalid content pack: registry.json is missing".to_string());
+    }
+
+    load_registry(path)?;
+
+    let manifest_path = path.join("pack-manifest.json");
+    if manifest_path.is_file() {
+        let raw = fs::read_to_string(&manifest_path)
+            .map_err(|error| format!("Failed to read pack-manifest.json: {error}"))?;
+        serde_json::from_str::<serde_json::Value>(&raw)
+            .map_err(|error| format!("Invalid pack-manifest.json: {error}"))?;
+    }
+
+    Ok(())
+}
+
 pub fn load_registry(content_path: &Path) -> Result<RegistryFile, String> {
     let registry_path = content_path.join("registry.json");
     let raw = fs::read_to_string(&registry_path)
@@ -85,6 +103,8 @@ pub fn import_content_pack(app: &AppHandle, zip_path: &Path) -> Result<PackInfo,
         let _ = fs::remove_dir_all(&staging_path);
         return Err("Invalid content pack: registry.json is missing".to_string());
     }
+
+    validate_staged_pack(&staging_path)?;
 
     if content_path.exists() {
         if backup_path.exists() {

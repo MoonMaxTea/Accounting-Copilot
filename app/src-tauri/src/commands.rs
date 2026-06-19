@@ -9,11 +9,12 @@ use crate::db;
 use crate::models::{
     AppConfigResponse, CitationScanResult, CitationTarget, DeleteFolderResult,
     GenerateProjectResult, PackInfo, ProjectFileEntry, ProjectTreeNode, SearchHit,
-    SimilarProjectMatch, StandardDetail, StandardSummary,
+    SimilarProjectMatch, StandardDetail, StandardSummary, UpdateCheckResult,
 };
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
 use crate::projects;
 use crate::trash::{TrashEntry, TrashStore};
+use crate::update;
 
 #[tauri::command]
 pub fn get_pack_info(app: AppHandle) -> Result<PackInfo, String> {
@@ -55,6 +56,7 @@ pub fn get_config(app: AppHandle) -> Result<AppConfigResponse, String> {
         projects_dir: config.projects_dir,
         ai: config.ai,
         projects_ui: config.projects_ui,
+        update: config.update,
     })
 }
 
@@ -419,6 +421,25 @@ pub fn open_official_url(app: AppHandle, url: String) -> Result<(), String> {
 #[tauri::command]
 pub fn get_app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub async fn check_content_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
+    update::check_updates(&app).await
+}
+
+#[tauri::command]
+pub async fn download_and_apply_content_update(app: AppHandle) -> Result<PackInfo, String> {
+    update::download_and_apply_content_update(&app).await
+}
+
+#[tauri::command]
+pub fn save_update_config(
+    app: AppHandle,
+    update: crate::config::UpdateConfig,
+) -> Result<AppConfigResponse, String> {
+    update::save_update_settings(&app, update)?;
+    get_config(app)
 }
 
 #[tauri::command]

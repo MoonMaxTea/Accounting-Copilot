@@ -13,6 +13,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -59,3 +61,19 @@ jobs:
             Standards content pack built from Vault @ ${{ inputs.vault_ref || 'master' }}.
             SHA256: ${{ steps.build.outputs.sha256 }}
             Size: ${{ steps.build.outputs.size }} bytes
+
+      - name: Update updates/manifest.json
+        run: |
+          node scripts/update-content-manifest.mjs \
+            --version "${{ steps.build.outputs.version }}" \
+            --sha256 "${{ steps.build.outputs.sha256 }}" \
+            --size "${{ steps.build.outputs.size }}" \
+            --tag "content-${{ steps.build.outputs.version }}"
+
+      - name: Commit manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/manifest.json
+          git diff --cached --quiet || git commit -m "chore: update content manifest to ${{ steps.build.outputs.version }}"
+          git push

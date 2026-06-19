@@ -101,6 +101,38 @@ impl ProjectsUiState {
     }
 }
 
+const DEFAULT_MANIFEST_URL: &str =
+    "https://raw.githubusercontent.com/MoonMaxTea/Accounting-standards-Desktop/main/updates/manifest.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateConfig {
+    #[serde(default = "default_manifest_url")]
+    pub manifest_url: String,
+    #[serde(default = "default_check_on_startup")]
+    pub check_on_startup: bool,
+    pub last_content_version: Option<String>,
+    pub last_update_check_secs: Option<u64>,
+}
+
+fn default_manifest_url() -> String {
+    DEFAULT_MANIFEST_URL.to_string()
+}
+
+fn default_check_on_startup() -> bool {
+    true
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            manifest_url: default_manifest_url(),
+            check_on_startup: true,
+            last_content_version: None,
+            last_update_check_secs: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub projects_dir: Option<String>,
@@ -108,6 +140,8 @@ pub struct AppConfig {
     pub ai: AiConfig,
     #[serde(default)]
     pub projects_ui: ProjectsUiState,
+    #[serde(default)]
+    pub update: UpdateConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -130,8 +164,19 @@ impl Default for AppConfig {
                 allow_legacy_citations: false,
             },
             projects_ui: ProjectsUiState::default(),
+            update: UpdateConfig::default(),
         }
     }
+}
+
+pub fn update_config<F>(app: &AppHandle, update: F) -> Result<AppConfig, String>
+where
+    F: FnOnce(&mut AppConfig),
+{
+    let mut config = load_config(app)?;
+    update(&mut config);
+    save_config(app, &config)?;
+    Ok(config)
 }
 
 pub fn update_projects_ui<F>(app: &AppHandle, update: F) -> Result<ProjectsUiState, String>

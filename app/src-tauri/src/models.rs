@@ -92,6 +92,28 @@ pub struct AppConfigResponse {
     pub projects_dir: Option<String>,
     pub ai: crate::config::AiConfig,
     pub projects_ui: crate::config::ProjectsUiState,
+    pub update: crate::config::UpdateConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentUpdateInfo {
+    pub latest_version: String,
+    pub release_tag: String,
+    pub pack_url: String,
+    pub pack_sha256: String,
+    pub pack_size_bytes: u64,
+    pub min_app_version: Option<String>,
+    pub release_notes: Option<String>,
+    pub vault_commit: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateCheckResult {
+    pub status: String,
+    pub current_content_version: Option<String>,
+    pub available_content: Option<ContentUpdateInfo>,
+    pub message: Option<String>,
+    pub checked_at_secs: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
