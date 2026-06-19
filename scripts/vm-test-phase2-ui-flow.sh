@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Extended VM UI test: Evidence tab → select note → click citation
+# Extended VM UI test: Evidence tab → DTA note → click ASC citation for highlight
 set -euo pipefail
 
 export DISPLAY="${DISPLAY:-:1}"
@@ -20,14 +20,10 @@ sleep 0.4
 
 # Evidence tab
 xdotool mousemove $((POS_X + WIDTH * 72 / 100)) $((POS_Y + 45)) click 1
+sleep 1.0
+
+# Center panel: click ASC 740 citation in DTA note (~50% width, ~22% height)
+xdotool mousemove $((POS_X + WIDTH * 50 / 100)) $((POS_Y + HEIGHT * 22 / 100)) click 1
 sleep 0.8
 
-# First project in left tree (~15% width, ~28% height)
-xdotool mousemove $((POS_X + WIDTH * 15 / 100)) $((POS_Y + HEIGHT * 28 / 100)) click 1
-sleep 0.8
-
-# IFRS citation in center panel (~45% width, ~38% height)
-xdotool mousemove $((POS_X + WIDTH * 45 / 100)) $((POS_Y + HEIGHT * 38 / 100)) click 1
-sleep 0.5
-
-echo "  ✓ Evidence → 选择笔记 → 点击 IFRS 引用"
+echo "  ✓ Evidence → DTA 笔记 → 点击 ASC 740 引用（右侧应高亮段落）"

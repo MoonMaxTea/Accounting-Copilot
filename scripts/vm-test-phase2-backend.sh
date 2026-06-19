@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DATA="${HOME}/.local/share/com.moonmaxtea.accounting-standards-desktop"
 CONTENT_DIR="${APP_DATA}/content"
-PROJECTS_DIR="${VAULT_PROJECTS:-${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault/02 - 项目}"
+PROJECTS_DIR="${VAULT_PROJECTS:-${ROOT_DIR}/tools/pack-builder/tests/fixtures/vault-live/02 - 项目}"
 
 pass=0
 fail=0
@@ -32,11 +32,13 @@ else
 fi
 
 DEMO="${PROJECTS_DIR}/Evidence演示-合营安排.md"
-REAL="${PROJECTS_DIR}/IFRS项目/合营联营会计处理/合营联营定义与会计处理.md"
+REAL="${PROJECTS_DIR}/双准则对比/DTA与Valuation Allowance/DTA确认与Valuation Allowance对比.md"
 if [[ -f "${DEMO}" ]]; then
   ok "演示笔记 fixture 就绪"
 elif [[ -f "${REAL}" ]]; then
-  ok "真实 Vault 项目笔记就绪"
+  ok "真实 Vault 项目笔记就绪（含 ASC 双准则对比）"
+elif [[ -f "${PROJECTS_DIR}/IFRS项目/合营联营会计处理/合营联营定义与会计处理.md" ]]; then
+  ok "真实 Vault IFRS 项目笔记就绪"
 else
   bad "演示笔记缺失"
 fi
