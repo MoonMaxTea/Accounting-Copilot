@@ -40,6 +40,7 @@ async fn main() {
     println!("question: {question}");
 
     let (result, _session, _activity) = ai::generate_and_save_project(
+        None,
         &projects_root,
         &content_dir,
         &app_config.ai,

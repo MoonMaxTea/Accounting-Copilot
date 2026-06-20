@@ -415,8 +415,14 @@ pub fn file_entry_from_path(projects_root: &Path, path: &Path) -> Result<Project
     let modified = metadata
         .modified()
         .unwrap_or(SystemTime::UNIX_EPOCH);
-    let relative = path
-        .strip_prefix(projects_root)
+    let canonical_root = projects_root
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let canonical_path = path
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let relative = canonical_path
+        .strip_prefix(&canonical_root)
         .map_err(|error| error.to_string())?
         .to_string_lossy()
         .replace('\\', "/");
@@ -859,6 +865,16 @@ fn truncate_for_log(text: &str, max_chars: usize) -> String {
     )
 }
 
+/// Strip any existing "## 日志" section from AI-generated markdown,
+/// so we can append a clean log entry without duplication.
+pub fn strip_trailing_log_section(markdown: &str) -> String {
+    if let Some(pos) = find_exact_heading(markdown, "## 日志") {
+        let before = &markdown[..pos];
+        return before.trim_end().to_string();
+    }
+    markdown.to_string()
+}
+
 pub fn append_log_for_turn(
     markdown: &str,
     question: &str,
@@ -919,6 +935,23 @@ fn classify_log_turn_kind(rest: &str, index: usize) -> &'static str {
     }
 }
 
+fn find_exact_heading(content: &str, heading: &str) -> Option<usize> {
+    let mut search_from = 0;
+    loop {
+        let pos = content[search_from..].find(heading)?;
+        let abs_pos = search_from + pos;
+        let after = abs_pos + heading.len();
+        let is_line_start = abs_pos == 0
+            || content.as_bytes().get(abs_pos.wrapping_sub(1)) == Some(&b'\n');
+        let is_exact_end = after >= content.len()
+            || matches!(content.as_bytes().get(after), Some(b'\n') | Some(b'\r'));
+        if is_line_start && is_exact_end {
+            return Some(abs_pos);
+        }
+        search_from = after;
+    }
+}
+
 fn extract_turns_from_log_section(content: &str) -> Vec<crate::models::AiConversationTurn> {
     use crate::models::AiConversationTurn;
 
@@ -928,7 +961,7 @@ fn extract_turns_from_log_section(content: &str) -> Vec<crate::models::AiConvers
         .unwrap_or(0);
     let mut turns = Vec::new();
 
-    let Some(log_start) = content.find("## 日志") else {
+    let Some(log_start) = find_exact_heading(content, "## 日志") else {
         return turns;
     };
     let log_section = content[log_start..]
@@ -972,13 +1005,22 @@ fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiCo
         .unwrap_or(0);
     let mut turns = Vec::new();
 
-    let Some(question_start) = content.find("## 问题") else {
+    let Some(question_start) = find_exact_heading(content, "## 问题") else {
         return turns;
     };
     let section = content[question_start..]
         .split("\n## ")
         .next()
         .unwrap_or("");
+
+    // Skip AI-generated structured content — if the section has ### sub-headings
+    // other than "### 追加问题", it's not a raw user question but AI-generated analysis.
+    let has_ai_subheadings = section
+        .lines()
+        .any(|line| line.starts_with("### ") && line != "### 追加问题");
+    if has_ai_subheadings {
+        return turns;
+    }
 
     if let Some(add_idx) = section.find("### 追加问题") {
         let initial = section[..add_idx]
@@ -989,7 +1031,7 @@ fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiCo
             turns.push(AiConversationTurn {
                 role: "user".to_string(),
                 content: truncate_for_log(&initial, 240),
-                timestamp_secs: now.saturating_sub(3600),
+                timestamp_secs: now,
                 kind: "create".to_string(),
             });
         }
@@ -1001,7 +1043,7 @@ fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiCo
             turns.push(AiConversationTurn {
                 role: "user".to_string(),
                 content: truncate_for_log(&follow_up, 240),
-                timestamp_secs: now.saturating_sub(60),
+                timestamp_secs: now,
                 kind: "continue".to_string(),
             });
         }
@@ -1011,7 +1053,7 @@ fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiCo
             turns.push(AiConversationTurn {
                 role: "user".to_string(),
                 content: truncate_for_log(&initial, 240),
-                timestamp_secs: now.saturating_sub(3600),
+                timestamp_secs: now,
                 kind: "create".to_string(),
             });
         }
@@ -1165,14 +1207,12 @@ pub fn conversation_activity_from_agent_session(
     use crate::models::AiConversationTurn;
 
     let mut turns = Vec::new();
-    let base = std::time::SystemTime::now()
+    let timestamp_secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or(0);
 
-    for (index, message) in session.iter().enumerate() {
-        let timestamp_secs = base.saturating_sub((session.len().saturating_sub(index)) as u64 * 30);
-
+    for message in session.iter() {
         match message.role.as_str() {
             "user" => {
                 let Some(raw) = message.content.as_ref() else {
@@ -1239,7 +1279,12 @@ fn supplement_missing_user_rounds(
 
     let mut missing: Vec<crate::models::AiConversationTurn> = supplemental
         .into_iter()
-        .filter(|turn| turn.role == "user" && !existing.contains(&user_round_signature(turn)))
+        .filter(|turn| {
+            turn.role == "user"
+                && (turn.kind == "create" || turn.kind == "continue")
+                && !turn.content.is_empty()
+                && !existing.contains(&user_round_signature(turn))
+        })
         .collect();
 
     if missing.is_empty() {
@@ -1281,12 +1326,12 @@ pub fn conversation_turns_from_agent_session(
     use crate::models::AiConversationTurn;
 
     let mut turns = Vec::new();
-    let base = std::time::SystemTime::now()
+    let timestamp_secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or(0);
 
-    for (index, message) in session.iter().enumerate() {
+    for message in session.iter() {
         if message.role != "user" {
             continue;
         }
@@ -1336,7 +1381,7 @@ pub fn conversation_turns_from_agent_session(
         turns.push(AiConversationTurn {
             role: "user".to_string(),
             content: content.to_string(),
-            timestamp_secs: base.saturating_sub((session.len() - index) as u64 * 30),
+            timestamp_secs,
             kind: kind.to_string(),
         });
     }

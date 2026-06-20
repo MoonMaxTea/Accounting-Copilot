@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePreferences } from "../context/PreferencesContext";
 import { EvidenceStandardPanel } from "./EvidenceStandardPanel";
 import { IconBook, IconChevronLeft, IconSparkles } from "./icons";
 import {
@@ -7,11 +8,11 @@ import {
   truncatePreview,
   type ConversationRound,
 } from "../lib/conversation";
+import type { MessageKey } from "../lib/i18n";
 import type {
   AiConversationTurn,
   CitationHighlight,
   CitationTarget,
-  GenerateProjectResult,
   ProjectFileEntry,
 } from "../types";
 
@@ -31,18 +32,11 @@ interface EvidenceSidePanelProps {
   onGenerate: () => void;
   onContinue: () => void;
   onExampleQuestion?: (value: string) => void;
-  lastResult: GenerateProjectResult | null;
   citationTarget: CitationTarget | null;
   highlight: CitationHighlight | null;
   missMessage: string | null;
   onOpenSuperseded: (standardId: string) => void;
 }
-
-const EXAMPLE_QUESTIONS = [
-  "How should we classify a 50:50 joint arrangement?",
-  "When does ASC 842 require a lease liability?",
-  "What are the IFRS 15 performance obligations in a bundled SaaS contract?",
-];
 
 function formatTurnTime(timestampSecs: number): string {
   return new Date(timestampSecs * 1000).toLocaleString(undefined, {
@@ -58,54 +52,63 @@ function ConversationRoundItem({
   index,
   expanded,
   onToggle,
+  tr,
+  trf,
+  locale,
 }: {
   round: ConversationRound;
   index: number;
   expanded: boolean;
   onToggle: () => void;
+  tr: (key: MessageKey) => string;
+  trf: (key: MessageKey, vars: Record<string, string | number>) => string;
+  locale: "en" | "zh";
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200">
+    <div className="overflow-hidden rounded-lg border border-brand-border">
       <button
         type="button"
         onClick={onToggle}
-        className="ui-focus-ring flex w-full items-start gap-2 bg-white px-3 py-2 text-left hover:bg-slate-50"
+        className="ui-focus-ring flex w-full items-start gap-2 bg-brand-surface px-3 py-2 text-left hover:bg-brand-hover"
       >
-        <span className="mt-1 text-caption text-slate-400">{expanded ? "−" : "+"}</span>
+        <span className="mt-1 text-caption text-brand-muted">{expanded ? "\u2212" : "+"}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-caption font-medium text-slate-700">
-            Round {index + 1} · {roundKindLabel(round.kind)} · {formatTurnTime(round.timestamp_secs)}
+          <span className="block text-caption font-medium text-brand-ink">
+            {trf("roundLabel", { n: index + 1 })}
+            {" \u00b7 "}
+            {roundKindLabel(round.kind, locale)}
+            {" \u00b7 "}
+            {formatTurnTime(round.timestamp_secs)}
           </span>
-          <span className="mt-1 block text-xs leading-5 text-slate-600">
-            {expanded ? "Collapse" : truncatePreview(round.userQuestion, 88)}
+          <span className="mt-1 block text-xs leading-5 text-brand-muted">
+            {expanded ? tr("collapse") : truncatePreview(round.userQuestion, 88)}
           </span>
         </span>
       </button>
 
       {expanded && (
-        <div className="space-y-2 border-t border-slate-100 bg-slate-50 px-3 py-2">
-          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <p className="mb-1 text-caption text-slate-500">Your question</p>
-            <p className="whitespace-pre-wrap text-xs leading-5 text-slate-800">
+        <div className="space-y-2 border-t border-brand-border bg-brand-paper px-3 py-2">
+          <div className="rounded-lg border border-brand-border bg-brand-surface px-3 py-2">
+            <p className="mb-1 text-caption text-brand-muted">{tr("yourQuestion")}</p>
+            <p className="whitespace-pre-wrap text-xs leading-5 text-brand-ink">
               {round.userQuestion}
             </p>
           </div>
 
           {round.steps.length > 0 ? (
             <div className="space-y-1.5">
-              <p className="text-caption text-slate-500">Knowledge base activity</p>
+              <p className="text-caption text-brand-muted">{tr("knowledgeBaseActivity")}</p>
               {round.steps.map((step, stepIndex) => (
                 <div
                   key={`${step.timestamp_secs}-${stepIndex}`}
                   className={[
                     "rounded-lg px-3 py-2 text-xs leading-5",
-                    step.kind === "tool"
-                      ? "border border-sky-100 bg-sky-50 text-sky-950"
-                      : "border border-emerald-100 bg-emerald-50 text-emerald-950",
+                    step.kind === "tool" ? "ui-alert-info" : "ui-alert-success",
                   ].join(" ")}
                 >
-                  <p className="mb-1 text-caption text-slate-500">
-                    {step.kind === "tool" ? "Pack search" : "Assistant"} ·{" "}
+                  <p className="mb-1 text-caption text-brand-muted">
+                    {step.kind === "tool" ? tr("packSearch") : tr("assistant")}
+                    {" \u00b7 "}
                     {formatTurnTime(step.timestamp_secs)}
                   </p>
                   <p className="whitespace-pre-wrap">{step.content}</p>
@@ -113,7 +116,7 @@ function ConversationRoundItem({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">No pack search activity recorded for this round.</p>
+            <p className="text-xs text-brand-muted">{tr("noPackSearchActivity")}</p>
           )}
         </div>
       )}
@@ -135,24 +138,29 @@ export function EvidenceSidePanel({
   onGenerate,
   onContinue,
   onExampleQuestion,
-  lastResult,
   citationTarget,
   highlight,
   missMessage,
   onOpenSuperseded,
 }: EvidenceSidePanelProps) {
+  const { tr, trf, locale } = usePreferences();
   const [activeTab, setActiveTab] = useState<SidePanelTab>("assistant");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
 
-  const saveLocationLabel = selectedFolderRelative ?? "Root";
+  const saveLocationLabel = selectedFolderRelative ?? tr("root");
   const isContinueMode = Boolean(selected);
   const submitLabel = generating
     ? isContinueMode
-      ? "Updating note…"
-      : "Generating…"
+      ? tr("updatingNote")
+      : tr("generating")
     : isContinueMode
-      ? "Send follow-up"
-      : "Generate project note";
+      ? tr("sendFollowUp")
+      : tr("generateProjectNote");
+
+  const exampleQuestions = useMemo(
+    () => [tr("exampleQ1"), tr("exampleQ2"), tr("exampleQ3")],
+    [tr],
+  );
 
   const conversationRounds = useMemo(
     () => groupConversationRounds(conversationTurns),
@@ -188,10 +196,10 @@ export function EvidenceSidePanel({
 
   const historyLabel = useMemo(() => {
     if (selected) {
-      return `${selected.title} · ${conversationRounds.length} rounds`;
+      return trf("rounds", { title: selected.title, count: conversationRounds.length });
     }
-    return `New conversation · ${conversationRounds.length} rounds`;
-  }, [selected, conversationRounds.length]);
+    return trf("newConversation", { count: conversationRounds.length });
+  }, [selected, conversationRounds.length, trf]);
 
   const toggleRound = (roundId: string) => {
     setExpandedRoundIds((current) => {
@@ -207,56 +215,54 @@ export function EvidenceSidePanel({
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-10 shrink-0 flex-col items-center border-l border-slate-200 bg-white py-3">
+      <div className="flex h-full w-10 shrink-0 flex-col items-center border-l border-brand-border bg-brand-surface py-3">
         <button
           type="button"
-          title="Expand panel"
+          title={tr("expandPanel")}
           onClick={() => onToggleCollapsed(false)}
-          className="ui-focus-ring rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+          className="ui-focus-ring rounded-lg p-2 text-brand-muted hover:bg-brand-hover"
         >
           <IconChevronLeft className="h-4 w-4 rotate-180" />
         </button>
-        <span className="mt-2 [writing-mode:vertical-rl] text-caption text-slate-400">Panel</span>
+        <span className="mt-2 [writing-mode:vertical-rl] text-caption text-brand-muted">
+          {tr("panel")}
+        </span>
       </div>
     );
   }
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-l border-slate-200 bg-white">
-      <header className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-l border-brand-border bg-brand-surface">
+      <header className="flex items-center justify-between border-b border-brand-border px-3 py-2">
         <div className="flex gap-1">
           <button
             type="button"
             onClick={() => setActiveTab("assistant")}
             className={[
               "ui-focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium",
-              activeTab === "assistant"
-                ? "bg-sky-50 text-sky-950"
-                : "text-slate-600 hover:bg-slate-50",
+              activeTab === "assistant" ? "ui-tab-active" : "ui-tab-inactive",
             ].join(" ")}
           >
             <IconSparkles className="h-4 w-4" />
-            Assistant
+            {tr("assistant")}
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("standards")}
             className={[
               "ui-focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium",
-              activeTab === "standards"
-                ? "bg-slate-100 text-slate-900"
-                : "text-slate-600 hover:bg-slate-50",
+              activeTab === "standards" ? "ui-tab-active" : "ui-tab-inactive",
             ].join(" ")}
           >
             <IconBook className="h-4 w-4" />
-            Standards
+            {tr("standards")}
           </button>
         </div>
         <button
           type="button"
-          title="Collapse panel"
+          title={tr("collapsePanel")}
           onClick={() => onToggleCollapsed(true)}
-          className="ui-focus-ring rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+          className="ui-focus-ring rounded-lg p-2 text-brand-muted hover:bg-brand-hover"
         >
           <IconChevronLeft className="h-4 w-4" />
         </button>
@@ -264,19 +270,19 @@ export function EvidenceSidePanel({
 
       {activeTab === "assistant" ? (
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
-          <p className="text-caption text-slate-500">
+          <p className="text-caption text-brand-muted">
             {isContinueMode
-              ? "Follow up on the open note. The same file will be updated."
-              : `A new note will be saved under ${saveLocationLabel}. Select a folder on the left first.`}
+              ? tr("followUpOpenNote")
+              : trf("newNoteSaveUnder", { folder: saveLocationLabel })}
           </p>
 
-          <div className="flex max-h-[min(42vh,520px)] min-h-[160px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-              <p className="text-xs font-medium text-slate-700">{historyLabel}</p>
+          <div className="flex max-h-[min(42vh,520px)] min-h-[160px] flex-col overflow-hidden rounded-lg border border-brand-border bg-brand-paper">
+            <div className="flex items-center justify-between border-b border-brand-border px-3 py-2">
+              <p className="text-xs font-medium text-brand-ink">{historyLabel}</p>
               {conversationRounds.length > 1 && (
                 <button
                   type="button"
-                  className="ui-focus-ring text-caption text-slate-500 hover:text-slate-800"
+                  className="ui-focus-ring text-caption text-brand-muted hover:text-brand-ink"
                   onClick={() => {
                     if (expandedRoundIds.size === conversationRounds.length) {
                       setExpandedRoundIds(new Set());
@@ -285,7 +291,9 @@ export function EvidenceSidePanel({
                     setExpandedRoundIds(new Set(conversationRounds.map((round) => round.id)));
                   }}
                 >
-                  {expandedRoundIds.size === conversationRounds.length ? "Collapse all" : "Expand all"}
+                  {expandedRoundIds.size === conversationRounds.length
+                    ? tr("collapseAll")
+                    : tr("expandAll")}
                 </button>
               )}
             </div>
@@ -293,14 +301,14 @@ export function EvidenceSidePanel({
             <div className="min-h-0 flex-1 space-y-2 overflow-auto p-3">
               {conversationRounds.length === 0 ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-500">No conversation yet. Try one of these prompts:</p>
+                  <p className="text-xs text-brand-muted">{tr("noConversationYet")}</p>
                   <div className="flex flex-col gap-2">
-                    {EXAMPLE_QUESTIONS.map((example) => (
+                    {exampleQuestions.map((example) => (
                       <button
                         key={example}
                         type="button"
                         onClick={() => onExampleQuestion?.(example)}
-                        className="ui-focus-ring rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                        className="ui-focus-ring rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-left text-xs text-brand-ink hover:bg-brand-hover"
                       >
                         {example}
                       </button>
@@ -315,6 +323,9 @@ export function EvidenceSidePanel({
                     index={index}
                     expanded={expandedRoundIds.has(round.id)}
                     onToggle={() => toggleRound(round.id)}
+                    tr={tr}
+                    trf={trf}
+                    locale={locale}
                   />
                 ))
               )}
@@ -322,26 +333,26 @@ export function EvidenceSidePanel({
           </div>
 
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-slate-700">
-              {isContinueMode ? "Follow-up" : "Question"}
+            <span className="text-xs font-medium text-brand-ink">
+              {isContinueMode ? tr("followUp") : tr("question")}
             </span>
             <textarea
               value={question}
               onChange={(event) => onQuestionChange(event.target.value)}
               rows={3}
-              placeholder="e.g. How should a 50:50 joint arrangement be classified?"
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder={tr("questionPlaceholder")}
+              className="ui-focus-ring w-full rounded-lg border border-brand-border px-3 py-2 text-sm"
             />
           </label>
 
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-slate-700">Additional facts (optional)</span>
+            <span className="text-xs font-medium text-brand-ink">{tr("additionalFacts")}</span>
             <textarea
               value={facts}
               onChange={(event) => onFactsChange(event.target.value)}
               rows={2}
-              placeholder="e.g. Both parties hold 50% and major decisions require unanimous consent."
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder={tr("factsPlaceholder")}
+              className="ui-focus-ring w-full rounded-lg border border-brand-border px-3 py-2 text-sm"
             />
           </label>
 
@@ -349,21 +360,10 @@ export function EvidenceSidePanel({
             type="button"
             disabled={generating}
             onClick={handleSubmit}
-            className="ui-focus-ring w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:bg-slate-400"
+            className="ui-focus-ring w-full rounded-lg bg-brand-ink dark:bg-brand-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {submitLabel}
           </button>
-
-          {lastResult && lastResult.validation.warnings.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-              <p className="font-medium">Validation warnings (file saved):</p>
-              <ul className="mt-1 list-disc pl-4">
-                {lastResult.validation.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-hidden">

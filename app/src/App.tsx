@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   checkContentUpdates,
   downloadAndApplyContentUpdate,
   getConfig,
   getPackInfo,
 } from "./api";
-import { IconSettings } from "./components/icons";
+import { TitleBar } from "./components/TitleBar";
 import { Wordmark } from "./components/Wordmark";
 import { ToastProvider, useToast } from "./components/Toast";
+import { usePreferences } from "./context/PreferencesContext";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { StandardsPage } from "./pages/StandardsPage";
 import { EvidencePage } from "./pages/EvidencePage";
-import type { AppTab, ContentDownloadProgress, PackInfo, UpdateCheckResult } from "./types";
+import type {
+  AiGenerationProgress,
+  AppTab,
+  ContentDownloadProgress,
+  PackInfo,
+  UpdateCheckResult,
+} from "./types";
 
 const EMPTY_PACK_INFO: PackInfo = {
   loaded: false,
@@ -24,19 +32,9 @@ const EMPTY_PACK_INFO: PackInfo = {
 
 const MAIN_TABS: AppTab[] = ["evidence", "standards"];
 
-function tabLabel(tab: AppTab): string {
-  switch (tab) {
-    case "standards":
-      return "Standards";
-    case "settings":
-      return "Settings";
-    default:
-      return "Workbench";
-  }
-}
-
 function AppShell() {
   const { showToast } = useToast();
+  const { tr, trf } = usePreferences();
   const [packInfo, setPackInfo] = useState<PackInfo | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("evidence");
   const [loading, setLoading] = useState(true);
@@ -45,6 +43,43 @@ function AppShell() {
   const [downloadProgress, setDownloadProgress] = useState<ContentDownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheckResult | null>(null);
+  const [genProgress, setGenProgress] = useState<AiGenerationProgress | null>(null);
+  const [genResultPath, setGenResultPath] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [genCounter, setGenCounter] = useState(0);
+
+  useEffect(() => {
+    const unlisten = listen<AiGenerationProgress>("ai-generation-progress", (event) => {
+      const p = event.payload;
+      setGenProgress(p);
+      if (p.phase === "complete") {
+        setGenResultPath(p.message);
+        setGenError(null);
+        setGenCounter((prev) => prev + 1);
+      } else if (p.phase === "error") {
+        setGenError(p.message);
+        setGenProgress(null);
+        setGenCounter((prev) => prev + 1);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const tabLabel = useCallback(
+    (tab: AppTab): string => {
+      switch (tab) {
+        case "standards":
+          return tr("standards");
+        case "settings":
+          return tr("settings");
+        default:
+          return tr("workbench");
+      }
+    },
+    [tr],
+  );
 
   const refreshPackInfo = useCallback(async () => {
     const info = await getPackInfo();
@@ -136,75 +171,69 @@ function AppShell() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-paper text-brand-muted">
-        <Wordmark variant="hero" />
-        <p className="text-sm">Starting…</p>
+      <div className="flex h-screen flex-col bg-brand-paper text-brand-muted">
+        <TitleBar
+          settingsActive={false}
+          onOpenSettings={() => setActiveTab("settings")}
+        />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4">
+          <Wordmark variant="hero" />
+          <p className="text-sm">{tr("starting")}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-paper">
-      <header className="border-b border-brand-border bg-brand-surface">
-        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center justify-between gap-4 px-3 py-2.5 sm:px-4">
-          <div className="flex min-w-0 items-center gap-8">
-            <Wordmark variant="header" />
-            {packInfo?.loaded && (
-              <nav className="flex items-center gap-1 border-l border-brand-border pl-6">
-                {MAIN_TABS.map((tab) => {
-                  const active = activeTab === tab;
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setActiveTab(tab)}
-                      className={[
-                        "ui-focus-ring relative px-3 py-2 text-sm font-medium transition",
-                        active ? "text-brand-ink" : "text-brand-muted hover:text-brand-ink",
-                      ].join(" ")}
-                    >
-                      {tabLabel(tab)}
-                      {active && (
-                        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-brand-burgundy" />
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
-            )}
-          </div>
+    <div className="flex h-screen flex-col overflow-hidden bg-brand-paper text-brand-ink">
+      <TitleBar
+        settingsActive={activeTab === "settings"}
+        onOpenSettings={() => setActiveTab("settings")}
+      />
 
-          <button
-            type="button"
-            title="Settings"
-            aria-label="Settings"
-            onClick={() => setActiveTab("settings")}
-            className={[
-              "ui-focus-ring rounded-lg p-2 transition",
-              activeTab === "settings"
-                ? "bg-brand-navy text-white"
-                : "text-brand-muted hover:bg-brand-paper hover:text-brand-ink",
-            ].join(" ")}
-          >
-            <IconSettings className="h-5 w-5" />
-          </button>
+      <header className="shrink-0 border-b border-brand-border bg-brand-surface">
+        <div className="mx-auto flex w-full max-w-[min(1920px,calc(100%-1rem))] items-center gap-8 px-3 py-2.5 sm:px-4">
+          <Wordmark variant="header" />
+          {packInfo?.loaded && (
+            <nav className="flex items-center gap-1 border-l border-brand-border pl-6">
+              {MAIN_TABS.map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={[
+                      "ui-focus-ring relative px-3 py-2 text-sm font-medium transition",
+                      active ? "text-brand-ink" : "text-brand-muted hover:text-brand-ink",
+                    ].join(" ")}
+                  >
+                    {tabLabel(tab)}
+                    {active && (
+                      <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-brand-accent" />
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[min(1920px,calc(100%-1rem))] px-3 py-4 sm:px-4">
+      <main className="mx-auto min-h-0 w-full max-w-[min(1920px,calc(100%-1rem))] flex-1 overflow-auto px-3 py-4 sm:px-4">
         {startupUpdate?.available_content && packInfo?.loaded && activeTab !== "settings" && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
             <p>
-              New standards version{" "}
-              <strong>{startupUpdate.available_content.latest_version}</strong> is available in
-              Settings.
+              {trf("newStandardsAvailable", {
+                version: startupUpdate.available_content.latest_version,
+              })}
             </p>
             <button
               type="button"
               onClick={() => setActiveTab("settings")}
               className="ui-focus-ring rounded-lg bg-emerald-900 px-3 py-1.5 text-white hover:bg-emerald-800"
             >
-              Open Settings
+              {tr("openSettings")}
             </button>
           </div>
         )}
@@ -224,13 +253,24 @@ function AppShell() {
         ) : (
           <>
             {activeTab === "standards" && (
-              <div className="h-[calc(100vh-4.5rem)]">
+              <div className="h-full min-h-[calc(100vh-6.5rem)]">
                 <StandardsPage />
               </div>
             )}
             {activeTab === "evidence" && (
-              <div className="h-[calc(100vh-4.5rem)]">
-                <EvidencePage onOpenSettings={() => setActiveTab("settings")} />
+              <div className="h-full min-h-[calc(100vh-6.5rem)]">
+                <EvidencePage
+                  onOpenSettings={() => setActiveTab("settings")}
+                  genProgress={genProgress}
+                  genError={genError}
+                  genResultPath={genResultPath}
+                  genCounter={genCounter}
+                  onGenConsumed={() => {
+                    setGenProgress(null);
+                    setGenError(null);
+                    setGenResultPath(null);
+                  }}
+                />
               </div>
             )}
           </>

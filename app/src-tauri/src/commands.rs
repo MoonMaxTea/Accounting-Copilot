@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use tauri::AppHandle;
+use tauri::Emitter;
 
 use crate::ai;
 use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, scan_citations};
@@ -134,6 +135,7 @@ pub async fn generate_project_document(
     let config = config::load_config(&app)?;
     let prior_session = config.projects_ui.agent_session(DRAFT_AGENT_SESSION_KEY);
     let (result, session, activity) = ai::generate_and_save_project(
+        Some(&app),
         &projects_root,
         &content_dir,
         &config.ai,
@@ -142,7 +144,24 @@ pub async fn generate_project_document(
         folder_relative.as_deref(),
         prior_session,
     )
-    .await?;
+    .await
+    .map_err(|error| {
+        let _ = app.emit(
+            "ai-generation-progress",
+            crate::models::AiGenerationProgress {
+                phase: "error".to_string(),
+                message: error.clone(),
+            },
+        );
+        error
+    })?;
+    let _ = app.emit(
+        "ai-generation-progress",
+        crate::models::AiGenerationProgress {
+            phase: "complete".to_string(),
+            message: result.file_path.clone(),
+        },
+    );
     persist_agent_run(
         &app,
         DRAFT_AGENT_SESSION_KEY,
@@ -171,6 +190,7 @@ pub async fn continue_project_document(
         .replace('\\', "/");
     let prior_session = config.projects_ui.agent_session(&relative_path);
     let (result, session, activity) = ai::continue_and_update_project(
+        Some(&app),
         &projects_root,
         &content_dir,
         &config.ai,
@@ -179,7 +199,24 @@ pub async fn continue_project_document(
         facts.as_deref(),
         prior_session,
     )
-    .await?;
+    .await
+    .map_err(|error| {
+        let _ = app.emit(
+            "ai-generation-progress",
+            crate::models::AiGenerationProgress {
+                phase: "error".to_string(),
+                message: error.clone(),
+            },
+        );
+        error
+    })?;
+    let _ = app.emit(
+        "ai-generation-progress",
+        crate::models::AiGenerationProgress {
+            phase: "complete".to_string(),
+            message: result.file_path.clone(),
+        },
+    );
     persist_agent_run(
         &app,
         &relative_path,

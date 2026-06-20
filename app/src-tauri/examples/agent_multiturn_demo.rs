@@ -35,6 +35,7 @@ async fn main() {
 
     println!("【1/2】新建项目…");
     let (created, session, activity) = ai::generate_and_save_project(
+        None,
         &projects_root,
         &content_dir,
         &app_config.ai,
@@ -61,6 +62,7 @@ async fn main() {
 
     println!("\n【2/2】同一项目追问…");
     let (updated, session_after, activity2) = ai::continue_and_update_project(
+        None,
         &projects_root,
         &content_dir,
         &app_config.ai,

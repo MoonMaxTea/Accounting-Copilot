@@ -3,7 +3,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures_util::StreamExt;
+#[allow(unused_imports)]
+use futures_util::{pin_mut, StreamExt};
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -303,6 +304,7 @@ async fn obtain_pack_download_response(
     let token = access_token.map(str::trim).filter(|value| !value.is_empty());
     let parsed_release = parse_release_download_url(&content.pack_url);
 
+    // If we have a token, prefer the authenticated GitHub API
     if let (Some(token), Some((owner, repo, tag, asset_name))) =
         (token, parsed_release.as_ref())
     {
@@ -312,6 +314,61 @@ async fn obtain_pack_download_response(
         .await;
     }
 
+    // For public repos (or when no token): try GitHub API (public) in parallel
+    // with the direct download URL.  api.github.com is accessible from mainland
+    // China while github.com/releases/download often is not.
+    if let Some((owner, repo, tag, asset_name)) = parsed_release.as_ref() {
+        // Clone strings to move into the async block
+        let owner = owner.clone();
+        let repo = repo.clone();
+        let tag = tag.clone();
+        let asset_name = asset_name.clone();
+        let direct_url = content.pack_url.clone();
+
+        let api_fut = async {
+            download_release_asset_via_github_api_public(
+                client, &owner, &repo, &tag, &asset_name,
+            )
+            .await
+        };
+        let direct_fut = async {
+            authorized_get(client, &direct_url, token)
+                .send()
+                .await
+                .map_err(|error| network_error_hint("下载准则库失败", &error))
+        };
+
+        futures_util::pin_mut!(api_fut);
+        futures_util::pin_mut!(direct_fut);
+
+        // Race: first successful response wins
+        return match futures_util::future::select(api_fut, direct_fut).await {
+            futures_util::future::Either::Left((Ok(response), _)) => Ok(response),
+            futures_util::future::Either::Right((Ok(response), _)) => Ok(response),
+            futures_util::future::Either::Left((Err(api_err), direct_fut)) => {
+                match direct_fut.await {
+                    Ok(response) if response.status().is_success() => Ok(response),
+                    Ok(response) => {
+                        let status = response.status();
+                        Err(format!("下载准则库失败: {}。{}", status, auth_error_hint(status)))
+                    }
+                    Err(direct_err) => Err(format!(
+                        "下载准则库失败。GitHub API 错误: {api_err}；直接下载错误: {direct_err}"
+                    )),
+                }
+            }
+            futures_util::future::Either::Right((Err(direct_err), api_fut)) => {
+                match api_fut.await {
+                    Ok(response) => Ok(response),
+                    Err(api_err) => Err(format!(
+                        "下载准则库失败。直接下载错误: {direct_err}；GitHub API 错误: {api_err}"
+                    )),
+                }
+            }
+        };
+    }
+
+    // Not a GitHub release URL — simple direct download
     let response = match authorized_get(&client, &content.pack_url, token)
         .send()
         .await
@@ -340,6 +397,55 @@ async fn obtain_pack_download_response(
         status,
         auth_error_hint(status)
     ))
+}
+
+/// Download a release asset via the public GitHub API (no token required for
+/// public repos).  api.github.com is generally accessible from mainland China.
+async fn download_release_asset_via_github_api_public(
+    client: &Client,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    asset_name: &str,
+) -> Result<reqwest::Response, String> {
+    let release_url = format!("https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}");
+    let release = client
+        .get(&release_url)
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .send()
+        .await
+        .map_err(|error| format!("无法查询 Release 信息: {error}"))?;
+
+    if !release.status().is_success() {
+        return Err(format!("查询 Release 失败: {}", release.status()));
+    }
+
+    let release_info = release
+        .json::<GitHubRelease>()
+        .await
+        .map_err(|error| format!("Release 信息格式无效: {error}"))?;
+
+    let asset = release_info
+        .assets
+        .into_iter()
+        .find(|item| item.name == asset_name)
+        .ok_or_else(|| format!("Release {tag} 中未找到文件 {asset_name}"))?;
+
+    let response = client
+        .get(&asset.url)
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .header(reqwest::header::ACCEPT, "application/octet-stream")
+        .send()
+        .await
+        .map_err(|error| format!("无法下载 Release 文件: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("下载 Release 文件失败: {}", response.status()));
+    }
+
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize)]
@@ -416,7 +522,27 @@ pub fn download_path(app: &AppHandle, version: &str) -> Result<PathBuf, String> 
     Ok(downloads_dir(app)?.join(format!("pack-{version}.zip")))
 }
 
-pub async fn fetch_manifest(
+/// Simple fetch that just does an HTTP GET and parses JSON — used for
+/// CDN / mirror URLs that don't match the GitHub raw URL pattern.
+async fn fetch_manifest_simple(client: &Client, url: &str) -> Result<UpdatesManifest, String> {
+    let response = client
+        .get(url)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|error| network_error_hint("无法获取更新清单", &error))?;
+
+    if !response.status().is_success() {
+        return Err(format!("更新清单返回错误: {}", response.status()));
+    }
+
+    response
+        .json::<UpdatesManifest>()
+        .await
+        .map_err(|error| format!("更新清单格式无效: {error}"))
+}
+
+async fn fetch_manifest_primary(
     manifest_url: &str,
     access_token: Option<&str>,
 ) -> Result<UpdatesManifest, String> {
@@ -478,6 +604,50 @@ pub async fn fetch_manifest(
     ))
 }
 
+/// Fetch the manifest, racing the primary URL against an alternative URL
+/// (e.g. jsDelivr CDN).  The first successful response wins.
+/// Falls back to the slower URL if the faster one fails.
+pub async fn fetch_manifest(
+    manifest_url: &str,
+    manifest_url_alt: &str,
+    access_token: Option<&str>,
+) -> Result<UpdatesManifest, String> {
+    // If the alt URL is empty or same as primary, just use primary
+    let alt = manifest_url_alt.trim();
+    if alt.is_empty() || alt == manifest_url.trim() {
+        return fetch_manifest_primary(manifest_url, access_token).await;
+    }
+
+    // Race primary vs alt
+    let alt_client = build_http_client()?;
+    let primary_fut = fetch_manifest_primary(manifest_url, access_token);
+    let alt_fut = fetch_manifest_simple(&alt_client, alt);
+
+    futures_util::pin_mut!(primary_fut);
+    futures_util::pin_mut!(alt_fut);
+
+    match futures_util::future::select(primary_fut, alt_fut).await {
+        futures_util::future::Either::Left((Ok(manifest), _)) => Ok(manifest),
+        futures_util::future::Either::Right((Ok(manifest), _)) => Ok(manifest),
+        futures_util::future::Either::Left((Err(primary_err), alt_fut)) => {
+            match alt_fut.await {
+                Ok(manifest) => Ok(manifest),
+                Err(alt_err) => Err(format!(
+                    "无法获取更新清单。主 URL 错误: {primary_err}；备用 URL 错误: {alt_err}"
+                )),
+            }
+        }
+        futures_util::future::Either::Right((Err(alt_err), primary_fut)) => {
+            match primary_fut.await {
+                Ok(manifest) => Ok(manifest),
+                Err(primary_err) => Err(format!(
+                    "无法获取更新清单。备用 URL 错误: {alt_err}；主 URL 错误: {primary_err}"
+                )),
+            }
+        }
+    }
+}
+
 pub fn current_content_version(app: &AppHandle) -> Result<Option<String>, String> {
     let config = config::load_config(app)?;
     if let Some(version) = config
@@ -519,7 +689,7 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    let manifest = match fetch_manifest(&config.update.manifest_url, access_token).await {
+    let manifest = match fetch_manifest(&config.update.manifest_url, &config.update.manifest_url_alt, access_token).await {
         Ok(value) => value,
         Err(error) => {
             let _ = config::update_config(app, |saved| {

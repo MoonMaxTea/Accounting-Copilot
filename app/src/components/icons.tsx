@@ -82,8 +82,8 @@ export function IconPin(props: IconProps) {
 export function IconSettings(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.5-2-3.5-2.3 1a8 8 0 0 0-1.7-1L15 3h-4l-.5 2.5a8 8 0 0 0-1.7 1l-2.3-1-2 3.5 2 1.5a7.8 7.8 0 0 0 .1 2l-2 1.5 2 3.5 2.3-1a8 8 0 0 0 1.7 1L11 21h4l.5-2.5a8 8 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5Z" />
     </BaseIcon>
   );
 }
@@ -134,6 +134,59 @@ export function IconBook(props: IconProps) {
     <BaseIcon {...props}>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    </BaseIcon>
+  );
+}
+
+export function IconSun(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </BaseIcon>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" />
+    </BaseIcon>
+  );
+}
+
+export function IconMinimize(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M5 12h14" />
+    </BaseIcon>
+  );
+}
+
+export function IconMaximize(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <rect x="5" y="5" width="14" height="14" rx="1" />
+    </BaseIcon>
+  );
+}
+
+export function IconRestore(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M8 3v3H5" />
+      <path d="M5 8h3V5" />
+      <rect x="9" y="9" width="10" height="10" rx="1" />
+      <path d="M16 3h5v5" />
+      <path d="M21 8h-3V5" />
+    </BaseIcon>
+  );
+}
+
+export function IconClose(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="m6 6 12 12M18 6 6 18" />
     </BaseIcon>
   );
 }

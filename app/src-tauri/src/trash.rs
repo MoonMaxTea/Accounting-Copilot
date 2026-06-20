@@ -86,7 +86,11 @@ impl TrashStore {
         }
 
         let relative = validated
-            .strip_prefix(projects_root)
+            .strip_prefix(
+                &projects_root
+                    .canonicalize()
+                    .map_err(|error| error.to_string())?,
+            )
             .map_err(|error| error.to_string())?
             .to_string_lossy()
             .replace('\\', "/");

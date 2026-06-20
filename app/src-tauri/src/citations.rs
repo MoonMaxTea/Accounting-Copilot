@@ -18,9 +18,9 @@ pub(crate) struct ParagraphRecord {
     pub(crate) paragraph: String,
     paragraph_normalized: String,
     pack_path: String,
-    char_start: u64,
+    pub(crate) char_start: u64,
     char_end: u64,
-    snippet_en: String,
+    pub(crate) snippet_en: String,
     pub(crate) status: String,
 }
 
@@ -58,6 +58,13 @@ pub fn parse_citation(raw: &str) -> Option<(String, String)> {
         return Some((format!("ASC {topic}"), codification));
     }
 
+    // Bare ASC topic reference (e.g. "ASC 842") — no specific paragraph
+    let asc_topic = Regex::new(r"(?i)ASC\s+(\d{3})\s*$").ok()?;
+    if let Some(caps) = asc_topic.captures(text) {
+        let topic = caps.get(1)?.as_str();
+        return Some((format!("ASC {topic}"), "1".to_string()));
+    }
+
     None
 }
 
@@ -86,16 +93,50 @@ fn resolve_from_index(
     let entries = load_paragraphs(content_dir)?;
     let normalized = paragraph.split('-').next().unwrap_or(paragraph);
 
-    let matched = entries.iter().find(|entry| {
-        entry.standard_id.eq_ignore_ascii_case(standard_id)
-            && (entry.paragraph == paragraph
-                || entry.paragraph_normalized == normalized
-                || entry.paragraph_normalized == paragraph)
-    });
+    // Prefer the entry with the highest char_start among matches.
+    // ASC codification files have an amendment-metadata table ("00 Status")
+    // at the top that repeats every paragraph number — those entries have
+    // low char_start values and contain "Amended … Accounting Standards
+    // Update" boilerplate, not the substantive standard text.  The real
+    // paragraphs always appear later in the file with higher char_start.
+    //
+    // Two-step matching: first try exact paragraph match; only fall back to
+    // normalized matching if no exact match exists.  This prevents ASC
+    // codifications (whose paragraph_normalized is just the topic number,
+    // e.g. "718") from matching every entry in the standard.
+    let matched = entries
+        .iter()
+        .filter(|entry| {
+            entry.standard_id.eq_ignore_ascii_case(standard_id)
+                && entry.paragraph == paragraph
+        })
+        .max_by_key(|entry| entry.char_start)
+        .or_else(|| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && (entry.paragraph_normalized == normalized
+                            || entry.paragraph_normalized == paragraph)
+                })
+                .max_by_key(|entry| entry.char_start)
+        });
 
     let Some(entry) = matched else {
         return Ok(None);
     };
+
+    // Read extended context from the actual file body.
+    // The pre-built snippet is short — too little for substantive
+    // paragraphs that follow header/amendment tables.  We read up to 4 000
+    // chars from the file so the AI gets sufficient context.
+    let extended_snippet = read_standard_body(content_dir, &entry.pack_path)
+        .map(|body| {
+            let start = entry.char_start as usize;
+            let end = (start + 4_000).min(body.len());
+            body[start..end].to_string()
+        })
+        .unwrap_or_else(|_| entry.snippet_en.clone());
 
     Ok(Some(CitationTarget {
         citation: citation.trim().to_string(),
@@ -104,7 +145,7 @@ fn resolve_from_index(
         pack_path: entry.pack_path.clone(),
         char_start: entry.char_start,
         char_end: entry.char_end,
-        snippet_en: entry.snippet_en.clone(),
+        snippet_en: extended_snippet,
         status: entry.status.clone(),
         resolved: true,
         paragraph_resolved: true,
@@ -238,6 +279,8 @@ pub fn scan_citations(content: &str) -> Vec<String> {
     let patterns = [
         Regex::new(r"(?i)(IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*\d+(?:[–-]\d+)?").unwrap(),
         Regex::new(r"(?i)ASC\s+(?:\d+\s*(?:§|Paragraph)?\s*)?\d{3}-\d{2}-\d{2}-\d+").unwrap(),
+        // Also match bare ASC topic references (e.g. "ASC 842")
+        Regex::new(r"(?i)ASC\s+\d{3}\b").unwrap(),
     ];
 
     for pattern in patterns {
@@ -267,6 +310,29 @@ mod tests {
         let parsed = parse_citation("ASC 740-10-25-5").expect("parsed");
         assert_eq!(parsed.0, "ASC 740");
         assert_eq!(parsed.1, "740-10-25-5");
+    }
+
+    #[test]
+    fn parses_bare_asc_topic() {
+        let parsed = parse_citation("ASC 842").expect("parsed");
+        assert_eq!(parsed.0, "ASC 842");
+        assert_eq!(parsed.1, "1");
+    }
+
+    #[test]
+    fn parses_asc_full_codification_over_bare_topic() {
+        // Full codification should still be preferred
+        let parsed = parse_citation("ASC 842-10-25-5").expect("parsed");
+        assert_eq!(parsed.0, "ASC 842");
+        assert_eq!(parsed.1, "842-10-25-5");
+    }
+
+    #[test]
+    fn scans_bare_asc_topic() {
+        let content = "See ASC 842 for lease accounting and IFRS 11 §7 for joint arrangements.";
+        let citations = scan_citations(content);
+        assert!(citations.iter().any(|c| c == "ASC 842"));
+        assert!(citations.iter().any(|c| c == "IFRS 11 §7"));
     }
 
     #[test]

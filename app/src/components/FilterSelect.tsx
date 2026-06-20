@@ -53,7 +53,7 @@ export function FilterSelect<T extends string>({
 
   return (
     <div ref={rootRef} className="relative min-w-[10rem] flex-1 sm:max-w-[14rem]">
-      <span className="mb-1 block text-xs font-medium text-slate-500">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-brand-muted">{label}</span>
       <button
         type="button"
         disabled={disabled}
@@ -67,22 +67,22 @@ export function FilterSelect<T extends string>({
         className={[
           "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition ui-focus-ring",
           disabled
-            ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+            ? "cursor-not-allowed border-brand-border bg-brand-paper text-brand-muted"
             : open
-              ? "border-slate-900 bg-white text-slate-900 shadow-sm ring-2 ring-slate-900/10"
-              : "border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50",
+              ? "border-brand-accent bg-brand-surface text-brand-ink shadow-sm ring-2 ring-brand-accent/10"
+              : "border-brand-border bg-brand-surface text-brand-ink hover:bg-brand-hover",
         ].join(" ")}
       >
         <span className="truncate font-medium">{selected?.label ?? "Select"}</span>
         <IconChevronDown
-          className={["h-4 w-4 text-slate-400 transition", open ? "rotate-180" : ""].join(" ")}
+          className={["h-4 w-4 text-brand-muted transition", open ? "rotate-180" : ""].join(" ")}
         />
       </button>
 
       {open && !disabled && (
         <ul
           role="listbox"
-          className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-slate-900/5"
+          className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-brand-border bg-brand-surface p-1 shadow-lg"
         >
           {options.map((item) => {
             const active = item.id === value;
@@ -99,8 +99,8 @@ export function FilterSelect<T extends string>({
                   className={[
                     "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition",
                     active
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100",
+                      ? "bg-brand-accent text-white"
+                      : "text-brand-ink hover:bg-brand-hover",
                   ].join(" ")}
                 >
                   <span>{item.label}</span>

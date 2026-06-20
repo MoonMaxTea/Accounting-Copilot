@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "../lib/i18n";
+import { loadLocale } from "../lib/preferences";
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -21,15 +23,17 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   render() {
     if (this.state.error) {
+      const locale = loadLocale();
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-100 px-6">
-          <div className="max-w-lg rounded-lg border border-red-200 bg-white p-6 text-left shadow-sm">
-            <h1 className="text-lg font-semibold text-red-700">Failed to load the app</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              The app encountered a rendering error. Close and reopen the app. If the problem
-              persists, contact your administrator.
+        <div className="flex min-h-screen items-center justify-center bg-brand-paper px-6">
+          <div className="max-w-lg rounded-lg border border-red-200 bg-brand-surface p-6 text-left shadow-sm dark:border-red-900">
+            <h1 className="text-lg font-semibold text-red-700 dark:text-red-400">
+              {t(locale, "appLoadFailed")}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-brand-muted">
+              {t(locale, "appLoadFailedHint")}
             </p>
-            <pre className="mt-4 overflow-auto rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
+            <pre className="mt-4 overflow-auto rounded-xl bg-brand-paper p-3 text-xs text-brand-ink">
               {this.state.error.message}
             </pre>
           </div>

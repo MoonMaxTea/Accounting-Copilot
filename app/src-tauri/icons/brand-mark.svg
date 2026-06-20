@@ -1,0 +1,6 @@
+<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="38" height="38" rx="8" fill="#1B2838" />
+  <rect x="5" y="5" width="30" height="30" rx="5" fill="none" stroke="#C7D0DB" stroke-width="1" opacity="0.55" />
+  <text x="20" y="24.5" text-anchor="middle" fill="#F8FAFC" font-family="Georgia, 'Times New Roman', serif" font-size="13" font-weight="700" letter-spacing="0.8">AC</text>
+  <path d="M9 31.5h22" stroke="#9AA8B8" stroke-width="1.2" stroke-linecap="round" />
+</svg>

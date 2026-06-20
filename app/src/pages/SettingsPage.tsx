@@ -9,6 +9,7 @@ import {
   saveUpdateConfig,
 } from "../api";
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
+import { usePreferences } from "../context/PreferencesContext";
 import type { AiConfig, ContentDownloadProgress, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
 
 interface SettingsPageProps {
@@ -16,47 +17,8 @@ interface SettingsPageProps {
   onPackUpdated: (packInfo: PackInfo) => void;
 }
 
-function formatCheckedAt(secs: number | null): string {
-  if (!secs) {
-    return "Not checked yet";
-  }
-  return new Date(secs * 1000).toLocaleString(undefined);
-}
-
-function updateStatusLabel(result: UpdateCheckResult | null): string | null {
-  if (!result) {
-    return null;
-  }
-  if (result.message) {
-    return result.message;
-  }
-  switch (result.status) {
-    case "up_to_date":
-      return "The standards library is up to date.";
-    case "content_available":
-      return "A new standards library version is available.";
-    case "app_update_required":
-      return "Please update the app first.";
-    case "error":
-      return "Update check failed.";
-    default:
-      return null;
-  }
-}
-
-function updateStatusClass(status: string): string {
-  switch (status) {
-    case "content_available":
-      return "border-emerald-200 bg-emerald-50 text-emerald-950";
-    case "error":
-    case "app_update_required":
-      return "border-amber-200 bg-amber-50 text-amber-950";
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-700";
-  }
-}
-
 export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
+  const { tr, trf } = usePreferences();
   const [appVersion, setAppVersion] = useState("0.1.0");
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>({
@@ -95,16 +57,56 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       .catch(() => undefined);
   }, []);
 
+  const formatCheckedAt = (secs: number | null): string => {
+    if (!secs) {
+      return tr("notCheckedYet");
+    }
+    return new Date(secs * 1000).toLocaleString(undefined);
+  };
+
+  const updateStatusLabel = (result: UpdateCheckResult | null): string | null => {
+    if (!result) {
+      return null;
+    }
+    if (result.message) {
+      return result.message;
+    }
+    switch (result.status) {
+      case "up_to_date":
+        return tr("updateUpToDate");
+      case "content_available":
+        return tr("updateAvailable");
+      case "app_update_required":
+        return tr("updateAppRequired");
+      case "error":
+        return tr("updateCheckFailed");
+      default:
+        return null;
+    }
+  };
+
+  const updateStatusClass = (status: string): string => {
+    switch (status) {
+      case "content_available":
+        return "ui-alert-success";
+      case "error":
+      case "app_update_required":
+        return "ui-alert-warning";
+      default:
+        return "ui-panel px-4 py-3 text-sm text-brand-muted";
+    }
+  };
+
   const handlePickProjectsDir = async () => {
     setPickingProjectsDir(true);
     setNotice(null);
     try {
       const config = await pickProjectsDir();
       setProjectsDir(config.projects_dir);
-      setNotice("Projects folder updated.");
+      setNotice(tr("projectsFolderUpdated"));
     } catch (caught: unknown) {
       const text = caught instanceof Error ? caught.message : String(caught);
-      if (text !== "选择已取消") {
+      if (text !== "\u9009\u62e9\u5df2\u53d6\u6d88") {
         setNotice(text);
       }
     } finally {
@@ -118,7 +120,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
     try {
       const config = await saveAiConfig(aiConfig);
       setAiConfig(config.ai);
-      setNotice("AI settings saved.");
+      setNotice(tr("aiSettingsSaved"));
     } catch (caught: unknown) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -161,7 +163,11 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         ...current,
         last_content_version: updated.content_version,
       }));
-      setNotice(`Standards library updated to ${updated.content_version ?? "the latest version"}.`);
+      setNotice(
+        trf("standardsUpdated", {
+          version: updated.content_version ?? tr("latestVersion"),
+        }),
+      );
     } catch (caught: unknown) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -176,7 +182,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
     try {
       const config = await saveUpdateConfig(updateConfig);
       setUpdateConfig(config.update);
-      setNotice("Update settings saved.");
+      setNotice(tr("updateSettingsSaved"));
     } catch (caught: unknown) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -189,67 +195,66 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Version info</h2>
-        <dl className="mt-4 grid gap-3 text-sm text-slate-700">
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>App version</dt>
+      <section className="ui-panel rounded-lg p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-brand-ink">{tr("versionInfo")}</h2>
+        <dl className="mt-4 grid gap-3 text-sm text-brand-ink">
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("appVersion")}</dt>
             <dd className="font-medium">{appVersion}</dd>
           </div>
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>Standards library version</dt>
-            <dd className="font-medium">{packInfo.content_version ?? "Not imported"}</dd>
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("standardsLibraryVersion")}</dt>
+            <dd className="font-medium">{packInfo.content_version ?? tr("notImported")}</dd>
           </div>
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>Vault commit</dt>
-            <dd className="font-medium">{packInfo.vault_commit ?? "—"}</dd>
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("vaultCommit")}</dt>
+            <dd className="font-medium">{packInfo.vault_commit ?? "\u2014"}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt>Local directory</dt>
-            <dd className="max-w-md truncate font-medium">{packInfo.content_dir ?? "—"}</dd>
+            <dt>{tr("localDirectory")}</dt>
+            <dd className="max-w-md truncate font-medium">{packInfo.content_dir ?? "\u2014"}</dd>
           </div>
         </dl>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Standards library updates</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          The standards library can only be installed through official update channels. The app
-          verifies format and integrity automatically. Manual zip imports are not supported.
-        </p>
-        <dl className="mt-4 grid gap-3 text-sm text-slate-700">
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>Last checked</dt>
+      <section className="ui-panel rounded-lg p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-brand-ink">{tr("standardsLibraryUpdates")}</h2>
+        <p className="mt-2 text-sm leading-6 text-brand-muted">{tr("standardsLibraryUpdatesBody")}</p>
+        <dl className="mt-4 grid gap-3 text-sm text-brand-ink">
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("lastChecked")}</dt>
             <dd className="font-medium">
               {formatCheckedAt(
                 updateStatus?.checked_at_secs ?? updateConfig.last_update_check_secs,
               )}
             </dd>
           </div>
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>Current version</dt>
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("currentVersion")}</dt>
             <dd className="font-medium">
-              {updateStatus?.current_content_version ?? packInfo.content_version ?? "Not imported"}
+              {updateStatus?.current_content_version ?? packInfo.content_version ?? tr("notImported")}
             </dd>
           </div>
         </dl>
 
         {updateStatus && statusText && (
-          <div
-            className={`mt-4 rounded-lg border px-4 py-3 text-sm ${updateStatusClass(updateStatus.status)}`}
-          >
+          <div className={`mt-4 rounded-lg text-sm ${updateStatusClass(updateStatus.status)}`}>
             <p className="font-medium">{statusText}</p>
           </div>
         )}
 
         {availableUpdate && (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <div className="ui-alert-success mt-4 rounded-lg p-4 text-sm">
             <p className="font-medium">
-              Update available to {availableUpdate.latest_version}
-              {availableUpdate.vault_commit ? ` (Vault ${availableUpdate.vault_commit})` : ""}
+              {trf("updateAvailableDetail", {
+                version: availableUpdate.latest_version,
+                vault: availableUpdate.vault_commit
+                  ? ` (Vault ${availableUpdate.vault_commit})`
+                  : "",
+              })}
             </p>
             {availableUpdate.release_notes && (
-              <pre className="mt-2 whitespace-pre-wrap font-sans text-emerald-900">
+              <pre className="mt-2 whitespace-pre-wrap font-sans opacity-90">
                 {availableUpdate.release_notes}
               </pre>
             )}
@@ -261,18 +266,18 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
             type="button"
             disabled={checkingUpdates || applyingUpdate}
             onClick={() => void handleCheckUpdates()}
-            className="ui-focus-ring rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+            className="ui-btn-primary ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed"
           >
-            {checkingUpdates ? "Checking…" : "Check for updates"}
+            {checkingUpdates ? tr("checking") : tr("checkForUpdates")}
           </button>
           {availableUpdate && (
             <button
               type="button"
               disabled={applyingUpdate || checkingUpdates}
               onClick={() => void handleApplyUpdate()}
-              className="ui-focus-ring rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:bg-emerald-400"
+              className="ui-focus-ring rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
             >
-              {applyingUpdate ? "Downloading…" : "Download and install"}
+              {applyingUpdate ? tr("downloading") : tr("downloadAndInstall")}
             </button>
           )}
         </div>
@@ -281,8 +286,8 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
           <ContentDownloadProgressBar progress={downloadProgress} pending={!downloadProgress} />
         )}
 
-        <div className="mt-5 space-y-4 border-t border-slate-100 pt-5">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+        <div className="mt-5 space-y-4 border-t border-brand-border pt-5">
+          <label className="flex items-center gap-2 text-sm text-brand-ink">
             <input
               type="checkbox"
               checked={updateConfig.check_on_startup}
@@ -293,9 +298,9 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                 }))
               }
             />
-            Check for updates on startup
+            {tr("checkOnStartup")}
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-brand-ink">
             <input
               type="checkbox"
               checked={updateConfig.auto_download_content}
@@ -306,10 +311,10 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                 }))
               }
             />
-            Automatically download and install new standards library versions
+            {tr("autoDownloadContent")}
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">Update manifest URL</span>
+            <span className="font-medium text-brand-ink">{tr("updateManifestUrl")}</span>
             <input
               type="url"
               value={updateConfig.manifest_url}
@@ -319,15 +324,12 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                   manifest_url: event.target.value,
                 }))
               }
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
-            <span className="block text-xs leading-5 text-slate-500">
-              If GitHub is slow or blocked in your region, enter a token below (the app uses
-              api.github.com) or point this URL to a mirror you can reach.
-            </span>
+            <span className="block text-xs leading-5 text-brand-muted">{tr("updateManifestHint")}</span>
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">GitHub access token (optional)</span>
+            <span className="font-medium text-brand-ink">{tr("githubTokenOptional")}</span>
             <input
               type="password"
               value={updateConfig.access_token ?? ""}
@@ -337,58 +339,49 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                   access_token: event.target.value || null,
                 }))
               }
-              placeholder="Required for private repository releases or raw files"
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              placeholder={tr("githubTokenOptionalPlaceholder")}
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
-            <span className="block text-xs leading-5 text-slate-500">
-              The app can be public while the standards library lives in a private repo. Enter a
-              GitHub token with read access to download packs from private releases. The token is
-              stored locally only.
+            <span className="block text-xs leading-5 text-brand-muted">
+              {tr("githubTokenOptionalHint")}
             </span>
           </label>
           <button
             type="button"
             disabled={savingUpdateConfig}
             onClick={() => void handleSaveUpdateConfig()}
-            className="ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
+            className="ui-btn-secondary ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
-            {savingUpdateConfig ? "Saving…" : "Save update settings"}
+            {savingUpdateConfig ? tr("saving") : tr("saveUpdateSettings")}
           </button>
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Projects folder</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Choose a folder to use as your project workspace. The workbench reads .md notes from
-          this location.
-        </p>
-        <dl className="mt-4 grid gap-3 text-sm text-slate-700">
-          <div className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-            <dt>Current folder</dt>
-            <dd className="max-w-md truncate font-medium">{projectsDir ?? "Not set"}</dd>
+      <section className="ui-panel rounded-lg p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-brand-ink">{tr("projectsFolder")}</h2>
+        <p className="mt-2 text-sm leading-6 text-brand-muted">{tr("projectsFolderBody")}</p>
+        <dl className="mt-4 grid gap-3 text-sm text-brand-ink">
+          <div className="flex justify-between gap-4 border-b border-brand-border pb-3">
+            <dt>{tr("currentFolder")}</dt>
+            <dd className="max-w-md truncate font-medium">{projectsDir ?? tr("notSet")}</dd>
           </div>
         </dl>
         <button
           type="button"
           disabled={pickingProjectsDir}
           onClick={() => void handlePickProjectsDir()}
-          className="ui-focus-ring mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+          className="ui-btn-primary ui-focus-ring mt-4 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed"
         >
-          {pickingProjectsDir ? "Selecting…" : "Choose projects folder"}
+          {pickingProjectsDir ? tr("selecting") : tr("chooseProjectsFolder")}
         </button>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">AI writing</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Supports OpenAI and services compatible with the OpenAI Chat Completions API (e.g.
-          DeepSeek, local Ollama). API keys and base URLs are stored locally in{" "}
-          <code className="rounded bg-slate-100 px-1.5 py-0.5">config.json</code> only.
-        </p>
+      <section className="ui-panel rounded-lg p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-brand-ink">{tr("aiWriting")}</h2>
+        <p className="mt-2 text-sm leading-6 text-brand-muted">{tr("aiWritingBody")}</p>
         <div className="mt-4 space-y-4">
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">Provider</span>
+            <span className="font-medium text-brand-ink">{tr("provider")}</span>
             <input
               type="text"
               value={aiConfig.provider ?? "openai"}
@@ -398,12 +391,12 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                   provider: event.target.value || "openai",
                 }))
               }
-              placeholder="openai / deepseek / ollama …"
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              placeholder="openai / deepseek / ollama �"
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">Base URL</span>
+            <span className="font-medium text-brand-ink">{tr("baseUrl")}</span>
             <input
               type="url"
               value={aiConfig.base_url ?? "https://api.openai.com/v1"}
@@ -414,15 +407,12 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                 }))
               }
               placeholder="https://api.openai.com/v1"
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
-            <span className="block text-xs text-slate-500">
-              Must be compatible with OpenAI&apos;s <code>/chat/completions</code> endpoint. Ollama
-              example: http://127.0.0.1:11434/v1
-            </span>
+            <span className="block text-xs text-brand-muted">{tr("baseUrlHint")}</span>
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">API key</span>
+            <span className="font-medium text-brand-ink">{tr("apiKey")}</span>
             <input
               type="password"
               value={aiConfig.api_key ?? ""}
@@ -433,11 +423,11 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                 }))
               }
               placeholder="sk-..."
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
           </label>
           <label className="block space-y-2 text-sm">
-            <span className="font-medium text-slate-800">Model</span>
+            <span className="font-medium text-brand-ink">{tr("model")}</span>
             <input
               type="text"
               value={aiConfig.model ?? "gpt-4o"}
@@ -447,10 +437,10 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                   model: event.target.value || "gpt-4o",
                 }))
               }
-              className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2"
+              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
             />
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-brand-ink">
             <input
               type="checkbox"
               checked={aiConfig.allow_legacy_citations}
@@ -461,23 +451,21 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
                 }))
               }
             />
-            Allow legacy standard citations
+            {tr("allowLegacyCitations")}
           </label>
           <button
             type="button"
             disabled={savingAi}
             onClick={() => void handleSaveAiConfig()}
-            className="ui-focus-ring rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+            className="ui-btn-primary ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed"
           >
-            {savingAi ? "Saving…" : "Save AI settings"}
+            {savingAi ? tr("saving") : tr("saveAiSettings")}
           </button>
         </div>
       </section>
 
       {notice && (
-        <p className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
-          {notice}
-        </p>
+        <p className="ui-panel rounded-lg px-4 py-3 text-sm text-brand-ink shadow-sm">{notice}</p>
       )}
     </div>
   );

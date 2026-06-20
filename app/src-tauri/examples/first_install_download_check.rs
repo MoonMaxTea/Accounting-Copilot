@@ -143,7 +143,7 @@ async fn main() {
         }
     );
 
-    let manifest = match fetch_manifest(MANIFEST_URL, token.as_deref()).await {
+    let manifest = match fetch_manifest(MANIFEST_URL, "", token.as_deref()).await {
         Ok(value) => value,
         Err(error) => {
             eprintln!("FAIL manifest: {error}");

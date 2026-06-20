@@ -153,11 +153,16 @@ impl ProjectsUiState {
 
 const DEFAULT_MANIFEST_URL: &str =
     "https://raw.githubusercontent.com/MoonMaxTea/Accounting-Copilot/main/updates/manifest.json";
+const DEFAULT_MANIFEST_URL_ALT: &str =
+    "https://cdn.jsdelivr.net/gh/MoonMaxTea/Accounting-Copilot@main/updates/manifest.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateConfig {
     #[serde(default = "default_manifest_url")]
     pub manifest_url: String,
+    /// Alternative manifest URL (e.g. CDN mirror).  Raced against manifest_url.
+    #[serde(default = "default_manifest_url_alt")]
+    pub manifest_url_alt: String,
     #[serde(default = "default_check_on_startup")]
     pub check_on_startup: bool,
     #[serde(default)]
@@ -172,6 +177,10 @@ fn default_manifest_url() -> String {
     DEFAULT_MANIFEST_URL.to_string()
 }
 
+fn default_manifest_url_alt() -> String {
+    DEFAULT_MANIFEST_URL_ALT.to_string()
+}
+
 fn default_check_on_startup() -> bool {
     true
 }
@@ -180,6 +189,7 @@ impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
             manifest_url: default_manifest_url(),
+            manifest_url_alt: default_manifest_url_alt(),
             check_on_startup: true,
             auto_download_content: true,
             last_content_version: None,

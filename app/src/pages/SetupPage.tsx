@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getConfig, saveUpdateConfig } from "../api";
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
 import { Wordmark } from "../components/Wordmark";
+import { usePreferences } from "../context/PreferencesContext";
 import type { ContentDownloadProgress, UpdateConfig } from "../types";
 
 interface SetupPageProps {
@@ -22,12 +23,6 @@ const defaultUpdateConfig: UpdateConfig = {
   access_token: null,
 };
 
-const STEPS = [
-  { id: 1, title: "Install standards pack" },
-  { id: 2, title: "Choose project folder" },
-  { id: 3, title: "Configure AI (optional)" },
-];
-
 export function SetupPage({
   onDownloadInitial,
   downloading,
@@ -35,9 +30,16 @@ export function SetupPage({
   error,
   onOpenSettings,
 }: SetupPageProps) {
+  const { tr, trf } = usePreferences();
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>(defaultUpdateConfig);
   const [savingToken, setSavingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
+
+  const steps = [
+    { id: 1, title: tr("step1Title") },
+    { id: 2, title: tr("step2Short") },
+    { id: 3, title: tr("step3Short") },
+  ];
 
   useEffect(() => {
     getConfig()
@@ -51,7 +53,7 @@ export function SetupPage({
     try {
       const config = await saveUpdateConfig(updateConfig);
       setUpdateConfig(config.update);
-      setTokenNotice("Access token saved locally.");
+      setTokenNotice(tr("tokenSaved"));
     } catch (caught: unknown) {
       setTokenNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -73,37 +75,32 @@ export function SetupPage({
     <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col justify-center px-6">
       <div className="mb-8">
         <Wordmark variant="hero" />
-        <h1 className="mt-6 text-xl font-semibold text-brand-ink">Get started in three steps</h1>
+        <h1 className="mt-6 text-xl font-semibold text-brand-ink">{tr("getStartedTitle")}</h1>
       </div>
 
       <ol className="mb-8 grid gap-3 sm:grid-cols-3">
-        {STEPS.map((step) => (
+        {steps.map((step) => (
           <li
             key={step.id}
             className={[
               "rounded-lg border px-4 py-3",
               step.id === 1
-                ? "border-brand-navy bg-brand-navy text-white"
+                ? "border-brand-accent bg-brand-accent text-white"
                 : "border-brand-border bg-brand-surface text-brand-muted",
             ].join(" ")}
           >
-            <p className="text-caption font-medium">Step {step.id}</p>
+            <p className="text-caption font-medium">{trf("stepLabel", { n: step.id })}</p>
             <p className="mt-1 text-sm font-medium">{step.title}</p>
           </li>
         ))}
       </ol>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <h2 className="text-title text-slate-900">Step 1 · Install the official standards pack</h2>
-        <p className="mt-3 text-body text-slate-600">
-          Accounting Copilot uses the official IFRS / IAS / ASC content pack. Manual zip import is
-          not supported.
-        </p>
+      <div className="ui-panel rounded-lg p-8 shadow-sm">
+        <h2 className="text-title text-brand-ink">{tr("setupStep1Heading")}</h2>
+        <p className="mt-3 text-body text-brand-muted">{tr("setupStep1Body")}</p>
 
         <label className="mt-6 block space-y-2">
-          <span className="text-sm font-medium text-slate-800">
-            GitHub access token (required for private repos)
-          </span>
+          <span className="text-sm font-medium text-brand-ink">{tr("githubTokenLabel")}</span>
           <input
             type="password"
             value={updateConfig.access_token ?? ""}
@@ -113,13 +110,10 @@ export function SetupPage({
                 access_token: event.target.value || null,
               }))
             }
-            placeholder="ghp_… or github_pat_…"
-            className="ui-focus-ring w-full rounded-lg border border-slate-300 px-4 py-2 text-sm"
+            placeholder="ghp_� or github_pat_�"
+            className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2 text-sm"
           />
-          <span className="block text-caption text-slate-500">
-            Use a token with Contents read access. It is stored only on this device. You can change
-            it later in Settings.
-          </span>
+          <span className="block text-caption text-brand-muted">{tr("githubTokenHint")}</span>
         </label>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -127,50 +121,44 @@ export function SetupPage({
             type="button"
             disabled={savingToken}
             onClick={() => void handleSaveToken()}
-            className="ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
+            className="ui-btn-secondary ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
-            {savingToken ? "Saving…" : "Save token"}
+            {savingToken ? tr("saving") : tr("saveToken")}
           </button>
         </div>
 
         {(tokenNotice || error) && (
-          <p className={`mt-3 text-sm ${error ? "text-red-600" : "text-slate-600"}`}>
+          <p className={`mt-3 text-sm ${error ? "text-red-600 dark:text-red-400" : "text-brand-muted"}`}>
             {error ?? tokenNotice}
           </p>
         )}
 
-        <div className="mt-8 border-t border-slate-100 pt-6">
+        <div className="mt-8 border-t border-brand-border pt-6">
           <button
             type="button"
             disabled={downloading}
             onClick={() => void handleDownload()}
             className="btn-primary ui-focus-ring rounded-lg px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
           >
-            {downloading ? "Downloading…" : "Download standards pack"}
+            {downloading ? tr("downloading") : tr("downloadStandardsPack")}
           </button>
           {downloading && (
             <ContentDownloadProgressBar progress={downloadProgress} pending={!downloadProgress} />
           )}
         </div>
 
-        <div className="mt-8 rounded-lg bg-slate-50 p-4 text-caption text-slate-600">
-          <p className="font-medium text-slate-800">After installation</p>
-          <p className="mt-1">
-            When the download finishes, the app opens the <strong>Standards</strong> tab automatically.
-            Use the top navigation for <strong>Workbench</strong> and <strong>Standards</strong>, and the
-            gear icon for <strong>Settings</strong>.
-          </p>
-          <p className="mt-1">
-            Step 2: In Settings, choose a folder to use as your project workspace.
-          </p>
-          <p className="mt-1">Step 3: add your AI provider and API key (optional).</p>
+        <div className="mt-8 rounded-lg bg-brand-paper p-4 text-caption text-brand-muted">
+          <p className="font-medium text-brand-ink">{tr("afterInstallation")}</p>
+          <p className="mt-1">{tr("afterInstallationBody")}</p>
+          <p className="mt-1">{tr("afterInstallationStep2")}</p>
+          <p className="mt-1">{tr("afterInstallationStep3")}</p>
           {onOpenSettings && (
             <button
               type="button"
               onClick={onOpenSettings}
-              className="ui-focus-ring mt-3 text-sm font-medium text-slate-900 underline"
+              className="ui-focus-ring mt-3 text-sm font-medium text-brand-ink underline"
             >
-              Open Settings
+              {tr("openSettings")}
             </button>
           )}
         </div>

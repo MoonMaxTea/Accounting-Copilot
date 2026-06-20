@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={[
               "rounded-xl px-4 py-3 text-sm shadow-lg ring-1 backdrop-blur",
               toast.variant === "success" && "bg-emerald-950/95 text-emerald-50 ring-emerald-800",
-              toast.variant === "info" && "bg-slate-900/95 text-white ring-slate-700",
+              toast.variant === "info" && "bg-brand-ink/95 text-brand-surface ring-brand-border",
               toast.variant === "error" && "bg-red-950/95 text-red-50 ring-red-800",
             ]
               .filter(Boolean)

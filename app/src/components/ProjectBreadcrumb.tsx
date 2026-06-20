@@ -1,3 +1,5 @@
+import { usePreferences } from "../context/PreferencesContext";
+
 interface ProjectBreadcrumbProps {
   selectedFolderRelative: string | null;
   selectedFileRelative?: string | null;
@@ -16,6 +18,7 @@ export function ProjectBreadcrumb({
   selectedFileRelative = null,
   onNavigateFolder,
 }: ProjectBreadcrumbProps) {
+  const { tr } = usePreferences();
   const segments = splitFolderPath(selectedFolderRelative);
   const fileName = selectedFileRelative
     ? selectedFileRelative.split("/").pop() ?? selectedFileRelative
@@ -23,25 +26,25 @@ export function ProjectBreadcrumb({
 
   return (
     <nav
-      aria-label="Project path"
-      className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200"
+      aria-label={tr("projectPath")}
+      className="flex flex-wrap items-center gap-1 rounded-xl bg-brand-paper px-3 py-2 text-xs text-brand-muted ring-1 ring-brand-border"
     >
       <button
         type="button"
         onClick={() => onNavigateFolder(null)}
-        className="rounded px-1.5 py-0.5 hover:bg-white hover:text-slate-900"
+        className="rounded px-1.5 py-0.5 hover:bg-brand-surface hover:text-brand-ink"
       >
-        Root
+        {tr("root")}
       </button>
       {segments.map((segment, index) => {
         const folderRelative = segments.slice(0, index + 1).join("/");
         return (
           <span key={folderRelative} className="flex items-center gap-1">
-            <span className="text-slate-400">/</span>
+            <span className="text-brand-muted">/</span>
             <button
               type="button"
               onClick={() => onNavigateFolder(folderRelative)}
-              className="rounded px-1.5 py-0.5 hover:bg-white hover:text-slate-900"
+              className="rounded px-1.5 py-0.5 hover:bg-brand-surface hover:text-brand-ink"
             >
               {segment}
             </button>
@@ -50,8 +53,8 @@ export function ProjectBreadcrumb({
       })}
       {fileName && (
         <>
-          <span className="text-slate-400">/</span>
-          <span className="truncate px-1.5 py-0.5 font-medium text-slate-900">{fileName}</span>
+          <span className="text-brand-muted">/</span>
+          <span className="truncate px-1.5 py-0.5 font-medium text-brand-ink">{fileName}</span>
         </>
       )}
     </nav>

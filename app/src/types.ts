@@ -79,6 +79,7 @@ export interface AppConfigResponse {
 
 export interface UpdateConfig {
   manifest_url: string;
+  manifest_url_alt?: string;
   check_on_startup: boolean;
   auto_download_content: boolean;
   last_content_version: string | null;
@@ -90,11 +91,17 @@ export interface ContentUpdateInfo {
   latest_version: string;
   release_tag: string;
   pack_url: string;
+  pack_url_alt: string | null;
   pack_sha256: string;
   pack_size_bytes: number;
   min_app_version: string | null;
   release_notes: string | null;
   vault_commit: string | null;
+}
+
+export interface AiGenerationProgress {
+  phase: string;
+  message: string;
 }
 
 export interface ContentDownloadProgress {

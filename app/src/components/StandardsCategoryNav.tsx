@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { usePreferences } from "../context/PreferencesContext";
+import { navLabel } from "../lib/i18n";
 import { IconChevronDown, IconFilter } from "./icons";
 import { FilterSelect } from "./FilterSelect";
 import {
   PRIMARY_CATEGORIES,
-  secondaryFieldLabel,
   secondaryOptions,
-  standardsBreadcrumb,
   type StandardsPrimaryCategory,
   type StandardsSecondary,
   tertiaryOptions,
@@ -33,9 +33,16 @@ export function StandardsCategoryNav({
   onTertiaryChange,
   onIncludeLegacyChange,
 }: StandardsCategoryNavProps) {
+  const { tr, locale } = usePreferences();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const breadcrumb = standardsBreadcrumb(primary, secondary, tertiary);
+  const breadcrumb = [
+    navLabel(locale, primary),
+    navLabel(locale, secondary),
+    ...(primary === "accounting-standards" && tertiary !== "ALL"
+      ? [navLabel(locale, tertiary)]
+      : []),
+  ].join(" › ");
   const tertiaryChoices = tertiaryOptions(primary, secondary);
 
   useEffect(() => {
@@ -67,56 +74,65 @@ export function StandardsCategoryNav({
   return (
     <div
       ref={rootRef}
-      className="relative flex shrink-0 flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+      className="relative flex shrink-0 flex-wrap items-center gap-3 rounded-lg border border-brand-border bg-brand-surface px-3 py-2"
     >
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-slate-500">Browse</p>
-        <p className="truncate text-sm font-medium text-slate-900">{breadcrumb}</p>
+        <p className="text-xs font-medium text-brand-muted">{tr("browse")}</p>
+        <p className="truncate text-sm font-medium text-brand-ink">{breadcrumb}</p>
       </div>
 
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+        className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-hover"
       >
         <IconFilter className="h-4 w-4" />
-        Filters
+        {tr("filters")}
         <IconChevronDown className={["h-4 w-4 transition", open ? "rotate-180" : ""].join(" ")} />
       </button>
 
       {primary === "accounting-standards" && (
-        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+        <label className="inline-flex items-center gap-2 text-sm text-brand-ink">
           <input
             type="checkbox"
             checked={includeLegacy}
             onChange={(event) => onIncludeLegacyChange(event.target.checked)}
-            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+            className="rounded border-brand-border text-brand-ink focus:ring-brand-accent"
           />
-          Include legacy
+          {tr("includeLegacy")}
         </label>
       )}
 
       {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 rounded-xl border border-brand-border bg-brand-surface p-4 shadow-lg">
           <div className="grid gap-3 sm:grid-cols-3">
             <FilterSelect
-              label="Content Type"
+              label={tr("contentType")}
               value={primary}
-              options={PRIMARY_CATEGORIES}
+              options={PRIMARY_CATEGORIES.map((item) => ({
+                id: item.id,
+                label: navLabel(locale, item.id),
+              }))}
               onChange={onPrimaryChange}
             />
             <FilterSelect
-              label={secondaryFieldLabel(primary)}
+              label={primary === "listing-rules" ? tr("market") : tr("standardsSystem")}
               value={secondary}
-              options={secondaryOptions(primary)}
+              options={secondaryOptions(primary).map((item) => ({
+                id: item.id,
+                label: navLabel(locale, item.id),
+              }))}
               onChange={onSecondaryChange}
             />
             {tertiaryChoices.length > 0 && (
               <FilterSelect
-                label="Specific Series"
+                label={tr("specificSeries")}
                 value={tertiary}
-                options={tertiaryChoices}
+                options={tertiaryChoices.map((item) => ({
+                  id: item.id,
+                  label: navLabel(locale, item.id),
+                }))}
                 onChange={onTertiaryChange}
               />
             )}

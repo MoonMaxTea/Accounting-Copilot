@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   continueProjectDocument,
   countProjectFolderEntries,
@@ -38,12 +38,12 @@ import {
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
 import { useHorizontalResize } from "../hooks/useHorizontalResize";
+import { usePreferences } from "../context/PreferencesContext";
 import type {
   AiConversationTurn,
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
-  GenerateProjectResult,
   ProjectFileEntry,
   ProjectsUiState,
   ProjectTreeNode,
@@ -97,8 +97,25 @@ function findLatestConversationFolder(
   return null;
 }
 
-export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }) {
+interface EvidencePageProps {
+  onOpenSettings?: () => void;
+  genProgress: import("../types").AiGenerationProgress | null;
+  genError: string | null;
+  genResultPath: string | null;
+  genCounter: number;
+  onGenConsumed: () => void;
+}
+
+export function EvidencePage({
+  onOpenSettings,
+  genProgress,
+  genError,
+  genResultPath,
+  genCounter,
+  onGenConsumed,
+}: EvidencePageProps) {
   const { showToast } = useToast();
+  const { tr, trf } = usePreferences();
   const { confirm } = useDialog();
   const sidebar = useHorizontalResize(240, 200, 360);
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
@@ -122,7 +139,6 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
   const [question, setQuestion] = useState("");
   const [facts, setFacts] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [lastResult, setLastResult] = useState<GenerateProjectResult | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [conversationTurns, setConversationTurns] = useState<AiConversationTurn[]>([]);
   const restoredRef = useRef(false);
@@ -235,7 +251,6 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
     if (!selected) {
       setNoteContent("");
       setScanResults([]);
-      setLastResult(null);
       return;
     }
 
@@ -272,13 +287,51 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
     };
   }, [selected]);
 
+  // React to AI generation results from global events (survives page switches)
+  const genResultConsumedRef = useRef<number>(0);
+  useEffect(() => {
+    if (genCounter <= genResultConsumedRef.current) {
+      return;
+    }
+    genResultConsumedRef.current = genCounter;
+
+    if (genError) {
+      showToast(genError, "error");
+      onGenConsumed();
+      return;
+    }
+
+    if (genResultPath) {
+      // Refresh to get the new file in tree, then select it
+      (async () => {
+        const files = await listProjectFiles();
+        const match = files.find((f) => f.relative_path === genResultPath);
+        if (match) {
+          setSelected(match);
+          setSelectedFolderRelative(
+            folderRelativeForSelection(match.relative_path, null),
+          );
+        }
+        await refreshSidebar(searchQuery);
+        await refreshTrash();
+        await refreshProjectsUi();
+        if (match) {
+          await refreshConversation(match.relative_path);
+        }
+        onGenConsumed();
+      })().catch(() => {
+        onGenConsumed();
+      });
+    }
+  }, [genCounter, genError, genResultPath]);
+
   const handleCitationClick = async (citation: string) => {
     setError(null);
     setCitationMiss(null);
     try {
       const target = await resolveCitation(citation);
       if (!target) {
-        setCitationMiss(`Citation not found in local pack: ${citation}`);
+        setCitationMiss(trf("citationNotFoundInPack", { citation }));
         setCitationTarget({
           citation,
           standard_id: "",
@@ -292,14 +345,20 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           paragraph_resolved: false,
         });
         setHighlight(null);
-        showToast(`Citation not found: ${citation}`, "info");
+        showToast(trf("toastCitationNotFound", { citation }), "info");
         return;
       }
 
       setCitationTarget(target);
       if (target.paragraph_resolved === false) {
         setHighlight(null);
-        showToast(`Paragraph not found for ${citation}; opened ${target.standard_id} full text`, "info");
+        showToast(
+          trf("toastParagraphFallback", {
+            citation,
+            standard: target.standard_id,
+          }),
+          "info",
+        );
         return;
       }
 
@@ -309,7 +368,13 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
         snippet_en: target.snippet_en,
         paragraph: target.paragraph,
       });
-      showToast(`Opened ${target.standard_id} §${target.paragraph}`, "info");
+      showToast(
+        trf("toastOpenedStandard", {
+          standard: target.standard_id,
+          paragraph: target.paragraph,
+        }),
+        "info",
+      );
     } catch (caught: unknown) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(message);
@@ -341,20 +406,18 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
   const handleGenerate = async () => {
     const trimmed = question.trim();
     if (!trimmed) {
-      setError("Enter a question before generating.");
+      setError(tr("enterQuestionBeforeGenerate"));
       return;
     }
 
     setGenerating(true);
     setError(null);
-    setLastResult(null);
     try {
       const generated = await generateProjectDocument(
         trimmed,
         facts.trim() || null,
         selectedFolderRelative,
       );
-      setLastResult(generated);
       setQuestion("");
       setFacts("");
       await refreshProjectsUi();
@@ -365,7 +428,7 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
         setSelected(match);
         setSelectedFolderRelative(folderRelativeForSelection(match.relative_path, null));
       }
-      showToast(`Saved "${generated.project_name}"`);
+      showToast(trf("savedProjectNote", { name: generated.project_name }));
       await refreshSidebar(searchQuery);
       await refreshConversation(generated.relative_path);
     } catch (caught: unknown) {
@@ -381,27 +444,25 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
     }
     const trimmed = question.trim();
     if (!trimmed) {
-      setError("Enter a follow-up before continuing.");
+      setError(tr("enterFollowUpBeforeContinue"));
       return;
     }
 
     setGenerating(true);
     setError(null);
-    setLastResult(null);
     try {
       const updated = await continueProjectDocument(
         selected.path,
         trimmed,
         facts.trim() || null,
       );
-      setLastResult(updated);
       setNoteContent(updated.content);
       const scanned = await scanNoteCitations(updated.content);
       setScanResults(scanned);
       setQuestion("");
       setFacts("");
       await refreshProjectsUi();
-      showToast("Project note updated");
+      showToast(tr("projectNoteUpdated"));
       await refreshConversation(selected.relative_path);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -419,12 +480,12 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
     const count = await countProjectFolderEntries(folderRelative);
     const message =
       count > 0
-        ? `This folder contains ${count} notes. They will be moved to Trash. Delete "${folderRelative}"?`
-        : `Delete empty folder "${folderRelative}"?`;
+        ? trf("deleteFolderWithNotes", { count, folder: folderRelative })
+        : trf("deleteEmptyFolder", { folder: folderRelative });
     const approved = await confirm({
-      title: "Delete folder",
+      title: tr("deleteFolder"),
       message,
-      confirmLabel: "Delete",
+      confirmLabel: tr("delete"),
       tone: "danger",
     });
     if (!approved) {
@@ -433,8 +494,8 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
     const result = await deleteProjectFolder(folderRelative);
     showToast(
       result.trashed_files > 0
-        ? `Folder deleted; ${result.trashed_files} notes moved to Trash`
-        : "Empty folder deleted",
+        ? trf("folderDeletedWithTrash", { count: result.trashed_files })
+        : tr("emptyFolderDeleted"),
     );
     await refreshSidebar(searchQuery);
     await refreshTrash();
@@ -457,20 +518,17 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
 
   if (!projectsDir) {
     return (
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-amber-950">
-        <p className="text-caption font-medium text-amber-800">Step 2 · Choose project folder</p>
-        <h2 className="mt-2 text-title">Project folder not configured</h2>
-        <p className="mt-2 text-body">
-          Open Settings and choose a folder to use as your project workspace. The workbench reads
-          project notes from there.
-        </p>
+      <section className="ui-alert-warning rounded-lg p-8">
+        <p className="text-caption font-medium">{tr("step2Title")}</p>
+        <h2 className="mt-2 text-title">{tr("projectFolderNotConfigured")}</h2>
+        <p className="mt-2 text-body">{tr("projectFolderHint")}</p>
         {onOpenSettings && (
           <button
             type="button"
             onClick={onOpenSettings}
             className="ui-focus-ring mt-4 rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
           >
-            Open Settings
+            {tr("openSettings")}
           </button>
         )}
       </section>
@@ -479,15 +537,33 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
 
   return (
     <div className="flex h-full flex-col gap-3">
+      {genProgress && genProgress.phase !== "complete" && genProgress.phase !== "error" && (
+        <div className="rounded-lg border border-brand-border bg-brand-surface px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent" />
+            <span className="text-sm text-brand-ink">
+              {genProgress.phase === "searching"
+                ? genProgress.message
+                : genProgress.message || tr("generating")}
+            </span>
+          </div>
+          {genProgress.phase === "searching" && (
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-brand-hover">
+              <div className="h-full animate-pulse rounded-full bg-brand-accent" style={{ width: "60%" }} />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-          <IconSearch className="h-4 w-4 text-slate-400" />
+        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-brand-border bg-brand-surface px-3 py-2">
+          <IconSearch className="h-4 w-4 text-brand-muted" />
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search project notes…"
-            className="ui-focus-ring w-full bg-transparent text-sm text-slate-800 outline-none"
+            placeholder={tr("searchProjectNotes")}
+            className="ui-focus-ring w-full bg-transparent text-sm text-brand-ink outline-none"
           />
         </label>
         <button
@@ -498,10 +574,10 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
               void refreshTrash();
             }
           }}
-          className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          className="ui-focus-ring inline-flex items-center gap-2 rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-ink hover:bg-brand-hover"
         >
           <IconTrash className="h-4 w-4" />
-          Trash{trashItems.length > 0 ? ` (${trashItems.length})` : ""}
+          {tr("trash")}{trashItems.length > 0 ? ` (${trashItems.length})` : ""}
         </button>
       </div>
 
@@ -526,19 +602,19 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           onClose={() => setTrashOpen(false)}
           onRestore={async (id) => {
             const restored = await restoreTrashItem(id);
-            showToast(`Restored "${restored.title}"`);
+            showToast(trf("restoredItem", { title: restored.title }));
             await refreshSidebar(searchQuery);
             await refreshTrash();
           }}
           onPurge={async (id) => {
             await purgeTrashItem(id);
-            showToast("Permanently deleted", "info");
+            showToast(tr("permanentlyDeleted"), "info");
             await refreshTrash();
           }}
         />
       )}
 
-      {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="ui-alert-error rounded-lg px-4 py-3 text-sm">{error}</p>}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="h-full shrink-0" style={{ width: sidebar.width }}>
@@ -557,18 +633,18 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           onSelectFolder={setSelectedFolderRelative}
           onCreateFolder={async (parentRelative, name) => {
             await createProjectFolder(name, parentRelative);
-            showToast(`Created folder "${name}"`);
+            showToast(trf("createdFolder", { name }));
             await refreshSidebar(searchQuery);
           }}
           onRenameFolder={async (folderRelative, newName) => {
             const updated = await renameProjectFolder(folderRelative, newName);
-            showToast(`Renamed to "${newName}"`);
+            showToast(trf("renamedTo", { name: newName }));
             await refreshSidebar(searchQuery);
             return updated;
           }}
           onRenameFile={async (filePath, newName) => {
             const renamed = await renameProjectFile(filePath, newName);
-            showToast(`Renamed to "${newName}"`);
+            showToast(trf("renamedTo", { name: newName }));
             await refreshSidebar(searchQuery);
             if (selected?.path === filePath) {
               setSelected(renamed);
@@ -577,14 +653,18 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           }}
           onMoveFile={async (filePath, targetFolderRelative) => {
             const moved = await moveProjectFile(filePath, targetFolderRelative);
-            showToast(`Moved to ${targetFolderRelative ?? "Root"}`);
+            showToast(
+              trf("movedToFolder", {
+                folder: targetFolderRelative ?? tr("root"),
+              }),
+            );
             await refreshSidebar(searchQuery);
             setSelected(moved);
           }}
           onDeleteFolder={handleDeleteFolder}
           onMoveFileToTrash={async (filePath) => {
             await moveProjectFileToTrash(filePath);
-            showToast("Moved to Trash", "info");
+            showToast(tr("movedToTrashToast"), "info");
             if (selected?.path === filePath) {
               setSelected(null);
             }
@@ -594,31 +674,38 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           onTogglePin={async (relativePath) => {
             const ui = await toggleProjectPin(relativePath);
             setProjectsUi(ui);
-            showToast(ui.pinned.includes(relativePath) ? "Pinned" : "Unpinned", "info");
+            showToast(
+              ui.pinned.includes(relativePath) ? tr("pinned") : tr("unpinned"),
+              "info",
+            );
           }}
           onReorder={async (parentRelative, orderedRelativePaths) => {
             const ui = await saveProjectsChildOrder(parentRelative, orderedRelativePaths);
             setProjectsUi(ui);
             await refreshSidebar(searchQuery);
           }}
+          onClearSelection={() => {
+            setSelected(null);
+            setSelectedFolderRelative(null);
+          }}
         />
         </div>
 
         <button
           type="button"
-          aria-label="Resize sidebar"
+          aria-label={tr("resizeSidebar")}
           onMouseDown={sidebar.onMouseDown}
           className={[
-            "flex w-1.5 shrink-0 items-center justify-center border-x border-slate-200 bg-slate-50 hover:bg-slate-100",
-            sidebar.dragging ? "bg-slate-200" : "",
+            "flex w-1.5 shrink-0 items-center justify-center border-x border-brand-border bg-brand-paper hover:bg-brand-hover",
+            sidebar.dragging ? "bg-brand-border" : "",
           ].join(" ")}
         >
-          <IconGrip className="h-4 w-4 text-slate-400" />
+          <IconGrip className="h-4 w-4 text-brand-muted" />
         </button>
 
-        <div className="min-h-0 min-w-0 flex-1 border border-slate-200 bg-white">
+        <div className="min-h-0 min-w-0 flex-1 border border-brand-border bg-brand-surface">
         <NotePanel
-          title={selected?.title ?? "Project note"}
+          title={selected?.title ?? tr("projectNote")}
           content={noteContent}
           scanResults={scanResults}
           loading={loadingNote}
@@ -641,7 +728,6 @@ export function EvidencePage({ onOpenSettings }: { onOpenSettings?: () => void }
           onGenerate={() => void handleGenerate()}
           onContinue={() => void handleContinue()}
           onExampleQuestion={setQuestion}
-          lastResult={lastResult}
           citationTarget={citationTarget}
           highlight={highlight}
           missMessage={citationMiss}

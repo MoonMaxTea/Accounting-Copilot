@@ -51,6 +51,15 @@ export function truncatePreview(text: string, maxChars = 72): string {
   return `${trimmed.slice(0, maxChars)}…`;
 }
 
-export function roundKindLabel(kind: ConversationRound["kind"]): string {
-  return kind === "create" ? "Draft" : "Follow-up";
+export function roundKindLabel(
+  kind: ConversationRound["kind"],
+  locale: "en" | "zh" = "en",
+): string {
+  return kind === "create"
+    ? locale === "zh"
+      ? "初稿"
+      : "Draft"
+    : locale === "zh"
+      ? "追问"
+      : "Follow-up";
 }

@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePreferences } from "../context/PreferencesContext";
 
 interface ConfirmRequest {
   title: string;
@@ -45,6 +46,7 @@ interface DialogContextValue {
 const DialogContext = createContext<DialogContextValue | null>(null);
 
 export function DialogProvider({ children }: { children: ReactNode }) {
+  const { tr } = usePreferences();
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [promptRequest, setPromptRequest] = useState<PromptRequest | null>(null);
   const [promptValue, setPromptValue] = useState("");
@@ -69,24 +71,24 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       {children}
 
       {confirmRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-brand-ink dark:bg-brand-accent/40 p-4">
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-brand-border bg-brand-surface p-5 shadow-xl"
           >
-            <h2 className="text-base font-semibold text-slate-900">{confirmRequest.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{confirmRequest.message}</p>
+            <h2 className="text-base font-semibold text-brand-ink">{confirmRequest.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-brand-muted">{confirmRequest.message}</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                className="ui-focus-ring rounded-lg px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                className="ui-focus-ring rounded-lg px-4 py-2 text-sm text-brand-ink hover:bg-brand-hover"
                 onClick={() => {
                   confirmRequest.resolve(false);
                   setConfirmRequest(null);
                 }}
               >
-                {confirmRequest.cancelLabel ?? "Cancel"}
+                {confirmRequest.cancelLabel ?? tr("cancel")}
               </button>
               <button
                 type="button"
@@ -94,14 +96,14 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                   "ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium text-white",
                   confirmRequest.tone === "danger"
                     ? "bg-red-600 hover:bg-red-700"
-                    : "bg-slate-900 hover:bg-slate-700",
+                    : "bg-brand-ink dark:bg-brand-accent hover:opacity-90",
                 ].join(" ")}
                 onClick={() => {
                   confirmRequest.resolve(true);
                   setConfirmRequest(null);
                 }}
               >
-                {confirmRequest.confirmLabel ?? "Confirm"}
+                {confirmRequest.confirmLabel ?? tr("confirm")}
               </button>
             </div>
           </div>
@@ -109,11 +111,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       )}
 
       {promptRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-brand-ink dark:bg-brand-accent/40 p-4">
           <form
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-brand-border bg-brand-surface p-5 shadow-xl"
             onSubmit={(event) => {
               event.preventDefault();
               const trimmed = promptValue.trim();
@@ -121,32 +123,32 @@ export function DialogProvider({ children }: { children: ReactNode }) {
               setPromptRequest(null);
             }}
           >
-            <h2 className="text-base font-semibold text-slate-900">{promptRequest.title}</h2>
+            <h2 className="text-base font-semibold text-brand-ink">{promptRequest.title}</h2>
             <label className="mt-4 block space-y-2">
-              <span className="text-sm font-medium text-slate-700">{promptRequest.label}</span>
+              <span className="text-sm font-medium text-brand-ink">{promptRequest.label}</span>
               <input
                 autoFocus
                 value={promptValue}
                 onChange={(event) => setPromptValue(event.target.value)}
-                className="ui-focus-ring w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="ui-focus-ring w-full rounded-lg border border-brand-border px-3 py-2 text-sm"
               />
             </label>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                className="ui-focus-ring rounded-lg px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                className="ui-focus-ring rounded-lg px-4 py-2 text-sm text-brand-ink hover:bg-brand-hover"
                 onClick={() => {
                   promptRequest.resolve(null);
                   setPromptRequest(null);
                 }}
               >
-                {promptRequest.cancelLabel ?? "Cancel"}
+                {promptRequest.cancelLabel ?? tr("cancel")}
               </button>
               <button
                 type="submit"
-                className="ui-focus-ring rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                className="ui-focus-ring rounded-lg bg-brand-ink dark:bg-brand-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               >
-                {promptRequest.confirmLabel ?? "Save"}
+                {promptRequest.confirmLabel ?? tr("save")}
               </button>
             </div>
           </form>

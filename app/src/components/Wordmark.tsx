@@ -1,9 +1,11 @@
+import { usePreferences } from "../context/PreferencesContext";
+
 interface WordmarkProps {
   variant?: "header" | "hero" | "mark";
   className?: string;
 }
 
-function BrandMark({ className = "h-8 w-8" }: { className?: string }) {
+export function BrandMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 40 40"
@@ -40,6 +42,7 @@ function BrandMark({ className = "h-8 w-8" }: { className?: string }) {
 }
 
 export function Wordmark({ variant = "header", className = "" }: WordmarkProps) {
+  const { tr } = usePreferences();
   if (variant === "mark") {
     return (
       <div className={className}>
@@ -63,11 +66,11 @@ export function Wordmark({ variant = "header", className = "" }: WordmarkProps) 
         </div>
         {variant === "hero" ? (
           <p className="mt-1 text-caption tracking-[0.18em] text-brand-muted uppercase">
-            Standards · Workpapers · Review
+            {tr("tagline")}
           </p>
         ) : (
           <p className="hidden text-caption text-brand-muted sm:block">
-            Standards · Workpapers · Review
+            {tr("tagline")}
           </p>
         )}
       </div>

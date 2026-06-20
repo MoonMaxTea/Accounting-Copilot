@@ -18,7 +18,7 @@ function normalizeParagraph(value: string): string {
   return value.split(/[–-]/)[0] ?? value;
 }
 
-function snippetFrom(content: string, start: number, length = 120): string {
+function snippetFrom(content: string, start: number, length = 2000): string {
   return content.slice(start, start + length).replace(/\s+/g, ' ').trim();
 }
 

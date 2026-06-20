@@ -108,6 +108,9 @@ pub struct ContentUpdateInfo {
     pub latest_version: String,
     pub release_tag: String,
     pub pack_url: String,
+    /// Alternative download URL for the content pack (e.g. CDN mirror)
+    #[serde(default)]
+    pub pack_url_alt: Option<String>,
     pub pack_sha256: String,
     pub pack_size_bytes: u64,
     pub min_app_version: Option<String>,
@@ -199,6 +202,12 @@ pub struct SimilarProjectMatch {
     pub title: String,
     pub project_name: String,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AiGenerationProgress {
+    pub phase: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

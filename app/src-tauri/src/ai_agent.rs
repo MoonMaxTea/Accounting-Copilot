@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6,13 +7,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::ai::{
-    build_system_prompt, load_writing_spec, parse_ai_response, MARKDOWN_END, MARKDOWN_START,
-    PROJECT_NAME_END, PROJECT_NAME_START,
+    parse_ai_response, MARKDOWN_END, MARKDOWN_START, PROJECT_NAME_END, PROJECT_NAME_START,
 };
 use crate::citations::{load_paragraphs, resolve_citation};
 use crate::config::AiConfig;
 use crate::db;
-use crate::models::{AiAgentMessage, AiAgentToolCall, AiConversationTurn};
+use crate::pack;
+use tauri::Emitter;
+
+use crate::models::{AiAgentMessage, AiAgentToolCall, AiConversationTurn, AiGenerationProgress};
 
 const MAX_TOOL_ROUNDS: usize = 12;
 const MAX_SESSION_MESSAGES: usize = 80;
@@ -118,7 +121,7 @@ fn pack_agent_tools() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "get_pack_paragraph",
-                "description": "Fetch exact English paragraph text from local pack by citation, e.g. IFRS 11 §7 or ASC 740-10-25-5.",
+                "description": "Read full English text of a specific paragraph from the local standards pack (returns several thousand characters). Use this to UNDERSTAND the standard — then distill into Chinese refinement in your output. NEVER paste the raw text verbatim into the document.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -145,23 +148,77 @@ fn pack_agent_tools() -> Vec<Value> {
     ]
 }
 
-pub fn build_agent_system_prompt(content_dir: &Path, allow_legacy: bool) -> Result<String, String> {
-    let writing = build_system_prompt(content_dir, allow_legacy)?;
+fn load_writing_spec(content_dir: &Path) -> Result<(String, String), String> {
+    let guide_path = content_dir.join("writing-spec/项目编写说明.md");
+    let skill_path = content_dir.join("writing-spec/SKILL.md");
+    let guide = fs::read_to_string(&guide_path)
+        .map_err(|error| format!("无法读取 writing-spec/项目编写说明.md: {error}"))?;
+    let skill = fs::read_to_string(&skill_path)
+        .map_err(|error| format!("无法读取 writing-spec/SKILL.md: {error}"))?;
+    Ok((guide, skill))
+}
+
+pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Result<String, String> {
+    let (guide, skill) = load_writing_spec(content_dir)?;
+
     Ok(format!(
-        "{writing}\n\n\
-         ## Agent 模式（方案 B）\n\
-         你是「只能做准则分析」的 Agent，所有准则依据必须通过工具从本地 content pack 获取。\n\n\
-         ### 工作流程\n\
-         1. 使用 `search_local_pack` 搜索相关准则\n\
-         2. 使用 `list_standard_paragraphs` / `get_pack_paragraph` 精确获取 § 原文\n\
-         3. 仅基于工具返回的 pack 原文撰写分析与结论\n\
-         4. 信息足够后，输出最终笔记（{name_start}…{name_end} + {md_start}…{md_end}）\n\n\
-         ### 红线\n\
-         - 禁止凭模型记忆或网络补充准则；工具未返回的段落不得引用\n\
-         - 「准则原文（知识库）」必须来自 `get_pack_paragraph` 返回的 snippet_en\n\
-         - 分析与结论只能引用已通过工具确认存在于 pack 的段落\n\
-         - 若 pack 无覆盖，写「知识库暂无该准则」\n\n\
-         在输出最终笔记前，可多次调用工具；不要在没有检索 pack 的情况下直接输出最终笔记。",
+        "## 身份\n\
+         你是一位资深会计准则与上市咨询合伙人，拥有超过 20 年的 IFRS / US GAAP 审计及咨询经验。\
+         你的职业生涯始于四大会计师事务所，历任审计经理、技术部高级经理，\
+         后升任上市咨询合伙人。你亲手处理过数百家企业的 IPO、重组、准则转换项目，\
+         对 FASB ASC 和 IASB IFRS/IAS 准则的字里行间都了然于心。\n\n\
+         客户找你不是为了读准则原文——他们自己能读。\
+         客户付钱给你，是因为你能：\n\
+         - 从客户混乱的业务描述中，精准识别出适用的准则和关键段落\n\
+         - 把几千字的英文准则提炼成一段中文，让 CFO 五分钟内做出决策\n\
+         - 在准则的灰色地带给出有依据的专业判断，而不是照本宣科\n\n\
+         ## 分析方法\n\
+         面对客户的每一个问题，你应该按以下方式思考：\n\
+         1. **诊断**：客户真正想问什么？背后的交易实质是什么？\n\
+         2. **定位**：哪条准则、哪个段落直接回答了这个问题？\n\
+         3. **解读**：准则原文说的是什么（通过工具完整阅读），但更重要的是——它在客户的场景下意味着什么？\n\
+         4. **输出**：用中文精炼核心结论 → 引用 2-4 句关键英文存证 → 附提炼表指导实务操作\n\n\
+         ## 编写规范\n{guide}\n\n## 写作技能\n{skill}\n\n\
+         ## 输出铁律（违反任一条 = 不合格）\n\n\
+         ### 铁律 1：你写的是中文分析，不是英文翻译\n\
+         工具返回的 snippet_en 是数千字符的英文准则原文——这是供你**阅读理解**的原材料，\
+         不是让你**粘贴**到文档里的成品。读完 4000 字符，你只需要输出：\n\
+         - 一段中文精炼（这条准则在说什么）\n\
+         - 2-4 句最关键的英文原文（存证用）\n\
+         - 一张提炼表（原则 | 原文依据 | 实务含义）\n\
+         > ⚠️ 如果你把 snippet_en 大段复制到 blockquote，你的输出就是废纸——客户不需要你替他复制粘贴。\n\n\
+         ### 铁律 2：blockquote 上限 4 句英文\n\
+         每个准则主题的英文引用块：\n\
+         - 必须 ≤ 4 句英文。多一句就删。\n\
+         - 只引用与客户问题直接相关的句子——不是顺眼的句子，是「如果没有这句话，结论就站不住」的句子。\n\
+         - blockquote 后必须有提炼表，没有例外。\n\n\
+         ### 铁律 3：提炼表 = 你的核心交付物\n\
+         | 原则 | 原文依据 | 提炼（实务含义）|\n\
+         - 「原文依据」写段落号（如 ASC 718 §718-10-25-2），不写英文\n\
+         - 「提炼」解释这对客户意味着什么：该怎么做、有什么选择、有什么风险\n\n\
+         ### 铁律 4：一切依据来自工具\n\
+         - 准则内容必须通过 search_local_pack / list_standard_paragraphs / get_pack_paragraph 获取\n\
+         - 工具未返回的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
+         - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
+         ## 工作流程\n\
+         1. 理解客户问题 → 诊断交易实质\n\
+         2. search_local_pack 定位准则\n\
+         3. list_standard_paragraphs 查看段落结构\n\
+         4. get_pack_paragraph 逐个读取关键段落（每次返回数千字符，完整阅读后在脑内精炼）\n\
+         5. 信息足够后输出最终笔记\n\n\
+         ## 输出格式\n\
+         1. 短项目名（2-12 字中文）\n\
+         2. Markdown 正文：frontmatter → TL;DR → 问题 → 准则原文+提炼表 → 分析 → 结论\n\
+         3. 使用以下分隔符包裹项目名和正文：\n\
+         {name_start}\n项目名\n{name_end}\n\
+         {md_start}\n---\n...\n---\n\n# 项目名\n...\n{md_end}\n\n\
+         ## 输出前自检（逐条确认后再提交）\n\
+         - [ ] 我是否用中文精炼了准则要求，而不是粘贴英文原文？\n\
+         - [ ] 每个 blockquote 是否 ≤ 4 句？多一句删了吗？\n\
+         - [ ] 每个 blockquote 后是否紧跟提炼表？提炼表的「原文依据」列是否只有段落号？\n\
+         - [ ] 我的中文分析是否链接了客户的具体问题（不是泛泛而谈）？\n\
+         - [ ] 所有准则引用是否都来自工具返回的内容？\n\
+         - [ ] 确认: 在文档末尾「日志」节的日期行后添加诊断标记 `<!-- prompt-v3-20260621 -->`",
         name_start = PROJECT_NAME_START,
         name_end = PROJECT_NAME_END,
         md_start = MARKDOWN_START,
@@ -249,27 +306,99 @@ pub fn execute_pack_tool(
             let args: SearchLocalPackArgs =
                 serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
             let limit = args.limit.unwrap_or(10).clamp(1, 20);
-            let hits = db::search_standards(content_dir, &args.query, limit)?;
-            let filtered: Vec<_> = hits
-                .into_iter()
-                .filter(|hit| allow_legacy || !hit.standard_id.is_empty())
-                .map(|hit| {
-                    json!({
-                        "standard_id": hit.standard_id,
+            let query = args.query.trim();
+            let mut results: Vec<Value> = Vec::new();
+            let mut seen_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+            // 1. FTS5 full-text search
+            if let Ok(fts_hits) = db::search_standards(content_dir, query, limit) {
+                for hit in fts_hits {
+                    if !allow_legacy && hit.standard_id.is_empty() {
+                        continue;
+                    }
+                    let sid = hit.standard_id.clone();
+                    results.push(json!({
+                        "standard_id": sid,
                         "title": hit.title,
                         "snippet": hit.snippet,
                         "pack_path": hit.pack_path,
-                    })
-                })
-                .collect();
-            serde_json::to_string(&json!({ "results": filtered, "count": filtered.len() }))
+                    }));
+                    seen_ids.insert(sid);
+                }
+            }
+
+            // 2. Registry fallback: match by standard ID
+            //    FTS5 has standard_id UNINDEXED; this catches exact ID
+            //    searches (e.g. "ASC 718") and enriches sparse FTS5 results.
+            if results.len() < limit as usize {
+                let entries = load_paragraphs(content_dir).unwrap_or_default();
+                if let Ok(registry) = pack::load_registry(content_dir) {
+                    let query_lower = query.to_lowercase();
+                    for std in &registry.standards {
+                        if seen_ids.contains(&std.id) {
+                            continue;
+                        }
+                        if results.len() >= limit as usize {
+                            break;
+                        }
+                        let id_lower = std.id.to_lowercase();
+                        let title_lower = std.title.to_lowercase();
+                        if id_lower == query_lower
+                            || id_lower.contains(&query_lower)
+                            || title_lower.contains(&query_lower)
+                            || query_lower.contains(&id_lower)
+                        {
+                            if !allow_legacy && std.status == "legacy" {
+                                continue;
+                            }
+                            // Count indexed paragraphs for this standard
+                            let para_count = entries
+                                .iter()
+                                .filter(|e| e.standard_id.eq_ignore_ascii_case(&std.id))
+                                .count();
+                            results.push(json!({
+                                "standard_id": std.id,
+                                "title": std.title,
+                                "title_zh": std.title_zh,
+                                "framework": std.framework,
+                                "status": std.status,
+                                "pack_path": std.pack_path,
+                                "indexed_paragraphs": para_count,
+                                "snippet": format!(
+                                    "{} — {}{}（{} 个索引段落可用）",
+                                    std.id,
+                                    if std.status == "legacy" { "[旧准则] " } else { "" },
+                                    std.title_zh.as_deref().unwrap_or(&std.title),
+                                    para_count,
+                                ),
+                            }));
+                            seen_ids.insert(std.id.clone());
+                        }
+                    }
+                }
+            }
+
+            serde_json::to_string(&json!({ "results": results, "count": results.len() }))
                 .map_err(|error| error.to_string())
         }
         "get_pack_paragraph" => {
             let args: GetPackParagraphArgs =
                 serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
-            let target = resolve_citation(content_dir, args.citation.trim())?
-                .ok_or_else(|| format!("知识库暂无该段落：{}", args.citation.trim()))?;
+            let citation = args.citation.trim();
+            let target = resolve_citation(content_dir, citation)?
+                .ok_or_else(|| {
+                    // Guide the AI: try list_standard_paragraphs to discover
+                    // the exact paragraph numbers available for this standard.
+                    let std_id = citation
+                        .split('§')
+                        .next()
+                        .unwrap_or(citation)
+                        .trim();
+                    format!(
+                        "未找到段落「{citation}」。请先调用 list_standard_paragraphs \
+                         查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
+                    )
+                })?;
             if target.status == "legacy" && !allow_legacy {
                 return Err(format!(
                     "段落 {} 为 legacy，默认不允许（可在设置中开启 legacy 引用）",
@@ -290,18 +419,64 @@ pub fn execute_pack_tool(
             let args: ListStandardParagraphsArgs =
                 serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
             let entries = load_paragraphs(content_dir)?;
-            let mut citations: Vec<String> = entries
+            let mut citations: Vec<&crate::citations::ParagraphRecord> = entries
                 .iter()
                 .filter(|entry| entry.standard_id.eq_ignore_ascii_case(&args.standard_id))
                 .filter(|entry| allow_legacy || entry.status == "current")
-                .map(|entry| format!("{} §{}", entry.standard_id, entry.paragraph))
                 .collect();
-            citations.sort();
-            citations.dedup();
+            // Sort by paragraph ID, then by char_start DESCENDING so that
+            // dedup keeps the *latest* occurrence — the substantive paragraph
+            // body, not the amendment-metadata table entry at the top of the
+            // file (which shares the same paragraph number).
+            citations.sort_by(|a, b| {
+                a.paragraph
+                    .cmp(&b.paragraph)
+                    .then_with(|| b.char_start.cmp(&a.char_start))
+            });
+            citations.dedup_by(|a, b| a.paragraph == b.paragraph);
+
+            // Sample a few substantive paragraphs (skip common header entries).
+            // ASC standards often have amendment tables early (ending in 00-1);
+            // sampling from later in the list gives the AI a realistic preview.
+            let skip_patterns = ["00-1", "00-2", "00-3"];
+            let substantive: Vec<_> = citations
+                .iter()
+                .filter(|e| !skip_patterns.iter().any(|p| e.paragraph.ends_with(p)))
+                .collect();
+            let sample_count = 4usize;
+            let samples: Vec<_> = if substantive.len() > sample_count {
+                let step = substantive.len() / sample_count;
+                (0..sample_count)
+                    .map(|i| {
+                        let e = substantive[i * step];
+                        json!({
+                            "citation": format!("{} §{}", e.standard_id, e.paragraph),
+                            "snippet_en": e.snippet_en,
+                        })
+                    })
+                    .collect()
+            } else {
+                substantive
+                    .iter()
+                    .take(sample_count)
+                    .map(|e| json!({
+                        "citation": format!("{} §{}", e.standard_id, e.paragraph),
+                        "snippet_en": e.snippet_en,
+                    }))
+                    .collect()
+            };
+
+            let paragraph_list: Vec<String> = citations
+                .iter()
+                .map(|e| format!("{} §{}", e.standard_id, e.paragraph))
+                .collect();
+
             serde_json::to_string(&json!({
                 "standard_id": args.standard_id,
-                "paragraphs": citations,
+                "paragraphs": paragraph_list,
                 "count": citations.len(),
+                "sample_previews": samples,
+                "_note": "以上为段落索引与预览。请用 get_pack_paragraph 逐个读取你需要的关键段落全文（每次返回数千字符）。阅读后输出文档时用中文精炼 + 2-4 句关键英文 + 提炼表，禁止粘贴原文。",
             }))
             .map_err(|error| error.to_string())
         }
@@ -411,11 +586,99 @@ async fn call_chat_with_tools(
         .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
+/// Like call_chat_with_tools but forces tool_choice: "none" so the model
+/// must produce a text response without calling any tools.  Used for the
+/// final synthesis nudge after the agent loop.
+async fn call_chat_with_tools_synthesis(
+    ai: &AiConfig,
+    messages: &[ApiChatMessage],
+    tools: &[Value],
+) -> Result<ApiChatMessage, String> {
+    let provider = ai
+        .provider
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("openai");
+
+    let api_key = ai
+        .api_key
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?;
+
+    let model = ai
+        .model
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("gpt-4o");
+
+    let base_url = ai
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("https://api.openai.com/v1")
+        .trim_end_matches('/');
+
+    let endpoint = format!("{base_url}/chat/completions");
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    let mut payload = json!({
+        "model": model,
+        "messages": messages,
+        "temperature": 0.2,
+    });
+    if !tools.is_empty() {
+        payload["tools"] = json!(tools);
+    }
+    payload["tool_choice"] = json!("none");
+
+    let response = client
+        .post(&endpoint)
+        .bearer_auth(api_key)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("{provider} 返回错误 ({status}): {body}"));
+    }
+
+    let body: ChatCompletionResponse = response
+        .json()
+        .await
+        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
+
+    body.choices
+        .first()
+        .map(|choice| choice.message.clone())
+        .ok_or_else(|| format!("{provider} 响应为空"))
+}
+
 pub async fn run_standards_agent(
+    app_handle: Option<&tauri::AppHandle>,
     content_dir: &Path,
     ai: &AiConfig,
     input: AgentRunInput<'_>,
 ) -> Result<AgentRunOutput, String> {
+    let emit = |phase: &str, msg: &str| {
+        if let Some(h) = app_handle {
+            let _ = h.emit(
+                "ai-generation-progress",
+                AiGenerationProgress { phase: phase.to_string(), message: msg.to_string() },
+            );
+        }
+    };
+
+    emit("searching", "正在检索本地准则库…");
     let _writing_spec = load_writing_spec(content_dir)?;
     let system_prompt = build_agent_system_prompt(content_dir, ai.allow_legacy_citations)?;
     let tools = pack_agent_tools();
@@ -462,11 +725,13 @@ pub async fn run_standards_agent(
 
         if let Some(tool_calls) = assistant.tool_calls.as_ref() {
             if tool_calls.is_empty() {
+                emit("generating", "正在生成项目笔记…");
                 final_raw = assistant.content.unwrap_or_default();
                 break;
             }
             for tool_call in tool_calls {
                 let label = tool_activity_label(&tool_call.function.name, &tool_call.function.arguments);
+                emit("searching", &label);
                 activity_log.push(AiConversationTurn {
                     role: "assistant".to_string(),
                     content: label.clone(),
@@ -525,7 +790,11 @@ pub async fn run_standards_agent(
             content: Some(format!(
                 "请根据以上工具检索到的 pack 原文，输出最终项目笔记。\n\
                  必须包含 {PROJECT_NAME_START}…{PROJECT_NAME_END} 与 {MARKDOWN_START}…{MARKDOWN_END} 区块。\n\
-                 不要调用工具，直接输出完整 Markdown。"
+                 不要再调用工具，直接输出完整 Markdown。",
+                PROJECT_NAME_START = PROJECT_NAME_START,
+                PROJECT_NAME_END = PROJECT_NAME_END,
+                MARKDOWN_START = MARKDOWN_START,
+                MARKDOWN_END = MARKDOWN_END,
             )),
             tool_calls: None,
             tool_call_id: None,
@@ -534,7 +803,9 @@ pub async fn run_standards_agent(
         session.push(synthesis_user.clone());
         api_messages.push(to_api_message(&synthesis_user));
 
-        let assistant = call_chat_with_tools(ai, &api_messages, &[]).await?;
+        // Use tool_choice: "none" rather than empty tools array —
+        // some API providers reject mixed tool-call history without tool defs.
+        let assistant = call_chat_with_tools_synthesis(ai, &api_messages, &tools).await?;
         let stored_assistant = from_api_message(&assistant);
         session.push(stored_assistant);
         api_messages.push(assistant.clone());
@@ -545,7 +816,7 @@ pub async fn run_standards_agent(
         return Err("Agent 未返回最终笔记内容。".to_string());
     }
 
-    parse_ai_response(&final_raw).map_err(|error| {
+    parse_ai_response(&final_raw, None).map_err(|error| {
         format!("Agent 响应格式无效：{error}。请重试或缩短问题。")
     })?;
 

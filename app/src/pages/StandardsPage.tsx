@@ -4,10 +4,11 @@ import { SearchBar } from "../components/SearchBar";
 import { StandardDetailPanel } from "../components/StandardDetailPanel";
 import { StandardList } from "../components/StandardList";
 import { StandardsCategoryNav } from "../components/StandardsCategoryNav";
+import { usePreferences } from "../context/PreferencesContext";
+import { navLabel } from "../lib/i18n";
 import {
   defaultSecondary,
   defaultTertiary,
-  emptyStandardsMessage,
   navigationForStandard,
   resolveStandardsQuery,
   type StandardsPrimaryCategory,
@@ -16,6 +17,7 @@ import {
 import type { FrameworkFilter, StandardSummary } from "../types";
 
 export function StandardsPage() {
+  const { tr, trf, locale } = usePreferences();
   const [primary, setPrimary] = useState<StandardsPrimaryCategory>("accounting-standards");
   const [secondary, setSecondary] = useState<StandardsSecondary>("ifrs");
   const [tertiary, setTertiary] = useState<FrameworkFilter>("ALL");
@@ -107,7 +109,10 @@ export function StandardsPage() {
     setTertiary(defaultTertiary(primary, value));
   };
 
-  const emptyMessage = emptyStandardsMessage(primary, secondary);
+  const emptyMessage =
+    primary === "listing-rules"
+      ? trf("listingRulesEmpty", { market: navLabel(locale, secondary) })
+      : tr("noStandardsMatch");
   const showListingRulesEmptyState = primary === "listing-rules" && !loading && standards.length === 0;
 
   return (
@@ -125,18 +130,16 @@ export function StandardsPage() {
         onIncludeLegacyChange={setIncludeLegacy}
       />
 
-      {error && <p className="shrink-0 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="ui-alert-error shrink-0 rounded-xl px-4 py-3 text-sm">{error}</p>}
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 overflow-hidden">
         <div className="min-h-0 overflow-auto">
           {loading ? (
-            <p className="rounded-lg bg-white p-6 text-sm text-slate-500">Loading standards…</p>
+            <p className="ui-panel p-6 text-sm text-brand-muted">{tr("loadingStandards")}</p>
           ) : showListingRulesEmptyState ? (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6">
-              <h3 className="text-sm font-semibold text-slate-900">Listing rules coming soon</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                {emptyMessage}
-              </p>
+            <div className="ui-panel rounded-lg border-dashed p-6">
+              <h3 className="text-sm font-semibold text-brand-ink">{tr("listingRulesComingSoon")}</h3>
+              <p className="mt-2 text-sm leading-6 text-brand-muted">{emptyMessage}</p>
             </div>
           ) : (
             <StandardList
