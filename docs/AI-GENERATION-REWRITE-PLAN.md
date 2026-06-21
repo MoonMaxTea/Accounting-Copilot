@@ -1,159 +1,302 @@
-# AI 生成功能重构计划：彻底消除 "prefix not found"（及同类工具协议错误）
+# 重构工作单（Engineering Handoff）：移除 function-calling，根治 DeepSeek "prefix not found"
 
-> 状态：**计划，待批准后实施**。本文档回应「follow-up 仍报 prefix not found，是否重构更快」的问题。
->
-> 结论先行：**是。** 但建议先用 ~10 分钟做 Phase 0 诊断（很可能是配置问题，能立刻解决）；若诊断未命中，则按本计划做一次**针对性重构**（移除 function-calling，改为 Rust 确定性检索 + 纯对话消息）。这是一次**编排层重构**，复用现有全部检索与后处理能力，**不是整个功能从零重写**，效果不降，且能一次性消除整类错误。
-
----
-
-## 一、评估：为什么重构（编排层）比继续打补丁更快、更可靠
-
-### 1.1 为什么已经修了 3 个版本还没好（0.1.9 / 0.1.10 / 0.1.11）
-
-| 版本 | 改动 | 为什么没根治 |
-|------|------|--------------|
-| 0.1.9 | 命中 `"prefix not found"` 后剥离工具历史重试 | DeepSeek 真实报错文案不含该字面量，闸门不触发 |
-| 0.1.10 | 放宽「何时重试」 | 闸门仍是同一个字符串匹配，依然不触发 |
-| 0.1.11 | 播种时 `strip_tool_history`，不再重放上一轮工具历史；放宽错误识别 | 仍**对每个请求附带 `tools`**，且当前轮仍会实时产生 `tool_calls`/`tool` 消息——只要走 function-calling 协议，DeepSeek 兼容端点/特定模型仍可能拒绝 |
-
-**根本问题有两层：**
-1. **架构层**：生成流程依赖 LLM function-calling（多轮 `tools` + `tool_calls` + `tool` 角色消息）。这是 DeepSeek（尤其 `deepseek-reasoner` 与 `/beta` 端点）和很多国内 OpenAI 兼容网关最容易出问题的部分。
-2. **工程层**：我们一直**没有抓到真实失败请求与原始错误体**，三次都是「盲修」。`"prefix not found"` 这个具体字面量不在 DeepSeek 官方文档的标准措辞里，强烈指向**特定模型（reasoner）或网关/`/beta` 端点**。
-
-### 1.2 结论
-
-- **继续打补丁**：只要还用 function-calling，就要逐个适配每家厂商/网关对工具消息、消息顺序、prefix、缓存的怪异要求——属于「打地鼠」，不可收敛。
-- **针对性重构（推荐）**：把检索从「LLM 用工具自己调」改为「Rust 里确定性地调用现有检索函数」，对 LLM 只发送**纯 `system/user/assistant` 文本消息、完全不带 `tools`**。这样：
-  - 永远不会出现 `tool_calls`/`tool` 角色消息 → **整类 prefix/工具协议错误从源头消失**（与厂商/网关/模型无关，`deepseek-reasoner` 也能用）；
-  - 复用现有检索原语（`db::search_standards`、`citations::*`、`execute_pack_tool` 的逻辑），**工作量可控**；
-  - 更便宜、更快、更可预测（无多轮工具往返）。
-
-> 风险提示：朴素的「一次性单轮检索」可能弱于 Agent 的多步检索。因此本计划保留**多步检索**，只是把「决定搜什么」和「读取段落」拆成 **不带工具的两阶段**，**效果不降**（详见 §三）。
+> 状态：**已确诊根因，计划待实施（本工作单供实施 Agent 直接执行）**。
+> 负责人视角（Manager）编写：下面每一步都写明「改哪个文件、加什么函数/结构、消息长什么样、怎么测、验收标准」，实施 Agent 照做即可，无需再猜。
 
 ---
 
-## 二、Phase 0：先诊断（强制，~10 分钟，可能直接解决）
+## 0. 给实施 Agent 的 TL;DR
 
-在动手重构前，必须先确认真因，避免第 4 次盲修。
-
-- [ ] **确认用户当前配置**（设置 → AI 写作）：
-  - **模型**：是否为 `deepseek-reasoner`？该模型对 function-calling 支持差，且要求「最后一条必须是 user / 带 prefix 的 assistant」。若是 → 换 `deepseek-chat` 或 `deepseek-v4-pro` 很可能立即修复。
-  - **Base URL**：是否为 `https://api.deepseek.com/beta`？`/beta` 会启用 prefix-completion（FIM）行为，可能直接产生 `prefix not found`。若是 → 改为 `https://api.deepseek.com`（或 `/v1`）很可能立即修复。
-  - 是否经第三方网关（one-api / new-api 等）？网关可能改写错误或自带 prefix 缓存。
-- [ ] **抓真实证据**：临时在 `request_chat_completion` 失败分支把「发出的 messages + 原始响应体」写入本地诊断文件（`_diag_last_request.json`，仅本地、用后即删），复现一次 follow-up，拿到**确切的失败请求与厂商原文**。
-- [ ] **快速实验**：加一个临时开关，follow-up 时**不附带 `tools`**（`tools=[]`）发一次单轮请求，看是否还报错。
-  - 若「不带 tools 就不报错」→ 证实是 function-calling 协议问题 → 直接进入 §三 重构。
-  - 若「仍报错」→ 是更底层（端点/网关/鉴权/缓存）问题 → 按诊断文件定位，可能无需重构。
-
-> Phase 0 的产出决定后续：很可能 §二 就解决了；若没有，§三 重构是高置信度的终极方案。
+- **要做的事**：把 AI 生成笔记的编排从「LLM function-calling 多轮工具循环」改为「**Rust 确定性检索 + 不带 `tools` 的纯对话三阶段管道**」。
+- **为什么**：DeepSeek 在 `deepseek-v4-flash` 上，**只要请求里带 `tools`（function calling）就会和其内部 "prefix" 路径冲突**，返回 400 `Function call should not be used with prefix` / `prefix not found`。只要我们**完全不发 `tools`**，该错误整类消失（与厂商、网关、模型无关）。
+- **红线**：不得降低核心检索/输出效果；新模式用配置开关灰度，旧 `agent` 模式保留一个版本周期可回退。
+- **不要做**：不要继续在 function-calling 上打补丁（已失败 3 次）。
 
 ---
 
-## 三、目标架构：无工具（tools-free）的确定性检索 + 纯对话
+## 1. 确诊根因（含证据）
 
-把当前「Agent 自驱工具循环」替换为**固定三阶段管道**，三次调用都是**纯文本消息、绝不带 `tools`**：
+### 1.1 现场信息（用户确认）
+- Base URL：`https://api.deepseek.com/v1`（标准端点，**非** `/beta`）
+- 模型：`deepseek-v4-flash`
+- 报错原文：`prefix not found`
+
+### 1.2 排除项
+- ❌ 不是 `/beta` 端点导致（用户用 `/v1`）。
+- ❌ 不是 `deepseek-reasoner` 的「最后一条必须是 user」限制（用户用 flash）。
+- ❌ 不是 0.1.11 的播种重放（`strip_tool_history` 已生效，但仍报错）。
+
+### 1.3 真因（高置信度，有外部证据）
+DeepSeek 的 **function calling 与 "prefix" 路径互斥**，且 `deepseek-v4-flash` 会进入该冲突：
+- 证据：GitHub `Kilo-Org/kilocode#10203` —「API conflict with **deepseek-v4-flash**」，DeepSeek 返回
+  `HTTP 400 {"error":{"message":"Function call should not be used with prefix", ...}}`。
+- 我们当前**每个请求都带 `tools`**（`ai_agent.rs` 的 `pack_agent_tools()` + `payload["tools"]`），并在循环中产生 `tool_calls`/`tool` 消息。`flash` 在多轮/特定结构下进入 prefix 路径 → 与 function call 冲突 → `prefix not found`。
+- 这解释了：首轮有时成功、follow-up 失败；以及为何「改错误字符串匹配/剥离历史」都治不好——**触发点是"带 tools"本身**，不是历史。
+
+### 1.4 立即可用的临时缓解（无需改代码，发给用户先用）
+- 把模型从 `deepseek-v4-flash` 换成 **`deepseek-v4-pro`** 或 **`deepseek-chat`**（设置 → AI 写作）。这两个模型通常不进入 flash 的 prefix 冲突路径，可能立刻可用。
+- 这是缓解，不是根治；根治见下方重构（移除 `tools`，任何 DeepSeek 模型都安全）。
+
+---
+
+## 2. 目标与非目标
+
+**目标**
+- 生成 / 追问（Continue）全流程**永不发送 `tools`/`tool_choice`**，**永不出现 `tool_calls`/`tool` 角色消息**。
+- 每次 LLM 调用都是**无状态、最小化**的纯对话（`[system, user]`），不重放历史。
+- 保持多步检索质量与现有后处理（引用截断、frontmatter、日志、免责声明）。
+
+**非目标**
+- 不改 UI 交互、不改文件存储格式、不改 content pack。
+- 不引入向量检索（那是 P2，见 `docs/P2-PLAN.md`）。
+- 不删除旧 `agent` 模式（先保留作回退）。
+
+---
+
+## 3. 目标架构：tools-free 三阶段管道
 
 ```
-Phase A 规划（1 次 chat，无 tools）
-  输入: system(精简) + user(问题/事实 [+ Continue: 现有文档])
-  要求模型输出 JSON：{ "queries": [...], "standards": [...] }
-  → 在 Rust 中解析（解析失败则回退到用问题原文做检索）
-
-Phase B 检索（纯 Rust，无 LLM）
-  用 Phase A 的 queries/standards 调用现有函数：
-    - db::search_standards (FTS5 + bm25 排序)
-    - execute_pack_tool 内的 registry 兜底逻辑
-    - load_paragraphs / resolve_citation → 读取关键段落全文(4000字)
-  组装「检索证据包」(标准/段落/snippet_en)，去重、按相关性排序、限量
-
-Phase C 写作（1 次 chat，无 tools）
-  输入: system(身份+编写规范+铁律) + user(问题/事实 + 证据包 [+ Continue: 现有文档])
-  → 直接输出 <<<PROJECT_NAME>>> / <<<MARKDOWN>>> 区块
-  → 复用现有 finalize_project_markdown（截断引用/frontmatter/日志/免责声明…）
+generate_project_document / continue_project_document  (commands.rs，不变)
+  → ai::generate_and_save_project / continue_and_update_project  (ai.rs，仅改内部调用)
+      → run_standards_pipeline(...)   ← 新函数，替代 run_standards_agent（由配置开关选择）
+          Phase A  plan_retrieval()     1 次 chat，无 tools，返回 JSON 查询计划
+          Phase B  gather_evidence()    纯 Rust，无 LLM，复用现有检索原语
+          Phase C  write_note()         1 次 chat，无 tools，输出最终 Markdown 区块
+      → parse_ai_response + finalize_project_markdown   (ai.rs，不变，复用)
 ```
 
-**消息形态**永远是 `[system, user]` 或 `[system, user, assistant, user]`，**无 `tools`/`tool_calls`/`tool`**。这对 OpenAI / DeepSeek（含 reasoner）/ 各类网关都安全。
+每个 LLM 调用的消息形态（**唯二**两种，均无 tools）：
+- Phase A：`[{system: planner}, {user: 问题+事实(+Continue:现有文档摘要)}]`
+- Phase C：`[{system: writer}, {user: 问题+事实+【检索证据】(+Continue:现有文档全文)}]`
 
-### 为什么效果不降
-- 仍是**多步检索**（先让模型规划查询，再确定性检索，再写作），保留了 Agent「先定位再细读」的优点。
-- 仍**完整读取段落全文**（4000 字）供写作，证据质量不变。
-- 检索更**可控、可观测**（命中、排序、数量都在 Rust 里，可记录可调），反而比「模型随机调工具」更稳。
-- 失败模式更少：无工具往返 → 无多轮放大、无协议错误、token 更省、更快。
+> 关键：**不拼接历史、不带 tools**，因此 DeepSeek 不会进入 prefix/function-call 冲突。
 
 ---
 
-## 四、详细工作计划（实施阶段）
+## 4. 数据结构（Rust，新增于 `ai_agent.rs` 或新建 `retrieval.rs`）
 
-> 实施前置：Phase 0 完成且确认需要重构。
+```rust
+/// Phase A 的产出：模型给出的检索计划（JSON 解析得到）
+#[derive(Debug, Deserialize, Default)]
+struct RetrievalPlan {
+    /// 用于 FTS5/registry 检索的查询词（英文/中文皆可），1-6 条
+    #[serde(default)]
+    queries: Vec<String>,
+    /// 模型认为相关的准则 ID（如 "IFRS 11" / "ASC 842"），可空
+    #[serde(default)]
+    standards: Vec<String>,
+}
 
-### 任务 1：抽出可复用的检索原语（重构准备，低风险）
-- [ ] 将 `ai_agent.rs::execute_pack_tool` 内三类检索逻辑抽为**纯 Rust 函数**（不依赖 LLM）：
-  - `search_pack(content_dir, query, limit) -> Vec<Hit>`
-  - `list_paragraphs(content_dir, standard_id) -> Vec<Citation>`
-  - `read_paragraph(content_dir, citation) -> Option<CitationTarget>`（已有 `resolve_citation`）
-- 涉及：`app/src-tauri/src/ai_agent.rs`（或新建 `retrieval.rs`）、复用 `db.rs`/`citations.rs`/`pack.rs`
-- 风险：低（搬运现有逻辑 + 单元测试覆盖）
+/// Phase B 组装的单条证据
+#[derive(Debug, Clone, Serialize)]
+struct EvidenceItem {
+    citation: String,      // 如 "IFRS 11 §7"
+    standard_id: String,
+    title: String,
+    snippet_en: String,    // 段落原文（单条上限见 §6 预算）
+}
 
-### 任务 2：Phase A 规划调用（无 tools）
-- [ ] 新增 `plan_retrieval(ai, question, facts, existing) -> RetrievalPlan`
-  - 一次 `chat`（`tools` 不传），prompt 要求输出严格 JSON
-  - Rust 端宽松解析（容错：代码块包裹、多余文本）；解析失败 → 回退：`queries=[question]`
-- 涉及：`ai_agent.rs`、`models.rs`（`RetrievalPlan`）
-- 风险：模型 JSON 不规范 → 必须有回退；已设计
-
-### 任务 3：Phase B 确定性检索 + 证据组装
-- [ ] `gather_evidence(content_dir, plan) -> EvidencePack`
-  - 跑查询 → 合并/去重 → bm25 排序 → 取 top-N 标准
-  - 对关键标准 `list_paragraphs` + `read_paragraph` 取全文
-  - 限制总量（条数/字符预算）防止 Phase C 超长
-- 涉及：`ai_agent.rs`/`retrieval.rs`
-- 风险：召回不足 → top-N 与字符预算需可调；用现有人工标注问题回归
-
-### 任务 4：Phase C 写作调用（无 tools）+ 复用后处理
-- [ ] `write_note(ai, system, question, facts, evidence, existing) -> raw`
-  - 一次 `chat`（无 tools），证据包以中文小节嵌入 user 内容
-  - 复用 `parse_ai_response` + `finalize_project_markdown`（引用截断、frontmatter、日志、禁语、免责声明）
-- 涉及：`ai_agent.rs`、`ai.rs`
-- 风险：低（后处理已稳定）
-
-### 任务 5：接线 + 移除工具循环
-- [ ] `run_standards_agent` 改为：Phase A → B → C；删除 `MAX_TOOL_ROUNDS` 工具循环、`pack_agent_tools`、`tool_choice`、`call_chat_with_tools*` 中的 `tools` 注入
-- [ ] 保留 `chat_completion_with_recovery` 仅作通用错误分级/上下文降级（不再涉及工具）
-- [ ] Continue 模式：现有文档进 user 内容（已是如此）；不再有任何工具消息
-- 涉及：`ai_agent.rs`、`commands.rs`（会话持久化可简化为纯文本轮次）
-- 风险：会话结构变化 → 兼容旧 `ai_agent_sessions`（读取时忽略残留工具消息，已有 `strip_tool_history` 可复用）
-
-### 任务 6：可观测性（顺带补上，避免再次盲修）
-- [ ] 失败时（可选开关，默认关）落地诊断：发出的 messages 概要 + 厂商原始错误 + 阶段
-- 涉及：`ai_agent.rs`、`SettingsPage.tsx`（开关）
-- 风险：低；默认关闭、仅本地
-
-### 任务 7：测试与回归
-- [ ] 单测：检索原语、JSON 计划解析容错、证据组装去重/排序/限量、消息形态断言（**永不含 tools/tool_calls/tool**）
-- [ ] 用现有样例项目（fixtures）做端到端质量回归，确认结论/引用质量不降
-- [ ] `cargo test` + `pnpm test` 全绿
-- 涉及：`ai_agent.rs` tests、`ai.rs` tests
-
-### 任务 8：灰度与发布
-- [ ] 加配置开关 `ai.generation_mode = "pipeline" | "agent"`，默认 `pipeline`；保留 `agent` 作为可回退（一个版本周期后再删旧代码）
-- [ ] 文档更新（AGENTS.md / ARCHITECTURE.md）：记录新管道、删除关于 function-calling 的过时说明
-- [ ] 版本 bump + tag 发布；按现有 `release-app.yml` 出四平台安装包
+/// Phase B 的产出：注入 Phase C 的证据包
+#[derive(Debug, Default, Serialize)]
+struct EvidencePack {
+    items: Vec<EvidenceItem>,
+}
+```
 
 ---
 
-## 五、范围与复杂度（技术口径，非工期）
+## 5. 函数清单（签名 + 职责 + 复用点）
 
-- **改动集中在** `ai_agent.rs`（编排重写）+ 少量 `ai.rs`/`models.rs`/`commands.rs`/`config.rs`/`SettingsPage.tsx`。
-- **复用**：`db.rs`、`citations.rs`、`pack.rs`、`finalize_project_markdown` 全部不动或微调。
-- **删除**：工具定义与多轮工具循环（净减代码）。
-- **可回退**：保留 `agent` 模式开关一个周期。
-- **风险点**：Phase A 的 JSON 稳定性（已设计回退）、Phase B 的召回调参（用回归集校准）。整体**低-中风险**，且**一次性消除整类协议错误**。
+> 全部放在 `ai_agent.rs`（或新建 `app/src-tauri/src/retrieval.rs` 并在 `lib.rs` 挂上 `mod retrieval;`）。
+
+### 5.1 检索原语（从现有 `execute_pack_tool` 抽出为纯 Rust，无 LLM）
+
+```rust
+/// FTS5 全文 + registry 兜底（搬运现有 search_local_pack 分支逻辑）
+fn search_pack(content_dir: &Path, allow_legacy: bool, query: &str, limit: u32) -> Vec<EvidenceItem>;
+
+/// 列出某准则已索引段落（搬运 list_standard_paragraphs 逻辑）
+fn list_paragraphs(content_dir: &Path, allow_legacy: bool, standard_id: &str) -> Vec<String>;
+
+/// 读取段落全文（直接复用 citations::resolve_citation；返回 snippet_en 已是 UTF-16 安全的 4000 字）
+fn read_paragraph(content_dir: &Path, allow_legacy: bool, citation: &str) -> Option<EvidenceItem>;
+```
+- 复用：`db::search_standards`、`pack::load_registry`、`citations::load_paragraphs`、`citations::resolve_citation`。
+- 注意：把现有 `execute_pack_tool` 里 search_local_pack 的「registry 模糊兜底」逻辑原样搬过来（保证召回不降）。
+
+### 5.2 Phase A：规划（1 次 chat，无 tools）
+
+```rust
+async fn plan_retrieval(
+    ai: &AiConfig,
+    question: &str,
+    facts: Option<&str>,
+    existing_markdown: Option<&str>,   // Continue 时给摘要（前 ~1500 字）
+) -> RetrievalPlan;
+```
+- 调 `request_chat_completion(ai, &[system_planner, user], &[] /* 无 tools */, "")`。
+- system_planner（精简，写死常量）：要求**只输出 JSON**，形如
+  `{"queries":["..."],"standards":["IFRS 11"]}`，不要解释。
+- 解析容错：剥离 ```json 代码块、截取第一个 `{...}`；`serde_json` 失败 → 回退
+  `RetrievalPlan{ queries: vec![question.to_string()], standards: vec![] }`。
+- **绝不因 Phase A 失败而中断**（永远有回退）。
+
+### 5.3 Phase B：检索 + 证据组装（纯 Rust）
+
+```rust
+fn gather_evidence(content_dir: &Path, allow_legacy: bool, plan: &RetrievalPlan) -> EvidencePack;
+```
+- 流程：对每个 `query` 调 `search_pack`；对每个 `standard` 调 `list_paragraphs` 选代表段落并 `read_paragraph`；
+  合并去重（按 `standard_id`+`citation`）→ 按相关性排序（FTS5 已 bm25；registry 兜底排后）→ 截断到
+  **上限**：最多 `MAX_EVIDENCE_ITEMS = 8` 条，单条 `MAX_ITEM_CHARS = 1500`，总预算 `MAX_EVIDENCE_CHARS = 8000`。
+- 若证据为空：返回空包（Phase C 仍可写作，并按规范注明"本地准则库未收录"）。
+
+### 5.4 Phase C：写作（1 次 chat，无 tools）
+
+```rust
+async fn write_note(
+    ai: &AiConfig,
+    content_dir: &Path,
+    mode: AgentMode,
+    question: &str,
+    facts: Option<&str>,
+    evidence: &EvidencePack,
+    existing_markdown: Option<&str>,   // Continue 时给全文
+) -> Result<String, String>;           // 返回 raw（含 <<<PROJECT_NAME>>>/<<<MARKDOWN>>>）
+```
+- system_writer：由 `build_writer_system_prompt(content_dir)` 生成（见 5.5）。
+- user 内容顺序：`用户问题` → `补充事实`（可选）→ `【检索证据】`（把 EvidencePack 渲染成中文小节，每条：`citation` + `snippet_en`）→ Continue 时附 `当前项目笔记全文`。
+- 调 `request_chat_completion(ai, &[system_writer, user], &[], "")`。
+- 复用 `chat_completion_with_recovery` 的**错误分级/上下文降级**（但此处 messages 无 tools/history，几乎不会触发）。
+
+### 5.5 写作版 system prompt（由现有写作规范派生，去掉工具相关）
+
+```rust
+fn build_writer_system_prompt(content_dir: &Path) -> Result<String, String>;
+```
+- 复用 `load_writing_spec`（编写规范 + SKILL）。
+- 与 `build_agent_system_prompt` 的差异：**删除**所有"用 search_local_pack/get_pack_paragraph 工具"的工作流文字，**替换为**「所有准则依据来自下方 user 提供的【检索证据】；证据未覆盖则如实注明，禁止编造」。
+- 保留：身份、分析方法、铁律（≤4 句英文引用、提炼表、中文精炼）、输出格式（`<<<PROJECT_NAME>>>`/`<<<MARKDOWN>>>` 分隔符）、自检清单、诊断标记。
+
+### 5.6 顶层编排（替代 run_standards_agent）
+
+```rust
+pub async fn run_standards_pipeline(
+    app_handle: Option<&tauri::AppHandle>,
+    content_dir: &Path,
+    ai: &AiConfig,
+    input: AgentRunInput<'_>,
+) -> Result<AgentRunOutput, String>;
+```
+- emit 进度：`searching`（Phase A/B）→ `generating`（Phase C）→ 由 commands 层 emit `complete`/`error`。
+- 组 `AgentRunOutput`：`raw_response = raw`；`session_messages` 存**纯文本轮次**（user 问题 + assistant 最终文本，**无 tools/tool 消息**）；`activity_log` 记录「检索：queries」「读取：citations」「已生成/更新」。
 
 ---
 
-## 六、给用户的两条路（按推荐顺序）
+## 6. 配置开关与接线
 
-1. **先做 Phase 0（最快）**：很可能你把模型设成了 `deepseek-reasoner`，或 Base URL 用了 `https://api.deepseek.com/beta`。改成 `deepseek-chat`/`deepseek-v4-pro` + 标准 Base URL，可能立刻不再报错。请把你的**模型名、Base URL、以及报错完整原文**发我，我可据此 5 分钟内确认。
-2. **若 Phase 0 未命中或你希望一劳永逸**：批准本计划，我按 §四 执行 tools-free 重构，从架构上根除该类错误，效果不降、成本更低。
+`app/src-tauri/src/config.rs` → `AiConfig` 增加：
+```rust
+#[serde(default)]
+pub generation_mode: Option<String>,   // "pipeline"(默认) | "agent"
+```
+- `ai.rs` 的 `generate_and_save_project` / `continue_and_update_project` 内：
+  ```rust
+  let output = match ai.generation_mode.as_deref() {
+      Some("agent") => run_standards_agent(app, content_dir, ai, input).await?,
+      _             => run_standards_pipeline(app, content_dir, ai, input).await?, // 默认
+  };
+  ```
+- 后续步骤（`parse_ai_response` / `finalize_project_markdown` / 保存）**完全不变**。
+- （可选）`SettingsPage.tsx` + `types.ts` + `api.ts` 暴露开关；默认 pipeline，无需用户操作。
 
-> 红线不变：重构默认不降低核心检索/输出效果；新模式可灰度、可回退；旧 `agent` 模式保留一个版本周期后再移除。
+---
+
+## 7. 改动文件清单（逐文件）
+
+| 文件 | 改动 |
+|------|------|
+| `app/src-tauri/src/ai_agent.rs`（或新 `retrieval.rs`） | 新增 §4 结构、§5 函数；保留 `run_standards_agent` 与 `request_chat_completion`/`chat_completion_with_recovery`；**Phase 调用一律传 `tools=&[]`** |
+| `app/src-tauri/src/ai.rs` | `generate_and_save_project`/`continue_and_update_project` 内按 `generation_mode` 选择编排；其余不变 |
+| `app/src-tauri/src/config.rs` | `AiConfig.generation_mode` |
+| `app/src-tauri/src/lib.rs` | 若新建 `retrieval.rs` 则 `mod retrieval;` |
+| `app/src/types.ts` / `api.ts` / `pages/SettingsPage.tsx` | （可选）开关 UI |
+| `AGENTS.md` / `docs/ARCHITECTURE.md` | 记录 pipeline 架构；更新关于 function-calling 的过时说明与 flash pitfall（真因＝tools 与 prefix 冲突） |
+
+**不动**：`db.rs`、`citations.rs`、`pack.rs`、`finalize_project_markdown` 及后处理、文件存储、content pack。
+
+---
+
+## 8. 向后兼容
+
+- 旧 `ai_agent_sessions` 可能含 tool 消息：pipeline 模式读取 `prior_messages` 时**只取文本轮次**（复用 `strip_tool_history`），或直接忽略（pipeline 每次 Phase A/C 都是无状态调用，可不依赖 prior_messages）。
+- 会话 UI 重建（`conversation_turns_from_agent_session` 等）只读 user 文本轮次，已兼容。
+
+---
+
+## 9. 测试计划（实施 Agent 必须全绿）
+
+**单元测试（`cargo test`）**
+- [ ] `search_pack`/`list_paragraphs`/`read_paragraph`：用 fixtures，断言命中与去重（迁移自现有 `execute_pack_tool` 测试）。
+- [ ] `RetrievalPlan` 解析容错：纯 JSON / ```json 包裹 / 含多余文本 / 非法 → 回退到 `queries=[question]`。
+- [ ] `gather_evidence`：去重、排序、条数与字符预算上限生效。
+- [ ] **消息形态断言（关键）**：构造 Phase A/C 的 messages，断言 **无任何 `tools` 字段、无 `tool_calls`、无 `tool` 角色**，且 `payload` 不含 `tools` 键。
+- [ ] `build_writer_system_prompt`：不含"search_local_pack/get_pack_paragraph 工具"字样，含"检索证据"指引与分隔符。
+
+**端到端回归（人工/脚本）**
+- [ ] 用 `tools/pack-builder/tests/fixtures` 的样例问题跑 create + continue，对比输出：结论明确、引用来自证据、格式合规、**无超长英文**。
+- [ ] 对照旧 `agent` 模式，确认引用准确性与召回不降。
+
+**真实联调（用户侧）**
+- [ ] `deepseek-v4-flash` + `/v1`：create 与 follow-up **均不再报 prefix not found**。
+- [ ] 同时验证 `deepseek-chat` / `deepseek-v4-pro` / OpenAI 兼容端点正常。
+
+**门禁**：`pnpm test` + `cargo test` 全绿；无新增编译告警。
+
+---
+
+## 10. 验收标准（Definition of Done）
+
+1. follow-up 在 `deepseek-v4-flash`+`/v1` 下不再出现 `prefix not found`（真实联调通过）。
+2. 任何路径下发出的请求**都不含 `tools`/`tool_calls`/`tool`**（有单测断言）。
+3. 生成/追问质量不低于旧 agent 模式（回归对比）。
+4. `generation_mode` 默认 `pipeline`，`agent` 可回退。
+5. 文档更新；测试全绿；版本 bump + 发布（沿用 `release-app.yml`）。
+
+---
+
+## 11. 实施步骤（建议顺序，带检查点）
+
+1. **任务 1**：抽检索原语（§5.1）+ 单测 → checkpoint：`cargo test` 绿。
+2. **任务 2**：`RetrievalPlan` + `plan_retrieval`（§5.2）+ 解析容错单测。
+3. **任务 3**：`gather_evidence`（§5.3）+ 预算/去重/排序单测。
+4. **任务 4**：`build_writer_system_prompt`（§5.5）+ `write_note`（§5.4）+ 消息形态断言单测。
+5. **任务 5**：`run_standards_pipeline`（§5.6）+ `generation_mode` 开关接线（§6）。
+6. **任务 6**：端到端回归（§9）+ 真实联调（用户协助）。
+7. **任务 7**：文档更新 + 版本 bump + 发布。
+8. **任务 8（一个周期后）**：删除旧 `agent` 模式与 `pack_agent_tools`/工具循环死代码。
+
+---
+
+## 12. 风险登记
+
+| 风险 | 应对 |
+|------|------|
+| Phase A 的 JSON 不规范 | 宽松解析 + 回退到问题原文检索；永不中断 |
+| 确定性检索召回 < Agent 多步检索 | 多 query + standards 列段落 + 字符预算调参；用回归集校准；保留 agent 回退 |
+| Phase C 上下文偏大（Continue 全文 + 证据） | 证据预算上限 + `chat_completion_with_recovery` 上下文降级兜底 |
+| flash 指令遵循弱（粘贴长英文） | `finalize_project_markdown` 的引用截断（≤600 字）已兜底 |
+| 旧会话含 tool 消息 | pipeline 无状态调用，不依赖；或 `strip_tool_history` 过滤 |
+
+---
+
+## 13. 回滚
+
+- 出问题：将 `ai.generation_mode` 设为 `"agent"` 即恢复旧行为（开关级回滚）。
+- 代码级：pipeline 与 agent 并存一个版本周期，确认稳定后再删旧代码（任务 8）。
+
+---
+
+### 附：给用户的话
+1. **现在就能试**：把模型从 `deepseek-v4-flash` 换成 `deepseek-v4-pro` 或 `deepseek-chat`，很可能立即不再报错（缓解）。
+2. **根治**：批准本工作单后，由实施 Agent 按 §11 执行 tools-free 重构，从架构上消除该错误，且效果不降、可回退。
