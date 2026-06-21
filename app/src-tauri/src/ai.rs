@@ -49,6 +49,40 @@ fn extract_citation_from_quote_header(line: &str) -> Option<String> {
     Some(rest[..end].trim().to_string())
 }
 
+/// Maximum number of characters allowed inside a single「知识库原文」blockquote.
+/// The system prompt (铁律 2) caps quotes at ~4 sentences; this is the
+/// code-level safety net that guarantees no multi-thousand-character English
+/// dump survives into the saved note, regardless of model behaviour.
+const MAX_QUOTE_CHARS: usize = 600;
+
+/// Collapse the body lines of a「知识库原文」blockquote (the `>`-prefixed lines
+/// following the header) and, if the quoted text exceeds `MAX_QUOTE_CHARS`,
+/// truncate it at a UTF-8 character boundary.  Returns the (possibly rewritten)
+/// blockquote body lines and whether truncation occurred.
+fn cap_quote_body(body_lines: &[String]) -> (Vec<String>, bool) {
+    let text = body_lines
+        .iter()
+        .map(|line| line.trim_start_matches('>').trim())
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if text.chars().count() <= MAX_QUOTE_CHARS {
+        return (body_lines.to_vec(), false);
+    }
+
+    let truncated: String = text.chars().take(MAX_QUOTE_CHARS).collect();
+    let capped = format!("{}…", truncated.trim_end());
+    (vec![">".to_string(), format!("> {capped}")], true)
+}
+
+/// Enforce the「知识库原文」引用 length limits in the model's output.
+///
+/// Historically this function *expanded* each quote by pasting up to 4 000
+/// characters of pack text into the document — which directly contradicted the
+/// system prompt's "2-4 sentences, never paste" rule and produced multi-thousand
+/// character English dumps.  It now only *caps* over-long quotes and flags
+/// citations that cannot be resolved in the local pack; it never inflates them.
 pub fn inject_pack_quotes(content_dir: &Path, markdown: &str) -> Result<(String, Vec<String>), String> {
     let lines: Vec<&str> = markdown.lines().collect();
     let mut out_lines: Vec<String> = Vec::new();
@@ -59,42 +93,37 @@ pub fn inject_pack_quotes(content_dir: &Path, markdown: &str) -> Result<(String,
         let line = lines[index];
         if line.contains("（知识库原文）") {
             if let Some(citation) = extract_citation_from_quote_header(line) {
-                match resolve_citation(content_dir, &citation)? {
-                    Some(target)
-                        if target.paragraph_resolved && !target.snippet_en.trim().is_empty() =>
-                    {
-                        let label = format!("{} §{}", target.standard_id, target.paragraph);
-                        out_lines.push(format!("> **{label}（知识库原文）：**"));
-                        out_lines.push(">".to_string());
-                        for snippet_line in target.snippet_en.lines() {
-                            out_lines.push(format!("> {snippet_line}"));
-                        }
-                        index += 1;
-                        while index < lines.len()
-                            && (lines[index].starts_with('>')
-                                || (lines[index].trim().is_empty()
-                                    && index + 1 < lines.len()
-                                    && lines[index + 1].starts_with('>')))
-                        {
-                            index += 1;
-                        }
-                        continue;
-                    }
-                    Some(_) => {
-                        out_lines.push(line.to_string());
-                    }
-                    None => {
-                        warnings
-                            .push(format!("段落未在本地准则库中找到，已保留 AI 原文，请人工核实：{citation}"));
-                        out_lines.push(line.to_string());
-                    }
+                if resolve_citation(content_dir, &citation)?.is_none() {
+                    warnings.push(format!(
+                        "段落未在本地准则库中找到，已保留 AI 原文，请人工核实：{citation}"
+                    ));
                 }
-            } else {
-                out_lines.push(line.to_string());
             }
-        } else {
             out_lines.push(line.to_string());
+            index += 1;
+
+            let mut body_lines: Vec<String> = Vec::new();
+            while index < lines.len()
+                && (lines[index].starts_with('>')
+                    || (lines[index].trim().is_empty()
+                        && index + 1 < lines.len()
+                        && lines[index + 1].starts_with('>')))
+            {
+                body_lines.push(lines[index].to_string());
+                index += 1;
+            }
+
+            let (capped_body, truncated) = cap_quote_body(&body_lines);
+            out_lines.extend(capped_body);
+            if truncated {
+                warnings.push(
+                    "检测到超长准则原文引用，已自动截断（铁律：每段英文引用 ≤ 4 句）。".to_string(),
+                );
+            }
+            continue;
         }
+
+        out_lines.push(line.to_string());
         index += 1;
     }
 
@@ -496,4 +525,42 @@ mod tests {
         assert!(parsed.markdown.contains("IFRS 11 §7-8"));
     }
 
+    #[test]
+    fn cap_quote_body_keeps_short_quotes_verbatim() {
+        let body = vec![
+            ">".to_string(),
+            "> A deferred tax asset shall be recognised.".to_string(),
+        ];
+        let (out, truncated) = cap_quote_body(&body);
+        assert!(!truncated);
+        assert_eq!(out, body);
+    }
+
+    #[test]
+    fn cap_quote_body_truncates_long_quotes() {
+        let long = "Sentence. ".repeat(200); // ~2000 chars, far over the cap
+        let body = vec![">".to_string(), format!("> {long}")];
+        let (out, truncated) = cap_quote_body(&body);
+        assert!(truncated);
+        let rendered = out.join("\n");
+        assert!(rendered.ends_with('…'));
+        let quoted_chars = rendered
+            .lines()
+            .map(|line| line.trim_start_matches('>').trim().chars().count())
+            .sum::<usize>();
+        assert!(quoted_chars <= MAX_QUOTE_CHARS + 1);
+    }
+
+    #[test]
+    fn inject_pack_quotes_does_not_expand_quotes() {
+        // Citation header that does not parse → no disk access, exercises the
+        // cap-only path and guarantees no 4 000-char expansion happens.
+        let temp = std::path::Path::new("/nonexistent-content-dir");
+        let long = "x".repeat(1500);
+        let markdown = format!("> **Note（知识库原文）：**\n>\n> {long}\n\n后续中文分析。");
+        let (out, _warnings) = inject_pack_quotes(temp, &markdown).expect("inject");
+        assert!(out.chars().count() < markdown.chars().count());
+        assert!(out.contains("…"));
+        assert!(out.contains("后续中文分析。"));
+    }
 }
