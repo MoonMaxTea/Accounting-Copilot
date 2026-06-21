@@ -218,6 +218,9 @@ pub struct AiConfig {
     pub model: Option<String>,
     #[serde(default)]
     pub allow_legacy_citations: bool,
+    /// "pipeline" (default) or "agent" (legacy function-calling fallback)
+    #[serde(default)]
+    pub generation_mode: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -230,6 +233,7 @@ impl Default for AppConfig {
                 base_url: Some("https://api.openai.com/v1".to_string()),
                 model: Some("gpt-4o".to_string()),
                 allow_legacy_citations: false,
+                generation_mode: None,
             },
             projects_ui: ProjectsUiState::default(),
             update: UpdateConfig::default(),
