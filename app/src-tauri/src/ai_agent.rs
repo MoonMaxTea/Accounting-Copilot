@@ -519,6 +519,44 @@ fn is_prefix_not_found_error(error: &str) -> bool {
     error.to_lowercase().contains("prefix not found")
 }
 
+/// True when the error indicates the request exceeded the model's context
+/// window (or the HTTP payload was too large).  Used only to decide whether a
+/// reduced-context retry is worth attempting — the normal path is untouched.
+fn is_context_length_error(error: &str) -> bool {
+    let lowered = error.to_lowercase();
+    lowered.contains("context_length_exceeded")
+        || lowered.contains("maximum context length")
+        || lowered.contains("context length")
+        || lowered.contains("too many tokens")
+        || lowered.contains("reduce the length")
+        || lowered.contains("string too long")
+        || lowered.contains("请求体过大")
+        || lowered.contains("上下文过长")
+}
+
+/// Turn a provider HTTP error into a clear, actionable Chinese message while
+/// still embedding the raw status + body so downstream detection (prefix /
+/// context errors) and human diagnosis keep working.
+fn classify_provider_error(provider: &str, status_code: u16, body: &str) -> String {
+    let hint = match status_code {
+        401 | 403 => "API Key 无效或无权限，请在「设置 → AI 写作」检查 API Key 与 Base URL。",
+        402 => "账户额度不足，请检查 AI 服务计费。",
+        404 => "接口或模型不存在，请检查模型名与 Base URL。",
+        413 => "请求体过大（上下文过长），系统已尝试精简历史后重试。",
+        429 => "请求过于频繁或额度受限，请稍后重试。",
+        500..=599 => "AI 服务暂时不可用，请稍后重试。",
+        400 => {
+            if is_context_length_error(body) {
+                "上下文过长，系统已尝试精简历史后重试；如仍失败请缩短问题或补充事实。"
+            } else {
+                "请求被拒绝（参数或上下文问题），请检查模型与设置。"
+            }
+        }
+        _ => "AI 调用失败。",
+    };
+    format!("{hint}（{provider} 返回 {status_code}）：{body}")
+}
+
 /// Rebuild a message list without anything that triggers DeepSeek's prefix
 /// completion: drop `tool` results and strip `tool_calls` from assistant
 /// messages (dropping assistants that then have no textual content).  The
@@ -613,9 +651,9 @@ async fn request_chat_completion(
         .map_err(|error| format!("{provider} 请求失败: {error}"))?;
 
     if !response.status().is_success() {
-        let status = response.status();
+        let status_code = response.status().as_u16();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("{provider} 返回错误 ({status}): {body}"));
+        return Err(classify_provider_error(provider, status_code, &body));
     }
 
     let body: ChatCompletionResponse = response
@@ -629,10 +667,14 @@ async fn request_chat_completion(
         .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
-/// Run a chat completion, retrying once without tool-call history if the
-/// provider returns DeepSeek's "prefix not found" error (common on follow-up
-/// turns that replay prior tool calls).
-async fn chat_completion_with_prefix_retry(
+/// Run a chat completion. The full message history (including tool results) is
+/// always tried first, so the normal path keeps maximum grounding. Only when the
+/// request would otherwise hard-fail — DeepSeek's "prefix not found" on
+/// follow-ups, or a context-window overflow — do we retry once with tool history
+/// stripped (system prompt + user turns preserved; in Continue mode the user
+/// turn already embeds the full document). This is a pure safety net: it never
+/// degrades a request that would have succeeded.
+async fn chat_completion_with_recovery(
     ai: &AiConfig,
     messages: &[ApiChatMessage],
     tools: &[Value],
@@ -640,9 +682,15 @@ async fn chat_completion_with_prefix_retry(
 ) -> Result<ApiChatMessage, String> {
     match request_chat_completion(ai, messages, tools, tool_choice).await {
         Ok(message) => Ok(message),
-        Err(error) if is_prefix_not_found_error(&error) => {
+        Err(error) if is_prefix_not_found_error(&error) || is_context_length_error(&error) => {
             let sanitized = sanitize_messages_for_prefix_retry(messages);
-            request_chat_completion(ai, &sanitized, tools, tool_choice).await
+            // Only retry if sanitizing actually removed something; otherwise the
+            // second request would be identical to the one that just failed.
+            if sanitized.len() < messages.len() {
+                request_chat_completion(ai, &sanitized, tools, tool_choice).await
+            } else {
+                Err(error)
+            }
         }
         Err(error) => Err(error),
     }
@@ -653,7 +701,7 @@ async fn call_chat_with_tools(
     messages: &[ApiChatMessage],
     tools: &[Value],
 ) -> Result<ApiChatMessage, String> {
-    chat_completion_with_prefix_retry(ai, messages, tools, "auto").await
+    chat_completion_with_recovery(ai, messages, tools, "auto").await
 }
 
 /// Like call_chat_with_tools but forces tool_choice: "none" so the model
@@ -664,7 +712,7 @@ async fn call_chat_with_tools_synthesis(
     messages: &[ApiChatMessage],
     tools: &[Value],
 ) -> Result<ApiChatMessage, String> {
-    chat_completion_with_prefix_retry(ai, messages, tools, "none").await
+    chat_completion_with_recovery(ai, messages, tools, "none").await
 }
 
 pub async fn run_standards_agent(
@@ -874,6 +922,33 @@ mod tests {
         ));
         assert!(is_prefix_not_found_error("Prefix Not Found"));
         assert!(!is_prefix_not_found_error("context_length_exceeded"));
+    }
+
+    #[test]
+    fn detects_context_length_error() {
+        assert!(is_context_length_error(
+            "{\"error\":{\"code\":\"context_length_exceeded\"}}"
+        ));
+        assert!(is_context_length_error(
+            "This model's maximum context length is 65536 tokens"
+        ));
+        assert!(!is_context_length_error("invalid api key"));
+    }
+
+    #[test]
+    fn classify_provider_error_keeps_body_for_detection() {
+        let auth = classify_provider_error("deepseek", 401, "invalid key");
+        assert!(auth.contains("API Key"));
+        assert!(auth.contains("invalid key"));
+
+        // 400 with a context body must remain detectable as a context error so
+        // the recovery retry still fires.
+        let ctx = classify_provider_error("deepseek", 400, "context_length_exceeded");
+        assert!(is_context_length_error(&ctx));
+
+        // Generic 400 must NOT be misread as a context error.
+        let generic = classify_provider_error("deepseek", 400, "bad request");
+        assert!(!is_context_length_error(&generic));
     }
 
     #[test]
