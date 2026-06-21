@@ -222,6 +222,11 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 | Filter/navigation UX | `lib/standards-navigation.ts`, `StandardsCategoryNav.tsx` |
 | New accounting framework | Add to vault + rebuild pack — no code changes needed (framework-agnostic retrieval) |
 
+## Recent changelog (2026-06-21, follow-up DeepSeek prefix fix — v0.1.11)
+
+### Fixed
+- **Follow-up "prefix not found" persisted through 0.1.9/0.1.10** (`ai_agent.rs`): the normal Continue path replayed the prior session's `tool`/`tool_calls` rows, which DeepSeek (`deepseek-reasoner` / `/beta` endpoint) rejects. The error-string retry never fired because DeepSeek's real wording ("…must be a user message, or an assistant message with prefix mode on") isn't the literal "prefix not found". Fixed structurally with `strip_tool_history` at seed time (prior tool plumbing removed, prior user/assistant text kept; current turn re-runs tools live, Continue embeds the full document → grounding unchanged). `is_prefix_not_found_error` broadened to all known DeepSeek wordings as a safety net.
+
 ## Recent changelog (2026-06-21, technical audit — P0/P1)
 
 > Supersedes some earlier notes below. The "AI output pasting raw English" issue

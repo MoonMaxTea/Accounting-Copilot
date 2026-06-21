@@ -243,15 +243,33 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 4. `finalize_project_markdown`: parse → inject_pack_quotes (**caps** over-long quotes, does not expand) → ensure_frontmatter → strip_trailing_log_section → append_log_for_turn → sanitize_banned_phrases → append_ai_disclaimer → save
 5. AI disclaimer auto-added at end: "本文档由 AI 辅助生成...需人工进行专业复核。"
 
-### Error recovery (prefix / context overflow)
+### Follow-up DeepSeek prefix error — structural fix (primary)
 
-All chat calls go through `chat_completion_with_recovery` (ai_agent.rs). The full history (incl. tool results) is **always tried first**, so the normal path keeps maximum grounding. It retries **once** with tool history stripped (via `sanitize_messages_for_prefix_retry`) only when the request would otherwise hard-fail:
-- **DeepSeek "prefix not found"** — replaying tool-call history triggers its beta prefix-completion path (`is_prefix_not_found_error`).
-- **Context-window overflow** — `is_context_length_error` (413 / `context_length_exceeded` / etc.).
+Follow-ups seed the agent with the prior saved session. **Do not replay the
+prior turn's tool plumbing.** `run_standards_agent` runs the seed through
+`strip_tool_history` (ai_agent.rs), which drops `tool` rows and strips
+assistant `tool_calls` while keeping prior user/assistant **text** turns. This
+is the primary, provider-agnostic fix: replaying tool/tool_calls rows makes
+DeepSeek (especially `deepseek-reasoner` and the `https://api.deepseek.com/beta`
+endpoint) reject the request, e.g. *"prefix not found"* or *"the last message …
+must be a user message, or an assistant message with prefix mode on"*. The
+current turn re-runs the pack tools live (correctly paired) and Continue mode
+embeds the full document, so grounding is unchanged.
 
-The retry is guarded to skip when nothing can be stripped (avoids a duplicate failing call). In Continue mode the user turn already embeds the full document, so the retry keeps enough context. Provider HTTP errors are mapped to clear Chinese messages by `classify_provider_error` while preserving the raw status+body for detection.
+> Why error-string retries weren't enough (0.1.9/0.1.10): the retry only fired
+> on the literal `"prefix not found"`, but DeepSeek's real wording differs by
+> model/endpoint. `is_prefix_not_found_error` now matches all known variants
+> ("prefix mode", `chat_prefix_completion`, "must be a user message", …).
 
-> Note: an earlier version of this file claimed `call_chat_with_tools` already auto-retried on prefix errors — that logic did **not** exist until the 2026-06-21 audit fix.
+### Error recovery (prefix / context overflow) — safety net
+
+All chat calls also go through `chat_completion_with_recovery` (ai_agent.rs). The
+full history is tried first; it retries **once** with tool history stripped only
+when the request would otherwise hard-fail (`is_prefix_not_found_error` or
+`is_context_length_error` for 413 / `context_length_exceeded`). With the
+structural fix above this rarely triggers, but it remains as defense-in-depth.
+Provider HTTP errors are mapped to clear Chinese messages by
+`classify_provider_error` while preserving the raw status+body for detection.
 
 ### Banned output phrases
 
@@ -276,7 +294,7 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | Wide unrelated diffs | User prefers minimal, focused changes |
 | Hardcoding framework names in regex | Framework-agnostic retrieval is now handled by the Agent's `search_local_pack` tool (FTS5 + registry fallback) |
 | Mermaid `securityLevel: "sandbox"` | Breaks `<br>` tags in node labels; use `"loose"` with `suppressErrorRendering: true` |
-| DeepSeek "prefix not found" on follow-up | API may reject tool-call history; `chat_completion_with_recovery` retries once with tool history stripped (also covers context-window overflow) |
+| DeepSeek "prefix not found" on follow-up | Caused by replaying the prior turn's `tool`/`tool_calls` rows. Fixed structurally: `run_standards_agent` seeds via `strip_tool_history` (never replays tool plumbing). `chat_completion_with_recovery` retry is only a safety net — don't rely on error-string matching alone (DeepSeek's wording varies by model/endpoint) |
 | Expanding quotes in `inject_pack_quotes` | It must **cap** (≤ 600 chars), never paste the 4 000-char `snippet_en` into the note — expanding overrides the prompt's ≤4-sentence rule and bloats follow-up context |
 | Byte-slicing `char_start` | `char_start` is a JS **UTF-16** offset; slice via `slice_utf16` (citations.rs), never `body[start..end]` by bytes — byte slicing mis-aligns on non-ASCII packs and can panic |
 | Using `find()` to resolve paragraph index entries | ASC codification files have an amendment-metadata table ("00 Status") at the top that repeats every paragraph number — earliest char_start entries contain boilerplate ("Amended … Accounting Standards Update"), not substantive text. Use `max_by_key(char_start)` to pick the latest occurrence, and **always try exact paragraph match before falling back to normalized matching** (ASC `paragraph_normalized` is just the topic number "718", matching every entry in the standard) |
