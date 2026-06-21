@@ -562,6 +562,20 @@ fn classify_provider_error(provider: &str, status_code: u16, body: &str) -> Stri
 /// messages (dropping assistants that then have no textual content).  The
 /// system prompt and the user turns — which in Continue mode already embed the
 /// full document — are preserved, so the model keeps enough context.
+/// True when the message list still carries tool-call replay state that
+/// `sanitize_messages_for_prefix_retry` can strip (tool results, assistant
+/// `tool_calls`, or orphaned `tool_call_id` fields).
+fn messages_have_tool_history(messages: &[ApiChatMessage]) -> bool {
+    messages.iter().any(|message| {
+        message.role == "tool"
+            || message.tool_call_id.is_some()
+            || message
+                .tool_calls
+                .as_ref()
+                .is_some_and(|calls| !calls.is_empty())
+    })
+}
+
 fn sanitize_messages_for_prefix_retry(messages: &[ApiChatMessage]) -> Vec<ApiChatMessage> {
     messages
         .iter()
@@ -682,7 +696,19 @@ async fn chat_completion_with_recovery(
 ) -> Result<ApiChatMessage, String> {
     match request_chat_completion(ai, messages, tools, tool_choice).await {
         Ok(message) => Ok(message),
-        Err(error) if is_prefix_not_found_error(&error) || is_context_length_error(&error) => {
+        Err(error) if is_prefix_not_found_error(&error) => {
+            let sanitized = sanitize_messages_for_prefix_retry(messages);
+            // Retry when tool history can be stripped.  Message count may stay
+            // the same when `trim_session` already dropped `tool` rows but
+            // assistant messages still carry `tool_calls` — that case still
+            // triggers DeepSeek's prefix-completion path.
+            if messages_have_tool_history(messages) {
+                request_chat_completion(ai, &sanitized, tools, tool_choice).await
+            } else {
+                Err(error)
+            }
+        }
+        Err(error) if is_context_length_error(&error) => {
             let sanitized = sanitize_messages_for_prefix_retry(messages);
             // Only retry if sanitizing actually removed something; otherwise the
             // second request would be identical to the one that just failed.
@@ -1004,5 +1030,47 @@ mod tests {
         assert!(sanitized.iter().all(|m| m.tool_calls.is_none()));
         assert_eq!(sanitized[0].role, "system");
         assert_eq!(sanitized[2].content.as_deref(), Some("最终答复"));
+    }
+
+    #[test]
+    fn prefix_retry_detects_tool_calls_without_tool_rows() {
+        // trim_session may drop leading `tool` rows while assistant tool_calls
+        // remain — sanitized.len() equals messages.len() but history is still
+        // replayable and must trigger a prefix retry.
+        let messages = vec![
+            ApiChatMessage {
+                role: "system".to_string(),
+                content: Some("sys".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            ApiChatMessage {
+                role: "assistant".to_string(),
+                content: Some("draft".to_string()),
+                tool_calls: Some(vec![ApiToolCall {
+                    id: "call_1".to_string(),
+                    call_type: "function".to_string(),
+                    function: ApiToolFunction {
+                        name: "search_local_pack".to_string(),
+                        arguments: "{}".to_string(),
+                    },
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            ApiChatMessage {
+                role: "user".to_string(),
+                content: Some("follow-up".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+        ];
+
+        assert!(messages_have_tool_history(&messages));
+        let sanitized = sanitize_messages_for_prefix_retry(&messages);
+        assert_eq!(sanitized.len(), messages.len());
+        assert!(sanitized.iter().all(|m| m.tool_calls.is_none()));
     }
 }
