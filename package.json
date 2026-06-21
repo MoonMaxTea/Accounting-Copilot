@@ -4,6 +4,8 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "test": "pnpm --filter @asd/shared-types build && pnpm -r test",
+    "test:rust": "cd app/src-tauri && cargo test",
+    "test:all": "pnpm test && pnpm test:rust",
     "build": "pnpm -r build",
     "app:dev": "pnpm --filter @asd/accounting-copilot tauri dev",
     "app:build": "pnpm --filter @asd/accounting-copilot tauri build",
