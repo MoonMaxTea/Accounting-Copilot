@@ -84,6 +84,18 @@ pub fn resolve_citation(content_dir: &Path, citation: &str) -> Result<Option<Cit
     resolve_standard_fallback(content_dir, citation, &standard_id, &paragraph)
 }
 
+/// Slice `len` UTF-16 code units from `body` starting at the UTF-16 offset
+/// `start`, returning a valid UTF-8 `String`.  This mirrors the JavaScript
+/// `String.prototype.slice(start, start + len)` semantics used by the pack
+/// indexer, so offsets stored in `paragraphs.json` line up exactly and slicing
+/// can never panic on a UTF-8 char boundary.
+fn slice_utf16(body: &str, start: usize, len: usize) -> String {
+    let units: Vec<u16> = body.encode_utf16().collect();
+    let start = start.min(units.len());
+    let end = start.saturating_add(len).min(units.len());
+    String::from_utf16_lossy(&units[start..end])
+}
+
 fn resolve_from_index(
     content_dir: &Path,
     citation: &str,
@@ -130,12 +142,15 @@ fn resolve_from_index(
     // The pre-built snippet is short — too little for substantive
     // paragraphs that follow header/amendment tables.  We read up to 4 000
     // chars from the file so the AI gets sufficient context.
+    //
+    // `char_start` is produced by the JS paragraph-indexer using JavaScript
+    // string offsets, i.e. **UTF-16 code units** (`String.slice` / `match.index`).
+    // Slicing the Rust `String` by raw byte indices therefore mis-aligns on any
+    // file containing non-ASCII text (the packs include Chinese「中文提炼」
+    // sections and emoji) and can panic on a non-char boundary.  We slice on the
+    // UTF-16 code-unit sequence to match the indexer exactly.
     let extended_snippet = read_standard_body(content_dir, &entry.pack_path)
-        .map(|body| {
-            let start = entry.char_start as usize;
-            let end = (start + 4_000).min(body.len());
-            body[start..end].to_string()
-        })
+        .map(|body| slice_utf16(&body, entry.char_start as usize, 4_000))
         .unwrap_or_else(|_| entry.snippet_en.clone());
 
     Ok(Some(CitationTarget {
@@ -297,6 +312,18 @@ pub fn scan_citations(content: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slice_utf16_matches_js_offsets_without_panicking() {
+        // Mixed Chinese + emoji + ASCII. JS String.slice uses UTF-16 offsets.
+        let body = "📌中文提炼ABCDEF";
+        // UTF-16 units: 📌 = 2 units, then 中文提炼 = 4 units → "ABCDEF" starts at 6.
+        assert_eq!(slice_utf16(body, 6, 3), "ABC");
+        // A start that would fall mid-byte for byte slicing must not panic.
+        assert_eq!(slice_utf16(body, 2, 4), "中文提炼");
+        // Out-of-range start yields empty, never panics.
+        assert_eq!(slice_utf16(body, 9999, 10), "");
+    }
 
     #[test]
     fn parses_ifrs_citation() {
