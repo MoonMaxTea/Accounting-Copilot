@@ -1,6 +1,6 @@
 # 重构工作单（Engineering Handoff）：Tools-free 三阶段生成管道
 
-> 状态：**计划已修订（2026-06-21），待实施**。本工作单供实施 Agent 直接执行。
+> 状态：**已实施（pipeline 默认）**。详见 `docs/AI-GENERATION-REWRITE-PLAN.md`。
 > 负责人视角（Manager）编写：下面每一步都写明「改哪个文件、加什么函数/结构、消息长什么样、怎么测、验收标准」，实施 Agent 照做即可，无需再猜。
 
 ---

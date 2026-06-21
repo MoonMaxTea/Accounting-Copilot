@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::citations::{resolve_citation, scan_citations};
 use crate::config::AiConfig;
-use crate::ai_agent::{AgentMode, AgentRunInput, run_standards_agent};
+use crate::ai_agent::{AgentMode, AgentRunInput, AgentRunOutput, run_standards_agent};
+use crate::ai_pipeline::run_standards_pipeline;
 use crate::models::{AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult, ProjectValidationReport};
 use crate::projects::{self, ParsedAiDocument};
 
@@ -382,6 +383,18 @@ pub fn validate_project_content(
     })
 }
 
+async fn run_standards_orchestrator(
+    app_handle: Option<&tauri::AppHandle>,
+    content_dir: &Path,
+    ai: &AiConfig,
+    input: AgentRunInput<'_>,
+) -> Result<AgentRunOutput, String> {
+    match ai.generation_mode.as_deref() {
+        Some("agent") => run_standards_agent(app_handle, content_dir, ai, input).await,
+        _ => run_standards_pipeline(app_handle, content_dir, ai, input).await,
+    }
+}
+
 pub async fn generate_and_save_project(
     app_handle: Option<&tauri::AppHandle>,
     projects_root: &Path,
@@ -392,7 +405,7 @@ pub async fn generate_and_save_project(
     folder_relative: Option<&str>,
     prior_session: Vec<AiAgentMessage>,
 ) -> Result<(GenerateProjectResult, Vec<AiAgentMessage>, Vec<AiConversationTurn>), String> {
-    let agent_output = run_standards_agent(
+    let agent_output = run_standards_orchestrator(
         app_handle,
         content_dir,
         ai,
@@ -464,7 +477,7 @@ pub async fn continue_and_update_project(
         .map(|value| value.to_string_lossy().replace('\\', "/"))
         .filter(|value| !value.is_empty());
 
-    let agent_output = run_standards_agent(
+    let agent_output = run_standards_orchestrator(
         app_handle,
         content_dir,
         ai,

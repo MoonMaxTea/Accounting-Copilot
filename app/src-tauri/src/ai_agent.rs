@@ -57,10 +57,10 @@ struct ListStandardParagraphsArgs {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct ApiChatMessage {
-    role: String,
+pub(crate) struct ApiChatMessage {
+    pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<String>,
+    pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<ApiToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -93,7 +93,7 @@ struct ChatCompletionChoice {
     message: ApiChatMessage,
 }
 
-fn now_secs() -> u64 {
+pub(crate) fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
@@ -158,7 +158,8 @@ fn load_writing_spec(content_dir: &Path) -> Result<(String, String), String> {
     Ok((guide, skill))
 }
 
-pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Result<String, String> {
+/// 身份、分析方法、铁律、输出格式、自检清单（不含工具/证据来源指引）
+pub fn build_core_writing_prompt(content_dir: &Path) -> Result<String, String> {
     let (guide, skill) = load_writing_spec(content_dir)?;
 
     Ok(format!(
@@ -176,17 +177,16 @@ pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Res
          面对客户的每一个问题，你应该按以下方式思考：\n\
          1. **诊断**：客户真正想问什么？背后的交易实质是什么？\n\
          2. **定位**：哪条准则、哪个段落直接回答了这个问题？\n\
-         3. **解读**：准则原文说的是什么（通过工具完整阅读），但更重要的是——它在客户的场景下意味着什么？\n\
+         3. **解读**：准则原文说的是什么（完整阅读理解），但更重要的是——它在客户的场景下意味着什么？\n\
          4. **输出**：用中文精炼核心结论 → 引用 2-4 句关键英文存证 → 附提炼表指导实务操作\n\n\
          ## 编写规范\n{guide}\n\n## 写作技能\n{skill}\n\n\
          ## 输出铁律（违反任一条 = 不合格）\n\n\
          ### 铁律 1：你写的是中文分析，不是英文翻译\n\
-         工具返回的 snippet_en 是数千字符的英文准则原文——这是供你**阅读理解**的原材料，\
-         不是让你**粘贴**到文档里的成品。读完 4000 字符，你只需要输出：\n\
+         准则英文原文是供你**阅读理解**的原材料，不是让你**粘贴**到文档里的成品。你只需要输出：\n\
          - 一段中文精炼（这条准则在说什么）\n\
          - 2-4 句最关键的英文原文（存证用）\n\
          - 一张提炼表（原则 | 原文依据 | 实务含义）\n\
-         > ⚠️ 如果你把 snippet_en 大段复制到 blockquote，你的输出就是废纸——客户不需要你替他复制粘贴。\n\n\
+         > ⚠️ 如果你把英文原文大段复制到 blockquote，你的输出就是废纸——客户不需要你替他复制粘贴。\n\n\
          ### 铁律 2：blockquote 上限 4 句英文\n\
          每个准则主题的英文引用块：\n\
          - 必须 ≤ 4 句英文。多一句就删。\n\
@@ -196,16 +196,6 @@ pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Res
          | 原则 | 原文依据 | 提炼（实务含义）|\n\
          - 「原文依据」写段落号（如 ASC 718 §718-10-25-2），不写英文\n\
          - 「提炼」解释这对客户意味着什么：该怎么做、有什么选择、有什么风险\n\n\
-         ### 铁律 4：一切依据来自工具\n\
-         - 准则内容必须通过 search_local_pack / list_standard_paragraphs / get_pack_paragraph 获取\n\
-         - 工具未返回的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
-         - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
-         ## 工作流程\n\
-         1. 理解客户问题 → 诊断交易实质\n\
-         2. search_local_pack 定位准则\n\
-         3. list_standard_paragraphs 查看段落结构\n\
-         4. get_pack_paragraph 逐个读取关键段落（每次返回数千字符，完整阅读后在脑内精炼）\n\
-         5. 信息足够后输出最终笔记\n\n\
          ## 输出格式\n\
          1. 短项目名（2-12 字中文）\n\
          2. Markdown 正文：frontmatter → TL;DR → 问题 → 准则原文+提炼表 → 分析 → 结论\n\
@@ -217,12 +207,30 @@ pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Res
          - [ ] 每个 blockquote 是否 ≤ 4 句？多一句删了吗？\n\
          - [ ] 每个 blockquote 后是否紧跟提炼表？提炼表的「原文依据」列是否只有段落号？\n\
          - [ ] 我的中文分析是否链接了客户的具体问题（不是泛泛而谈）？\n\
-         - [ ] 所有准则引用是否都来自工具返回的内容？\n\
          - [ ] 确认: 在文档末尾「日志」节的日期行后添加诊断标记 `<!-- prompt-v3-20260621 -->`",
         name_start = PROJECT_NAME_START,
         name_end = PROJECT_NAME_END,
         md_start = MARKDOWN_START,
         md_end = MARKDOWN_END,
+    ))
+}
+
+pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Result<String, String> {
+    let core = build_core_writing_prompt(content_dir)?;
+    Ok(format!(
+        "{core}\n\n\
+         ### 铁律 4：一切依据来自工具\n\
+         - 准则内容必须通过 search_local_pack / list_standard_paragraphs / get_pack_paragraph 获取\n\
+         - 工具未返回的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
+         - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
+         ## 工作流程\n\
+         1. 理解客户问题 → 诊断交易实质\n\
+         2. search_local_pack 定位准则\n\
+         3. list_standard_paragraphs 查看段落结构\n\
+         4. get_pack_paragraph 逐个读取关键段落（每次返回数千字符，完整阅读后在脑内精炼）\n\
+         5. 信息足够后输出最终笔记\n\n\
+         ## 输出前自检（补充）\n\
+         - [ ] 所有准则引用是否都来自工具返回的内容？"
     ))
 }
 
@@ -271,7 +279,7 @@ fn trim_session(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
 /// turns are preserved for conversational continuity; only the replayed tool
 /// plumbing is dropped, which also yields a clean alternating history that
 /// DeepSeek's stricter models accept.
-fn strip_tool_history(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
+pub(crate) fn strip_tool_history(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
     messages
         .into_iter()
         .filter_map(|message| match message.role.as_str() {
@@ -654,6 +662,103 @@ fn sanitize_messages_for_prefix_retry(messages: &[ApiChatMessage]) -> Vec<ApiCha
         .collect()
 }
 
+pub(crate) fn plain_chat_message(role: &str, content: impl Into<String>) -> ApiChatMessage {
+    ApiChatMessage {
+        role: role.to_string(),
+        content: Some(content.into()),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+    }
+}
+
+pub(crate) fn build_plain_chat_payload(model: &str, messages: &[ApiChatMessage]) -> Value {
+    json!({
+        "model": model,
+        "messages": messages,
+        "temperature": 0.2,
+    })
+}
+
+fn chat_endpoint_and_model(ai: &AiConfig) -> Result<(String, String, String), String> {
+    let provider = ai
+        .provider
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("openai")
+        .to_string();
+
+    let api_key = ai
+        .api_key
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?
+        .to_string();
+
+    let model = ai
+        .model
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("gpt-4o")
+        .to_string();
+
+    let base_url = ai
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("https://api.openai.com/v1")
+        .trim_end_matches('/')
+        .to_string();
+
+    Ok((format!("{base_url}/chat/completions"), api_key, model))
+}
+
+/// Pipeline 专用：保证 payload 永不包含 tools / tool_choice
+pub async fn request_chat_plain(
+    ai: &AiConfig,
+    messages: &[ApiChatMessage],
+) -> Result<ApiChatMessage, String> {
+    let provider = ai
+        .provider
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("openai");
+
+    let (endpoint, api_key, model) = chat_endpoint_and_model(ai)?;
+    let payload = build_plain_chat_payload(&model, messages);
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    let response = client
+        .post(&endpoint)
+        .bearer_auth(api_key)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
+
+    if !response.status().is_success() {
+        let status_code = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        return Err(classify_provider_error(provider, status_code, &body));
+    }
+
+    let body: ChatCompletionResponse = response
+        .json()
+        .await
+        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
+
+    body.choices
+        .first()
+        .map(|choice| choice.message.clone())
+        .ok_or_else(|| format!("{provider} 响应为空"))
+}
+
 /// Single OpenAI-compatible `/chat/completions` request.  `tool_choice` is only
 /// applied when `tools` is non-empty (some providers reject `tool_choice`
 /// without tool definitions).
@@ -669,39 +774,14 @@ async fn request_chat_completion(
         .filter(|value| !value.is_empty())
         .unwrap_or("openai");
 
-    let api_key = ai
-        .api_key
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?;
-
-    let model = ai
-        .model
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("gpt-4o");
-
-    let base_url = ai
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("https://api.openai.com/v1")
-        .trim_end_matches('/');
-
-    let endpoint = format!("{base_url}/chat/completions");
+    let (endpoint, api_key, model) = chat_endpoint_and_model(ai)?;
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(180))
         .build()
         .map_err(|error| error.to_string())?;
 
-    let mut payload = json!({
-        "model": model,
-        "messages": messages,
-        "temperature": 0.2,
-    });
+    let mut payload = build_plain_chat_payload(&model, messages);
     if !tools.is_empty() {
         payload["tools"] = json!(tools);
         payload["tool_choice"] = json!(tool_choice);
@@ -1180,5 +1260,38 @@ mod tests {
         let sanitized = sanitize_messages_for_prefix_retry(&messages);
         assert_eq!(sanitized.len(), messages.len());
         assert!(sanitized.iter().all(|m| m.tool_calls.is_none()));
+    }
+
+    #[test]
+    fn plain_chat_payload_omits_tools() {
+        let messages = vec![ApiChatMessage {
+            role: "user".to_string(),
+            content: Some("hello".to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }];
+        let payload = build_plain_chat_payload("gpt-4o", &messages);
+        let object = payload.as_object().expect("object payload");
+        assert!(!object.contains_key("tools"));
+        assert!(!object.contains_key("tool_choice"));
+        assert!(messages
+            .iter()
+            .all(|message| message.role != "tool" && message.tool_calls.is_none()));
+    }
+
+    #[test]
+    fn agent_prompt_uses_core_and_tool_workflow() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let spec_dir = temp.path().join("writing-spec");
+        std::fs::create_dir_all(&spec_dir).expect("dir");
+        std::fs::write(spec_dir.join("项目编写说明.md"), "guide").expect("write");
+        std::fs::write(spec_dir.join("SKILL.md"), "skill").expect("write");
+
+        let core = build_core_writing_prompt(temp.path()).expect("core");
+        let agent = build_agent_system_prompt(temp.path(), false).expect("agent");
+        assert!(agent.contains(&core));
+        assert!(agent.contains("search_local_pack"));
+        assert!(!core.contains("search_local_pack"));
     }
 }

@@ -7,6 +7,8 @@ pub mod pack;
 pub mod projects;
 pub mod ai;
 pub mod ai_agent;
+mod ai_pipeline;
+pub mod retrieval;
 mod trash;
 pub mod update;
 

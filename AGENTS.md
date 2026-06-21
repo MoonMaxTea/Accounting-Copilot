@@ -215,7 +215,20 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 
 ## AI subsystem
 
-### Agent tools (3)
+### Generation modes (`AiConfig.generation_mode`)
+
+| Mode | Default | Entry point |
+|------|---------|-------------|
+| **pipeline** | yes | `ai_pipeline::run_standards_pipeline` — Phase 0 rule plan → optional LLM plan → `retrieval::gather_evidence` → `write_note` via `request_chat_plain` (no `tools`) |
+| **agent** | rollback | `ai_agent::run_standards_agent` — legacy function-calling loop (max 12 rounds) |
+
+- `ai.rs::run_standards_orchestrator` selects mode. **Pipeline LLM calls never read `prior_messages`**; create/follow-up both use stateless `[system, user]`.
+- Shared prompt core: `build_core_writing_prompt` (agent appends tool workflow; pipeline writer uses 【检索证据】).
+- Post-processing unchanged: `parse_ai_response` → `finalize_project_markdown`.
+
+See `docs/AI-GENERATION-REWRITE-PLAN.md` for full spec.
+
+### Agent tools (3) — agent mode only
 
 | Tool | Purpose | Key detail |
 |------|---------|------------|
@@ -223,11 +236,11 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 | `get_pack_paragraph` | Citation → extended snippet (4000 chars from file body) | Uses `resolve_citation` → `resolve_from_index` (exact-match first, `max_by_key(char_start)` to skip amendment-metadata entries). Error msg guides AI to use `list_standard_paragraphs` |
 | `list_standard_paragraphs` | List all indexed paragraphs for a standard | Reads `paragraphs.json` each call; dedup prefers highest `char_start` (substantive entry) |
 
-### Architecture (merged — single Agent mode)
+### Architecture
 
-- `ai_agent.rs`: Self-contained system prompt + agent loop. `build_agent_system_prompt` loads writing spec directly (no longer calls `build_system_prompt` from ai.rs). Also owns provider error classification (`classify_provider_error`) and recovery retries (`chat_completion_with_recovery`).
-- `ai.rs`: Post-processing only (validation, **pack quote capping**, project save). `inject_pack_quotes` now **caps** over-long `（知识库原文）` quotes (≤ 600 chars) — it no longer pastes 4 000-char pack text into the note. Old dead code (`build_system_prompt`, `build_user_prompt`, `build_user_prompt_with_pack`, `build_continue_user_prompt`, `collect_relevant_pack_snippets`) removed on 2026-06-21
-- Single flow: Agent searches → reads full 4000 chars per paragraph (for *understanding* only) → outputs 2-4 key English sentences + Chinese refinement tables. The 4000-char snippet must never reach the document body (capped post-processing enforces this).
+- **Pipeline (default):** `retrieval.rs` + `ai_pipeline.rs` — deterministic pack retrieval, tools-free chat.
+- **Agent (rollback):** `ai_agent.rs` — self-contained system prompt + agent loop. `build_agent_system_prompt` = `build_core_writing_prompt` + tool workflow. Provider error classification (`classify_provider_error`) and recovery retries (`chat_completion_with_recovery`).
+- `ai.rs`: Orchestration (`run_standards_orchestrator`), post-processing (**pack quote capping** ≤ 600 chars), project save.
 
 ### System prompt (agent mode)
 
@@ -294,7 +307,7 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | Wide unrelated diffs | User prefers minimal, focused changes |
 | Hardcoding framework names in regex | Framework-agnostic retrieval is now handled by the Agent's `search_local_pack` tool (FTS5 + registry fallback) |
 | Mermaid `securityLevel: "sandbox"` | Breaks `<br>` tags in node labels; use `"loose"` with `suppressErrorRendering: true` |
-| DeepSeek "prefix not found" on follow-up | Caused by replaying the prior turn's `tool`/`tool_calls` rows. Fixed structurally: `run_standards_agent` seeds via `strip_tool_history` (never replays tool plumbing). `chat_completion_with_recovery` retry is only a safety net — don't rely on error-string matching alone (DeepSeek's wording varies by model/endpoint) |
+| DeepSeek "prefix not found" on follow-up | **Use pipeline mode (default).** Agent mode may still fail when providers reject function-calling + multi-turn history. Pipeline never sends `tools`. Settings → Generation mode → Agent only for rollback. |
 | Expanding quotes in `inject_pack_quotes` | It must **cap** (≤ 600 chars), never paste the 4 000-char `snippet_en` into the note — expanding overrides the prompt's ≤4-sentence rule and bloats follow-up context |
 | Byte-slicing `char_start` | `char_start` is a JS **UTF-16** offset; slice via `slice_utf16` (citations.rs), never `body[start..end]` by bytes — byte slicing mis-aligns on non-ASCII packs and can panic |
 | Using `find()` to resolve paragraph index entries | ASC codification files have an amendment-metadata table ("00 Status") at the top that repeats every paragraph number — earliest char_start entries contain boilerplate ("Amended … Accounting Standards Update"), not substantive text. Use `max_by_key(char_start)` to pick the latest occurrence, and **always try exact paragraph match before falling back to normalized matching** (ASC `paragraph_normalized` is just the topic number "718", matching every entry in the standard) |
