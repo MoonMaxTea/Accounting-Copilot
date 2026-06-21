@@ -31,6 +31,7 @@ pub fn search_standards(content_path: &Path, query: &str, limit: u32) -> Result<
               snippet(standards_fts, 3, '<mark>', '</mark>', '...', 32) AS snippet
             FROM standards_fts
             WHERE standards_fts MATCH ?
+            ORDER BY rank
             LIMIT ?
             ",
         )
