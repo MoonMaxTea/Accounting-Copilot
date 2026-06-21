@@ -254,6 +254,49 @@ fn trim_session(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
     messages[start..].to_vec()
 }
 
+/// Remove replayed tool-call state from a *prior* agent session before seeding a
+/// new run.
+///
+/// Root cause of the recurring follow-up failure: replaying an earlier turn's
+/// `tool` results and assistant `tool_calls` makes DeepSeek (especially the
+/// `deepseek-reasoner` model and the `https://api.deepseek.com/beta` endpoint)
+/// reject the request — e.g. "prefix not found" or "the last message ... must be
+/// a user message, or an assistant message with prefix mode on". Relying on an
+/// error-string-matched retry was fragile (the real messages don't contain the
+/// literal "prefix not found"), so we fix it structurally instead.
+///
+/// This is safe and does not reduce grounding: the current turn re-runs the
+/// pack tools live (correctly paired within the turn) and, in Continue mode, the
+/// user turn already embeds the full document. Prior **user/assistant text**
+/// turns are preserved for conversational continuity; only the replayed tool
+/// plumbing is dropped, which also yields a clean alternating history that
+/// DeepSeek's stricter models accept.
+fn strip_tool_history(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
+    messages
+        .into_iter()
+        .filter_map(|message| match message.role.as_str() {
+            "tool" => None,
+            "assistant" => message
+                .content
+                .filter(|content| !content.trim().is_empty())
+                .map(|content| AiAgentMessage {
+                    role: "assistant".to_string(),
+                    content: Some(content),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    name: None,
+                }),
+            _ => Some(AiAgentMessage {
+                role: message.role,
+                content: message.content,
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            }),
+        })
+        .collect()
+}
+
 fn to_api_message(message: &AiAgentMessage) -> ApiChatMessage {
     ApiChatMessage {
         role: message.role.clone(),
@@ -512,11 +555,19 @@ fn response_has_final_blocks(text: &str) -> bool {
     text.contains(MARKDOWN_START) && text.contains(MARKDOWN_END)
 }
 
-/// True when the provider rejected the request because of DeepSeek's beta
-/// prefix-completion path ("prefix not found"), which is triggered by replaying
-/// prior tool-call / tool-result messages on a follow-up turn.
+/// True when the provider rejected the request because of DeepSeek's
+/// prefix-completion path, triggered by replaying prior tool-call / tool-result
+/// messages on a follow-up turn. DeepSeek surfaces several wordings depending on
+/// model and endpoint, so we match all known variants (the literal
+/// "prefix not found", "prefix mode", a `chat_prefix_completion` doc link, and
+/// the "last message ... must be a user message" form) rather than one string.
 fn is_prefix_not_found_error(error: &str) -> bool {
-    error.to_lowercase().contains("prefix not found")
+    let e = error.to_lowercase();
+    e.contains("prefix not found")
+        || e.contains("prefix mode")
+        || e.contains("chat_prefix_completion")
+        || e.contains("must be a user message")
+        || (e.contains("last message") && e.contains("prefix"))
 }
 
 /// True when the error indicates the request exceeded the model's context
@@ -762,7 +813,10 @@ pub async fn run_standards_agent(
     let tools = pack_agent_tools();
 
     let user_turn = build_user_turn(&input);
-    let mut session = trim_session(input.prior_messages);
+    // Seed from prior turns WITHOUT replaying their tool plumbing — replayed
+    // tool/tool_calls rows are what trigger DeepSeek's prefix / "last message
+    // must be a user message" rejections on follow-ups.
+    let mut session = trim_session(strip_tool_history(input.prior_messages));
     session.push(AiAgentMessage {
         role: "user".to_string(),
         content: Some(user_turn),
@@ -947,7 +1001,61 @@ mod tests {
             "deepseek 返回错误 (400): {\"error\":{\"message\":\"prefix not found\"}}"
         ));
         assert!(is_prefix_not_found_error("Prefix Not Found"));
+        // DeepSeek's real wording (deepseek-reasoner / beta endpoint) — must be
+        // matched too, otherwise the recovery retry never fires.
+        assert!(is_prefix_not_found_error(
+            "The last message of deepseek-reasoner must be a user message, or an assistant message with prefix mode on (refer to https://api-docs.deepseek.com/guides/chat_prefix_completion)."
+        ));
         assert!(!is_prefix_not_found_error("context_length_exceeded"));
+        assert!(!is_prefix_not_found_error("invalid api key"));
+    }
+
+    #[test]
+    fn strip_tool_history_drops_replay_keeps_text_turns() {
+        let prior = vec![
+            AiAgentMessage {
+                role: "user".to_string(),
+                content: Some("初始问题".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(vec![AiAgentToolCall {
+                    id: "call_1".to_string(),
+                    name: "search_local_pack".to_string(),
+                    arguments: "{}".to_string(),
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "tool".to_string(),
+                content: Some("4000 chars of pack text".to_string()),
+                tool_calls: None,
+                tool_call_id: Some("call_1".to_string()),
+                name: Some("search_local_pack".to_string()),
+            },
+            AiAgentMessage {
+                role: "assistant".to_string(),
+                content: Some("最终笔记".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+        ];
+
+        let stripped = strip_tool_history(prior);
+        // No tool rows, no tool_calls anywhere, no orphan tool_call_id.
+        assert!(stripped.iter().all(|m| m.role != "tool"));
+        assert!(stripped.iter().all(|m| m.tool_calls.is_none()));
+        assert!(stripped.iter().all(|m| m.tool_call_id.is_none()));
+        // Clean alternating text history is preserved.
+        let roles: Vec<&str> = stripped.iter().map(|m| m.role.as_str()).collect();
+        assert_eq!(roles, vec!["user", "assistant"]);
+        assert_eq!(stripped[1].content.as_deref(), Some("最终笔记"));
     }
 
     #[test]
