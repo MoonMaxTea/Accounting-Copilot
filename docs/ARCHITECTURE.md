@@ -222,6 +222,27 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 | Filter/navigation UX | `lib/standards-navigation.ts`, `StandardsCategoryNav.tsx` |
 | New accounting framework | Add to vault + rebuild pack — no code changes needed (framework-agnostic retrieval) |
 
+## Recent changelog (2026-06-21, technical audit — P0/P1)
+
+> Supersedes some earlier notes below. The "AI output pasting raw English" issue
+> was **not** primarily the flash model; the deterministic cause was
+> `inject_pack_quotes` expanding quotes. The previously-claimed
+> "`call_chat_with_tools` auto-retries on prefix not found" did **not** exist in
+> code and is now actually implemented.
+
+### Fixed (P0)
+- **Prompt ignored — multi-thousand-char English quotes** (`ai.rs::inject_pack_quotes`): post-processing replaced the model's concise `（知识库原文）` quote with up to 4 000 chars of raw pack text, overriding the system prompt's ≤4-sentence rule. Now it **caps** over-long quotes (≤ 600 chars, UTF-8 safe) and warns on unresolved citations; it never expands them.
+- **Snippet offset mismatch / panic** (`citations.rs::resolve_from_index`): `char_start` from `paragraphs.json` is a JS **UTF-16** offset but was used to byte-slice the Rust `String`, mis-aligning snippets on non-ASCII packs and risking a panic. New `slice_utf16` helper slices on UTF-16 code units to match the indexer exactly — no pack rebuild required.
+- **Follow-up error — DeepSeek "prefix not found"** (`ai_agent.rs`): follow-ups replay tool-call history that triggers the error; the documented retry was missing. Request functions merged into one shared sender with a real retry that strips tool history (system + user turns preserved).
+
+### Added (P1)
+- **Provider error classification** (`ai_agent.rs::classify_provider_error`): 401/403/402/404/413/429/5xx and context-length 400s map to clear Chinese messages while keeping raw status+body for detection/diagnosis.
+- **Context-overflow graceful degradation** (`ai_agent.rs::chat_completion_with_recovery`): full history is always tried first; only on prefix/context-overflow errors does it retry once with tool history stripped (guarded to skip pointless duplicate calls). Pure safety net — the normal path is unchanged.
+- **FTS5 relevance ordering** (`db.rs`): `ORDER BY rank` (bm25) so the most relevant standards surface first; recall unchanged.
+
+### Deferred
+- Long-term architecture work (semantic retrieval + rerank, prompt caching, session-cost治理, observability, doc/code consistency tests) is planned in [`docs/P2-PLAN.md`](P2-PLAN.md).
+
 ## Recent changelog (2026-06-21)
 
 ### Fixed

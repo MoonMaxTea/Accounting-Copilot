@@ -225,9 +225,9 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 
 ### Architecture (merged — single Agent mode)
 
-- `ai_agent.rs`: Self-contained system prompt + agent loop. `build_agent_system_prompt` loads writing spec directly (no longer calls `build_system_prompt` from ai.rs)
-- `ai.rs`: Post-processing only (validation, pack quote injection, project save). Old dead code (`build_system_prompt`, `build_user_prompt`, `build_user_prompt_with_pack`, `build_continue_user_prompt`, `collect_relevant_pack_snippets`) removed on 2026-06-21
-- Single flow: Agent searches → reads full 4000 chars per paragraph → outputs 2-4 key English sentences + Chinese refinement tables
+- `ai_agent.rs`: Self-contained system prompt + agent loop. `build_agent_system_prompt` loads writing spec directly (no longer calls `build_system_prompt` from ai.rs). Also owns provider error classification (`classify_provider_error`) and recovery retries (`chat_completion_with_recovery`).
+- `ai.rs`: Post-processing only (validation, **pack quote capping**, project save). `inject_pack_quotes` now **caps** over-long `（知识库原文）` quotes (≤ 600 chars) — it no longer pastes 4 000-char pack text into the note. Old dead code (`build_system_prompt`, `build_user_prompt`, `build_user_prompt_with_pack`, `build_continue_user_prompt`, `collect_relevant_pack_snippets`) removed on 2026-06-21
+- Single flow: Agent searches → reads full 4000 chars per paragraph (for *understanding* only) → outputs 2-4 key English sentences + Chinese refinement tables. The 4000-char snippet must never reach the document body (capped post-processing enforces this).
 
 ### System prompt (agent mode)
 
@@ -240,12 +240,18 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 1. Frontend calls `generateProjectDocument` / `continueProjectDocument`
 2. Agent loop emits `ai-generation-progress` events: `searching` → `generating` → `complete` / `error`
 3. App.tsx listens globally → passes progress/result to WorkbenchPage (survives tab switches)
-4. `finalize_project_markdown`: parse → inject_pack_quotes → ensure_frontmatter → strip_trailing_log_section → append_log_for_turn → sanitize_banned_phrases → append_ai_disclaimer → save
+4. `finalize_project_markdown`: parse → inject_pack_quotes (**caps** over-long quotes, does not expand) → ensure_frontmatter → strip_trailing_log_section → append_log_for_turn → sanitize_banned_phrases → append_ai_disclaimer → save
 5. AI disclaimer auto-added at end: "本文档由 AI 辅助生成...需人工进行专业复核。"
 
-### DeepSeek "prefix not found" handling
+### Error recovery (prefix / context overflow)
 
-DeepSeek API may return "prefix not found" when conversation history triggers its beta prefix-completion path. `call_chat_with_tools` auto-detects this error and retries without prior tool-call messages (keeping system prompt + current user turn). The existing markdown in `build_user_turn` (Continue mode) still provides full document context.
+All chat calls go through `chat_completion_with_recovery` (ai_agent.rs). The full history (incl. tool results) is **always tried first**, so the normal path keeps maximum grounding. It retries **once** with tool history stripped (via `sanitize_messages_for_prefix_retry`) only when the request would otherwise hard-fail:
+- **DeepSeek "prefix not found"** — replaying tool-call history triggers its beta prefix-completion path (`is_prefix_not_found_error`).
+- **Context-window overflow** — `is_context_length_error` (413 / `context_length_exceeded` / etc.).
+
+The retry is guarded to skip when nothing can be stripped (avoids a duplicate failing call). In Continue mode the user turn already embeds the full document, so the retry keeps enough context. Provider HTTP errors are mapped to clear Chinese messages by `classify_provider_error` while preserving the raw status+body for detection.
+
+> Note: an earlier version of this file claimed `call_chat_with_tools` already auto-retried on prefix errors — that logic did **not** exist until the 2026-06-21 audit fix.
 
 ### Banned output phrases
 
@@ -270,11 +276,13 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | Wide unrelated diffs | User prefers minimal, focused changes |
 | Hardcoding framework names in regex | Framework-agnostic retrieval is now handled by the Agent's `search_local_pack` tool (FTS5 + registry fallback) |
 | Mermaid `securityLevel: "sandbox"` | Breaks `<br>` tags in node labels; use `"loose"` with `suppressErrorRendering: true` |
-| DeepSeek "prefix not found" on follow-up | API may reject tool-call history; `call_chat_with_tools` auto-retries without prior messages |
+| DeepSeek "prefix not found" on follow-up | API may reject tool-call history; `chat_completion_with_recovery` retries once with tool history stripped (also covers context-window overflow) |
+| Expanding quotes in `inject_pack_quotes` | It must **cap** (≤ 600 chars), never paste the 4 000-char `snippet_en` into the note — expanding overrides the prompt's ≤4-sentence rule and bloats follow-up context |
+| Byte-slicing `char_start` | `char_start` is a JS **UTF-16** offset; slice via `slice_utf16` (citations.rs), never `body[start..end]` by bytes — byte slicing mis-aligns on non-ASCII packs and can panic |
 | Using `find()` to resolve paragraph index entries | ASC codification files have an amendment-metadata table ("00 Status") at the top that repeats every paragraph number — earliest char_start entries contain boilerplate ("Amended … Accounting Standards Update"), not substantive text. Use `max_by_key(char_start)` to pick the latest occurrence, and **always try exact paragraph match before falling back to normalized matching** (ASC `paragraph_normalized` is just the topic number "718", matching every entry in the standard) |
 | `dedup_by` keeping the first entry after paragraph-sort | The paragraph index is sorted by char_start; after sorting by paragraph ID, entries with the same paragraph are in char_start order. `dedup_by` keeps the first (lowest char_start = amendment metadata). Sort by `(paragraph, char_start DESC)` before dedup |
 | `paragraph_normalized` loose matching | `normalizeParagraph("718-10-35-3")` → `"718"` — matches every entry in ASC 718. Always gate with exact paragraph match first; only fall back to normalized when no exact match exists |
-| Using `deepseek-v4-flash` for document generation | Flash models have weak instruction-following; ignore blockquote-length limits and paste raw English. Use `deepseek-v4-pro` or `deepseek-chat` for the Agent generation flow. The system prompt (verified via `_diag_system_prompt.txt` dump) is correct — the model simply doesn't obey complex output constraints |
+| Using `deepseek-v4-flash` for document generation | Flash models have weaker instruction-following. NOTE: the 2026-06-21 audit found the *primary* cause of multi-thousand-char English dumps was `inject_pack_quotes` expanding quotes (a code bug, now fixed), **not** the model. Stronger models (`deepseek-v4-pro` / `deepseek-chat`) are still preferred for adherence, but the deterministic cap now enforces quote length regardless of model |
 
 ---
 
