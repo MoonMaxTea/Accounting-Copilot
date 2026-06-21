@@ -512,10 +512,53 @@ fn response_has_final_blocks(text: &str) -> bool {
     text.contains(MARKDOWN_START) && text.contains(MARKDOWN_END)
 }
 
-async fn call_chat_with_tools(
+/// True when the provider rejected the request because of DeepSeek's beta
+/// prefix-completion path ("prefix not found"), which is triggered by replaying
+/// prior tool-call / tool-result messages on a follow-up turn.
+fn is_prefix_not_found_error(error: &str) -> bool {
+    error.to_lowercase().contains("prefix not found")
+}
+
+/// Rebuild a message list without anything that triggers DeepSeek's prefix
+/// completion: drop `tool` results and strip `tool_calls` from assistant
+/// messages (dropping assistants that then have no textual content).  The
+/// system prompt and the user turns — which in Continue mode already embed the
+/// full document — are preserved, so the model keeps enough context.
+fn sanitize_messages_for_prefix_retry(messages: &[ApiChatMessage]) -> Vec<ApiChatMessage> {
+    messages
+        .iter()
+        .filter_map(|message| match message.role.as_str() {
+            "tool" => None,
+            "assistant" => message
+                .content
+                .as_ref()
+                .filter(|content| !content.trim().is_empty())
+                .map(|content| ApiChatMessage {
+                    role: message.role.clone(),
+                    content: Some(content.clone()),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    name: None,
+                }),
+            _ => Some(ApiChatMessage {
+                role: message.role.clone(),
+                content: message.content.clone(),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            }),
+        })
+        .collect()
+}
+
+/// Single OpenAI-compatible `/chat/completions` request.  `tool_choice` is only
+/// applied when `tools` is non-empty (some providers reject `tool_choice`
+/// without tool definitions).
+async fn request_chat_completion(
     ai: &AiConfig,
     messages: &[ApiChatMessage],
     tools: &[Value],
+    tool_choice: &str,
 ) -> Result<ApiChatMessage, String> {
     let provider = ai
         .provider
@@ -558,7 +601,7 @@ async fn call_chat_with_tools(
     });
     if !tools.is_empty() {
         payload["tools"] = json!(tools);
-        payload["tool_choice"] = json!("auto");
+        payload["tool_choice"] = json!(tool_choice);
     }
 
     let response = client
@@ -586,6 +629,33 @@ async fn call_chat_with_tools(
         .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
+/// Run a chat completion, retrying once without tool-call history if the
+/// provider returns DeepSeek's "prefix not found" error (common on follow-up
+/// turns that replay prior tool calls).
+async fn chat_completion_with_prefix_retry(
+    ai: &AiConfig,
+    messages: &[ApiChatMessage],
+    tools: &[Value],
+    tool_choice: &str,
+) -> Result<ApiChatMessage, String> {
+    match request_chat_completion(ai, messages, tools, tool_choice).await {
+        Ok(message) => Ok(message),
+        Err(error) if is_prefix_not_found_error(&error) => {
+            let sanitized = sanitize_messages_for_prefix_retry(messages);
+            request_chat_completion(ai, &sanitized, tools, tool_choice).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn call_chat_with_tools(
+    ai: &AiConfig,
+    messages: &[ApiChatMessage],
+    tools: &[Value],
+) -> Result<ApiChatMessage, String> {
+    chat_completion_with_prefix_retry(ai, messages, tools, "auto").await
+}
+
 /// Like call_chat_with_tools but forces tool_choice: "none" so the model
 /// must produce a text response without calling any tools.  Used for the
 /// final synthesis nudge after the agent loop.
@@ -594,73 +664,7 @@ async fn call_chat_with_tools_synthesis(
     messages: &[ApiChatMessage],
     tools: &[Value],
 ) -> Result<ApiChatMessage, String> {
-    let provider = ai
-        .provider
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("openai");
-
-    let api_key = ai
-        .api_key
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?;
-
-    let model = ai
-        .model
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("gpt-4o");
-
-    let base_url = ai
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("https://api.openai.com/v1")
-        .trim_end_matches('/');
-
-    let endpoint = format!("{base_url}/chat/completions");
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let mut payload = json!({
-        "model": model,
-        "messages": messages,
-        "temperature": 0.2,
-    });
-    if !tools.is_empty() {
-        payload["tools"] = json!(tools);
-    }
-    payload["tool_choice"] = json!("none");
-
-    let response = client
-        .post(&endpoint)
-        .bearer_auth(api_key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("{provider} 返回错误 ({status}): {body}"));
-    }
-
-    let body: ChatCompletionResponse = response
-        .json()
-        .await
-        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
-
-    body.choices
-        .first()
-        .map(|choice| choice.message.clone())
-        .ok_or_else(|| format!("{provider} 响应为空"))
+    chat_completion_with_prefix_retry(ai, messages, tools, "none").await
 }
 
 pub async fn run_standards_agent(
@@ -861,5 +865,69 @@ mod tests {
         )
         .expect("tool");
         assert!(result.contains("IFRS 11 §7"));
+    }
+
+    #[test]
+    fn detects_deepseek_prefix_not_found_error() {
+        assert!(is_prefix_not_found_error(
+            "deepseek 返回错误 (400): {\"error\":{\"message\":\"prefix not found\"}}"
+        ));
+        assert!(is_prefix_not_found_error("Prefix Not Found"));
+        assert!(!is_prefix_not_found_error("context_length_exceeded"));
+    }
+
+    #[test]
+    fn prefix_retry_sanitizer_drops_tool_history() {
+        let messages = vec![
+            ApiChatMessage {
+                role: "system".to_string(),
+                content: Some("sys".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            ApiChatMessage {
+                role: "user".to_string(),
+                content: Some("问题".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            ApiChatMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(vec![ApiToolCall {
+                    id: "call_1".to_string(),
+                    call_type: "function".to_string(),
+                    function: ApiToolFunction {
+                        name: "search_local_pack".to_string(),
+                        arguments: "{}".to_string(),
+                    },
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            ApiChatMessage {
+                role: "tool".to_string(),
+                content: Some("tool result".to_string()),
+                tool_calls: None,
+                tool_call_id: Some("call_1".to_string()),
+                name: Some("search_local_pack".to_string()),
+            },
+            ApiChatMessage {
+                role: "assistant".to_string(),
+                content: Some("最终答复".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+        ];
+
+        let sanitized = sanitize_messages_for_prefix_retry(&messages);
+        assert_eq!(sanitized.len(), 3);
+        assert!(sanitized.iter().all(|m| m.role != "tool"));
+        assert!(sanitized.iter().all(|m| m.tool_calls.is_none()));
+        assert_eq!(sanitized[0].role, "system");
+        assert_eq!(sanitized[2].content.as_deref(), Some("最终答复"));
     }
 }
