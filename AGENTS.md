@@ -341,3 +341,41 @@ Product owner often communicates in **Chinese**. Keep **UI strings in English** 
 | macOS | `~/Library/Application Support/com.moonmaxtea.accounting-copilot/` |
 
 Contains: `config.json`, `content/` (installed pack), `downloads/`, `trash/`.
+
+---
+
+## Cursor Cloud specific instructions
+
+Durable notes for cloud agents working on this repo. The startup update script runs `pnpm install`; everything below is context that is **not** covered by that.
+
+### Environment (already provisioned in the VM snapshot)
+
+- **Toolchain:** Node 22, pnpm 9.15, Rust stable are preinstalled.
+- **Tauri Linux GUI system libs** (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `pkg-config`) are preinstalled. Source of truth for the list is `.github/workflows/release-app.yml` (`build-linux` job). If the GUI fails to compile/link, reinstall these via `apt`.
+- **A display is available at `DISPLAY=:1`** — required for `pnpm app:dev` to open the Tauri window.
+
+### Running the app
+
+- Use `pnpm app:dev` (from repo root). Tauri's `beforeDevCommand` auto-starts Vite on `:1420` (strictPort) and compiles/launches the Rust backend — **do not run `vite` separately**.
+- First Rust compile is slow (~25s+ from a warm cargo cache, much longer cold); subsequent rebuilds are fast.
+- The desktop has an **idle screensaver (black screen with a spinning 3D cube)** that activates after a few seconds of no input. This is NOT an app crash — the app process keeps running. Move the mouse / click to dismiss it, and keep interactions continuous when recording demos.
+
+### Testing the standards browser / workbench WITHOUT a GitHub token
+
+The app ships no content; normally it downloads a pack from the **private** GitHub repo (needs a fine-grained token with Contents: Read-only, set in Setup/Settings). To exercise the offline Standards browser end-to-end without any secret, build a pack from the in-repo fixtures and import it directly:
+
+```bash
+# Build a small valid pack from test fixtures (IFRS 11 + IAS 31)
+pnpm --filter @asd/pack-builder build
+node tools/pack-builder/dist/cli.js \
+  --vault "tools/pack-builder/tests/fixtures/vault" \
+  --registry "tools/pack-builder/tests/fixtures/registry-minimal.yaml" \
+  --output /tmp/demo-pack.zip --content-version 2026.06.21
+
+# Import it into the app data dir, then (re)start the app
+cd app/src-tauri && cargo run -q --example import_content_pack -- /tmp/demo-pack.zip
+```
+
+After import, restart `pnpm app:dev` (pack info is read at startup) → the top nav shows **Standards** + **Workbench**, and the standards list/body/in-document search work fully offline.
+
+- **Lint/type-check:** there is no ESLint; the gate is `tsc --noEmit`, which runs as part of `pnpm test`.
