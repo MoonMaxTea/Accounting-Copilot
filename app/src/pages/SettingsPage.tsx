@@ -38,7 +38,6 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
     base_url: "https://api.openai.com/v1",
     model: "gpt-4o",
     allow_legacy_citations: false,
-    generation_mode: "agent",
   });
   const [updateStatus, setUpdateStatus] = useState<UpdateCheckResult | null>(null);
   const [pickingProjectsDir, setPickingProjectsDir] = useState(false);
@@ -457,23 +456,6 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
               }
             />
             {tr("allowLegacyCitations")}
-          </label>
-          <label className="block space-y-2 text-sm">
-            <span className="font-medium text-brand-ink">{tr("generationMode")}</span>
-            <select
-              value={aiConfig.generation_mode ?? "agent"}
-              onChange={(event) =>
-                setAiConfig((current) => ({
-                  ...current,
-                  generation_mode: event.target.value,
-                }))
-              }
-              className="ui-input ui-focus-ring w-full rounded-lg px-4 py-2"
-            >
-              <option value="agent">{tr("generationModeAgent")}</option>
-              <option value="pipeline">{tr("generationModePipeline")}</option>
-            </select>
-            <span className="block text-xs text-brand-muted">{tr("generationModeHint")}</span>
           </label>
           <button
             type="button"

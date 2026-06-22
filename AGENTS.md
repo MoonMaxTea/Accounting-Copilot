@@ -80,7 +80,8 @@ Tauri commands (app/src-tauri/src/commands.rs)
     ├── db.rs            SQLite FTS for standards search
     ├── citations.rs     paragraph index, citation resolve
     ├── projects.rs      Obsidian projects folder tree / files
-    ├── ai.rs / ai_agent.rs   LLM document generation
+    ├── ai.rs / ai_agent.rs   LLM document generation (agent-only)
+    ├── session.rs       AI session files (outside config.json)
     ├── config.rs        ~/.local/share/.../config.json
     └── trash.rs         soft-delete for project files
 ```
@@ -215,20 +216,9 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 
 ## AI subsystem
 
-### Generation modes (`AiConfig.generation_mode`)
+Agent-only document generation: `ai.rs` calls `ai_agent::run_standards_agent` directly (no alternate pipeline mode).
 
-| Mode | Default | Entry point |
-|------|---------|-------------|
-| **pipeline** | yes | `ai_pipeline::run_standards_pipeline` — Phase 0 rule plan → optional LLM plan → `retrieval::gather_evidence` → `write_note` via `request_chat_plain` (no `tools`) |
-| **agent** | rollback | `ai_agent::run_standards_agent` — legacy function-calling loop (max 12 rounds) |
-
-- `ai.rs::run_standards_orchestrator` selects mode. **Pipeline LLM calls never read `prior_messages`**; create/follow-up both use stateless `[system, user]`.
-- Shared prompt core: `build_core_writing_prompt` (agent appends tool workflow; pipeline writer uses 【检索证据】).
-- Post-processing unchanged: `parse_ai_response` → `finalize_project_markdown`.
-
-See `docs/AI-GENERATION-REWRITE-PLAN.md` for full spec.
-
-### Agent tools (3) — agent mode only
+### Agent tools (3)
 
 | Tool | Purpose | Key detail |
 |------|---------|------------|
@@ -238,15 +228,32 @@ See `docs/AI-GENERATION-REWRITE-PLAN.md` for full spec.
 
 ### Architecture
 
-- **Pipeline (default):** `retrieval.rs` + `ai_pipeline.rs` — deterministic pack retrieval, tools-free chat.
-- **Agent (rollback):** `ai_agent.rs` — self-contained system prompt + agent loop. `build_agent_system_prompt` = `build_core_writing_prompt` + tool workflow. Provider error classification (`classify_provider_error`) and recovery retries (`chat_completion_with_recovery`).
-- `ai.rs`: Orchestration (`run_standards_orchestrator`), post-processing (**pack quote capping** ≤ 600 chars), project save.
+- **`ai_agent.rs`:** Self-contained system prompt + agent loop. `build_agent_system_prompt` = `build_core_writing_prompt` + tool workflow. Provider error classification (`classify_provider_error`), recovery retries (`chat_completion_with_recovery`), storm guard, synthesis fallback.
+- **`ai.rs`:** Post-processing (**pack quote capping** ≤ 600 chars), project save. Calls `run_standards_agent` for create/continue.
+- **`session.rs`:** Persists AI sessions under `sessions/<sha256(key)>.json` (migrated from `config.json` on `get_config`).
+- **`retrieval.rs`:** Legacy deterministic retrieval helpers (tests only; no longer wired to generation).
 
-### System prompt (agent mode)
+### Cross-turn API shape (stateless)
 
-- Built by `build_agent_system_prompt` (ai_agent.rs) — self-contained, loads writing spec from content pack
-- Writing spec files (`writing-spec/`) loaded from content pack, included in prompt
-- Agent runs max 12 tool rounds (`MAX_TOOL_ROUNDS`), then forced synthesis
+Each run seeds the API with **`[system, current user_turn]` only** via `seed_agent_turn`. Prior turns are stripped of `tool` rows / `tool_calls` before persistence. Continue mode embeds the **full normalized `.md`** in the user turn; the current turn re-runs pack tools live.
+
+### Session storage
+
+| Path | Content |
+|------|---------|
+| `sessions/<sha256(relative_path)>.json` | `StoredAiSession`: user/assistant text messages + `activity` log (tool steps for UI) |
+| Legacy | `config.json` `ai_agent_sessions` / `ai_threads` migrated on first `get_config` |
+
+### Debug log (`ai-debug.log`)
+
+- Location: app data dir (`~/.local/share/com.moonmaxtea.accounting-copilot/` on Linux)
+- Written by `append_ai_debug_event` — **metadata only** (mode, phase, provider, model, status, char counts, tool name, error class)
+- **Never** logs API keys, full prompts, or tool result bodies
+
+### System prompt
+
+- Built by `build_agent_system_prompt` (ai_agent.rs) — loads writing spec from content pack
+- Agent runs max 12 tool rounds (`MAX_TOOL_ROUNDS`), then forced synthesis (`tool_choice: "none"`)
 
 ### Generation lifecycle
 
@@ -307,7 +314,7 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | Wide unrelated diffs | User prefers minimal, focused changes |
 | Hardcoding framework names in regex | Framework-agnostic retrieval is now handled by the Agent's `search_local_pack` tool (FTS5 + registry fallback) |
 | Mermaid `securityLevel: "sandbox"` | Breaks `<br>` tags in node labels; use `"loose"` with `suppressErrorRendering: true` |
-| DeepSeek "prefix not found" on follow-up | **Use pipeline mode (default).** Agent mode may still fail when providers reject function-calling + multi-turn history. Pipeline never sends `tools`. Settings → Generation mode → Agent only for rollback. |
+| DeepSeek "prefix not found" on follow-up | **Do not replay tool history.** `seed_agent_turn` + `strip_tool_history` drop prior `tool`/`tool_calls` rows; Continue embeds full document. `chat_completion_with_recovery` retries once inside a single turn as safety net. |
 | Expanding quotes in `inject_pack_quotes` | It must **cap** (≤ 600 chars), never paste the 4 000-char `snippet_en` into the note — expanding overrides the prompt's ≤4-sentence rule and bloats follow-up context |
 | Byte-slicing `char_start` | `char_start` is a JS **UTF-16** offset; slice via `slice_utf16` (citations.rs), never `body[start..end]` by bytes — byte slicing mis-aligns on non-ASCII packs and can panic |
 | Using `find()` to resolve paragraph index entries | ASC codification files have an amendment-metadata table ("00 Status") at the top that repeats every paragraph number — earliest char_start entries contain boilerplate ("Amended … Accounting Standards Update"), not substantive text. Use `max_by_key(char_start)` to pick the latest occurrence, and **always try exact paragraph match before falling back to normalized matching** (ASC `paragraph_normalized` is just the topic number "718", matching every entry in the standard) |
@@ -340,4 +347,4 @@ Product owner often communicates in **Chinese**. Keep **UI strings in English** 
 | Windows | `%APPDATA%\com.moonmaxtea.accounting-copilot\` |
 | macOS | `~/Library/Application Support/com.moonmaxtea.accounting-copilot/` |
 
-Contains: `config.json`, `content/` (installed pack), `downloads/`, `trash/`.
+Contains: `config.json`, `content/` (installed pack), `downloads/`, `trash/`, `sessions/` (AI conversation state), `ai-debug.log` (redacted AI run metadata).

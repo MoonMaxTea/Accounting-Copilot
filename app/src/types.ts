@@ -51,8 +51,6 @@ export interface AiConfig {
   base_url: string | null;
   model: string | null;
   allow_legacy_citations: boolean;
-  /** "pipeline" (default) or "agent" (legacy function-calling) */
-  generation_mode?: string | null;
 }
 
 export interface ProjectsUiState {

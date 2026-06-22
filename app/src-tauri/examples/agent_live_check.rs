@@ -1,8 +1,7 @@
-//! Live DeepSeek test: create + 3 continues.
+//! Live DeepSeek test: create + 3 continues (agent-only).
 //! Usage:
-//!   DEEPSEEK_API_KEY=sk-... cargo run --example pipeline_live_check -- [model]
-//!   ASD_GENERATION_MODE=agent DEEPSEEK_API_KEY=... cargo run --example pipeline_live_check -- deepseek-v4-flash
-//! Default model: deepseek-v4-flash, default mode: pipeline
+//!   DEEPSEEK_API_KEY=sk-... cargo run --example agent_live_check -- [model]
+//! Default model: deepseek-v4-flash
 
 use std::path::PathBuf;
 
@@ -20,16 +19,12 @@ fn build_ai_config(model: &str) -> AiConfig {
         .or_else(|_| std::env::var("ASD_AI_API_KEY"))
         .expect("Set DEEPSEEK_API_KEY (or ASD_AI_API_KEY) for live testing");
 
-    let generation_mode = std::env::var("ASD_GENERATION_MODE")
-        .unwrap_or_else(|_| "pipeline".to_string());
-
     AiConfig {
         provider: Some("deepseek".to_string()),
         api_key: Some(api_key),
         base_url: Some("https://api.deepseek.com/v1".to_string()),
         model: Some(model.to_string()),
         allow_legacy_citations: false,
-        generation_mode: Some(generation_mode),
     }
 }
 
@@ -47,14 +42,13 @@ async fn main() {
 
     let projects_root = std::env::var("ASD_PROJECTS_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/pipeline-live-projects"));
+        .unwrap_or_else(|_| PathBuf::from("/tmp/agent-live-projects"));
     std::fs::create_dir_all(&projects_root).expect("create projects dir");
-    std::fs::create_dir_all(projects_root.join("pipeline-test")).expect("mkdir pipeline-test");
+    std::fs::create_dir_all(projects_root.join("agent-test")).expect("mkdir agent-test");
 
     let ai = build_ai_config(&model);
-    let generation_mode = ai.generation_mode.clone().unwrap_or_else(|| "pipeline".to_string());
 
-    println!("== Live check ({generation_mode}) ==");
+    println!("== Agent live check ==");
     println!("model: {model}");
     println!("base_url: https://api.deepseek.com/v1");
     println!("content: {}", content_dir.display());
@@ -71,7 +65,7 @@ async fn main() {
         &ai,
         question,
         facts,
-        Some("pipeline-test"),
+        Some("agent-test"),
         Vec::new(),
     )
     .await

@@ -117,11 +117,6 @@ const messages = {
     apiKey: "API key",
     model: "Model",
     allowLegacyCitations: "Allow legacy standard citations",
-    generationMode: "Generation mode",
-    generationModeHint:
-      "Agent (recommended): function-calling loop with local pack search. Pipeline: deterministic retrieval + tools-free chat (rollback only).",
-    generationModePipeline: "Pipeline (rollback)",
-    generationModeAgent: "Agent (recommended)",
     saveAiSettings: "Save AI settings",
     projectsFolderUpdated: "Projects folder updated.",
     aiSettingsSaved: "AI settings saved.",
@@ -393,11 +388,6 @@ const messages = {
     apiKey: "API 密钥",
     model: "模型",
     allowLegacyCitations: "允许引用已废止准则",
-    generationMode: "生成模式",
-    generationModeHint:
-      "Agent（推荐）：function-calling 循环 + 本地准则库检索。Pipeline：确定性检索 + 无 tools 对话（仅作回退）。",
-    generationModePipeline: "Pipeline（回退）",
-    generationModeAgent: "Agent（推荐）",
     saveAiSettings: "保存 AI 设置",
     projectsFolderUpdated: "项目文件夹已更新。",
     aiSettingsSaved: "AI 设置已保存。",

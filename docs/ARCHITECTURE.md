@@ -138,13 +138,45 @@ Rust (ai_agent.rs)                  Frontend (App.tsx)
 
 Events are global (not tied to component lifecycle). Switching tabs does not interrupt generation.
 
-## Conversation tracking pipeline
+Progress payload (`AiGenerationProgress`) may include `run_id`, `step_index`, `kind` (`tool` / `retrieval` / `writing` / `synthesis`), and `detail`.
+
+## AI document generation (agent-only)
+
+```mermaid
+sequenceDiagram
+  participant UI as Workbench
+  participant CMD as commands.rs
+  participant AI as ai.rs
+  participant AG as ai_agent.rs
+  participant LLM as Provider API
+  participant Pack as pack + citations
+
+  UI->>CMD: generate_project_document / continue_project_document
+  CMD->>CMD: session::load_session
+  CMD->>AI: generate_and_save_project / continue_and_update_project
+  AI->>AG: run_standards_agent
+  Note over AG: API seed = [system, user_turn]<br/>tool loop in-memory only
+  loop up to 12 rounds
+    AG->>LLM: chat/completions + tools
+    LLM-->>AG: tool_calls or final blocks
+    AG->>Pack: search / list / get_paragraph
+  end
+  AG-->>AI: raw_response + session + activity
+  AI->>AI: finalize_project_markdown (cap quotes ≤600 chars)
+  CMD->>CMD: session::save_session
+```
+
+Key files: `ai_agent.rs` (loop), `ai.rs` (post-process), `session.rs` (persistence).
+
+Live check: `cd app/src-tauri && DEEPSEEK_API_KEY=... cargo run --example agent_live_check -- deepseek-v4-flash`
+
+## Conversation tracking
 
 ```
 get_project_conversation(relative_path)
   │
-  ├── Source A: stored (ai_threads[path] in config.json)     ← real timestamps (now_secs)
-  ├── Source B: session_activity (ai_agent_sessions[path])   ← parsed from agent messages
+  ├── Source A: session file activity (sessions/<hash>.json)   ← tool/retrieval steps + timestamps
+  ├── Source B: legacy ai_threads in config.json (migrated)    ← fallback only
   └── Source C: markdown_turns (parsed from .md file)         ← log section + question section
        │
        ├── extract_turns_from_log_section: uses find_exact_heading("## 日志")
@@ -189,7 +221,7 @@ Lazy-loaded via `React.lazy()`. Detects `language-mermaid` fenced code blocks in
 | Standards | `list_standards`, `get_standard`, `search_standards`, `open_official_url` |
 | Projects | `list_project_tree`, `read_project_file`, `create_project_folder`, … |
 | Citations | `resolve_citation`, `scan_note_citations` |
-| AI | `generate_project_document`, `continue_project_document`, `append_ai_conversation_turn` (progress via `ai-generation-progress` events) |
+| AI | `generate_project_document`, `continue_project_document`, `append_ai_conversation_turn`, `list_ai_conversation_index` (progress via `ai-generation-progress` events) |
 | Config | `get_config`, `save_projects_dir`, `save_ai_config` |
 
 Full list: `app/src-tauri/src/lib.rs`.
@@ -226,6 +258,18 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 
 ### Fixed
 - **Follow-up "prefix not found" persisted through 0.1.9/0.1.10** (`ai_agent.rs`): the normal Continue path replayed the prior session's `tool`/`tool_calls` rows, which DeepSeek (`deepseek-reasoner` / `/beta` endpoint) rejects. The error-string retry never fired because DeepSeek's real wording ("…must be a user message, or an assistant message with prefix mode on") isn't the literal "prefix not found". Fixed structurally with `strip_tool_history` at seed time (prior tool plumbing removed, prior user/assistant text kept; current turn re-runs tools live, Continue embeds the full document → grounding unchanged). `is_prefix_not_found_error` broadened to all known DeepSeek wordings as a safety net.
+
+## Recent changelog (2026-06-22, agent-only rewrite)
+
+### Removed
+- **Pipeline generation mode** (`ai_pipeline.rs`, `AiConfig.generation_mode`, Settings toggle). Document generation is agent-only via `run_standards_agent`.
+- **`pipeline_live_check`** example → renamed **`agent_live_check`**.
+
+### Added / changed (PR-1–PR-5, summarized)
+- **Stateless cross-turn API:** each run sends `[system, current user]`; session files store text-only history under `sessions/`.
+- **Session migration** from `config.json` on `get_config`.
+- **Agent hardening:** phases, synthesis guard, tool storm skip, JSON repair, 429/503 backoff.
+- **`ai-debug.log`:** redacted run metadata in app data dir.
 
 ## Recent changelog (2026-06-21, technical audit — P0/P1)
 

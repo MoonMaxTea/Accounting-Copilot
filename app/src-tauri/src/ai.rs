@@ -6,12 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::citations::{resolve_citation, scan_citations};
 use crate::config::AiConfig;
 use crate::ai_agent::{
-    append_ai_debug_event, ai_provider_model, now_secs, AgentMode, AgentRunInput, AgentRunOutput,
-    run_standards_agent,
+    AgentMode, AgentRunInput, run_standards_agent,
 };
-use crate::ai_pipeline::run_standards_pipeline;
 use crate::models::{
-    AiAgentMessage, AiConversationTurn, AiDebugEvent, CitationScanResult, GenerateProjectResult,
+    AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult,
     ProjectValidationReport,
 };
 use crate::projects::{self, ParsedAiDocument};
@@ -389,36 +387,6 @@ pub fn validate_project_content(
     })
 }
 
-async fn run_standards_orchestrator(
-    app_handle: Option<&tauri::AppHandle>,
-    content_dir: &Path,
-    ai: &AiConfig,
-    input: AgentRunInput<'_>,
-) -> Result<AgentRunOutput, String> {
-    let mode = ai.generation_mode.as_deref().unwrap_or("agent");
-    let (provider, model) = ai_provider_model(ai);
-    append_ai_debug_event(
-        app_handle,
-        &AiDebugEvent {
-            ts_secs: now_secs(),
-            mode: Some(mode.to_string()),
-            phase: Some("orchestrator_start".to_string()),
-            provider,
-            model,
-            status: Some("started".to_string()),
-            prompt_chars: None,
-            completion_chars: None,
-            tool_name: None,
-            error_class: None,
-        },
-    );
-
-    match ai.generation_mode.as_deref() {
-        Some("pipeline") => run_standards_pipeline(app_handle, content_dir, ai, input).await,
-        _ => run_standards_agent(app_handle, content_dir, ai, input).await,
-    }
-}
-
 pub async fn generate_and_save_project(
     app_handle: Option<&tauri::AppHandle>,
     projects_root: &Path,
@@ -429,7 +397,7 @@ pub async fn generate_and_save_project(
     folder_relative: Option<&str>,
     prior_session: Vec<AiAgentMessage>,
 ) -> Result<(GenerateProjectResult, Vec<AiAgentMessage>, Vec<AiConversationTurn>), String> {
-    let agent_output = run_standards_orchestrator(
+    let agent_output = run_standards_agent(
         app_handle,
         content_dir,
         ai,
@@ -501,7 +469,7 @@ pub async fn continue_and_update_project(
         .map(|value| value.to_string_lossy().replace('\\', "/"))
         .filter(|value| !value.is_empty());
 
-    let agent_output = run_standards_orchestrator(
+    let agent_output = run_standards_agent(
         app_handle,
         content_dir,
         ai,
