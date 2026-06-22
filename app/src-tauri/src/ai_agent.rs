@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,9 +14,11 @@ use crate::citations::{load_paragraphs, resolve_citation};
 use crate::config::AiConfig;
 use crate::db;
 use crate::pack;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
-use crate::models::{AiAgentMessage, AiAgentToolCall, AiConversationTurn, AiGenerationProgress};
+use crate::models::{
+    AiAgentMessage, AiConversationTurn, AiDebugEvent, AiGenerationProgress,
+};
 
 const MAX_TOOL_ROUNDS: usize = 12;
 const MAX_SESSION_MESSAGES: usize = 80;
@@ -107,6 +110,92 @@ pub(crate) fn now_secs() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or(0)
+}
+
+pub(crate) fn ai_provider_model(ai: &AiConfig) -> (Option<String>, Option<String>) {
+    let provider = ai
+        .provider
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let model = ai
+        .model
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    (provider, model)
+}
+
+pub(crate) fn classify_debug_error(error: &str) -> Option<String> {
+    if is_prefix_not_found_error(error) {
+        Some("prefix".to_string())
+    } else if is_context_length_error(error) {
+        Some("context_length".to_string())
+    } else if is_retryable_provider_error(error) {
+        Some("retryable".to_string())
+    } else {
+        let lowered = error.to_lowercase();
+        if lowered.contains("401")
+            || lowered.contains("403")
+            || lowered.contains("invalid api key")
+            || lowered.contains("unauthorized")
+        {
+            Some("auth".to_string())
+        } else {
+            Some("provider".to_string())
+        }
+    }
+}
+
+pub(crate) fn count_api_message_chars(messages: &[ApiChatMessage]) -> u64 {
+    messages
+        .iter()
+        .map(|message| message.content.as_deref().unwrap_or("").len() as u64)
+        .sum()
+}
+
+pub(crate) fn append_ai_debug_event(
+    app_handle: Option<&tauri::AppHandle>,
+    event: &AiDebugEvent,
+) {
+    let Some(handle) = app_handle else {
+        return;
+    };
+    let Ok(dir) = handle.path().app_data_dir() else {
+        return;
+    };
+    let path = dir.join("ai-debug.log");
+    let Ok(line) = serde_json::to_string(event) else {
+        return;
+    };
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut file| writeln!(file, "{line}"));
+}
+
+pub(crate) fn emit_generation_progress(
+    app_handle: Option<&tauri::AppHandle>,
+    run_id: &str,
+    step_index: &mut u32,
+    phase: &str,
+    message: &str,
+    kind: Option<&str>,
+    detail: Option<&str>,
+) {
+    *step_index += 1;
+    let payload = AiGenerationProgress {
+        phase: phase.to_string(),
+        message: message.to_string(),
+        run_id: Some(run_id.to_string()),
+        step_index: Some(*step_index),
+        kind: kind.map(str::to_string),
+        detail: detail.map(str::to_string),
+    };
+    if let Some(handle) = app_handle {
+        let _ = handle.emit("ai-generation-progress", payload);
+    }
 }
 
 fn pack_agent_tools() -> Vec<Value> {
@@ -375,25 +464,6 @@ fn to_api_message(message: &AiAgentMessage) -> ApiChatMessage {
                         name: call.name.clone(),
                         arguments: call.arguments.clone(),
                     },
-                })
-                .collect()
-        }),
-        tool_call_id: message.tool_call_id.clone(),
-        name: message.name.clone(),
-    }
-}
-
-fn from_api_message(message: &ApiChatMessage) -> AiAgentMessage {
-    AiAgentMessage {
-        role: message.role.clone(),
-        content: message.content.clone(),
-        tool_calls: message.tool_calls.as_ref().map(|calls| {
-            calls
-                .iter()
-                .map(|call| AiAgentToolCall {
-                    id: call.id.clone(),
-                    name: call.function.name.clone(),
-                    arguments: call.function.arguments.clone(),
                 })
                 .collect()
         }),
@@ -1011,16 +1081,48 @@ pub async fn run_standards_agent(
     ai: &AiConfig,
     input: AgentRunInput<'_>,
 ) -> Result<AgentRunOutput, String> {
-    let emit = |phase: &str, msg: &str| {
-        if let Some(h) = app_handle {
-            let _ = h.emit(
-                "ai-generation-progress",
-                AiGenerationProgress { phase: phase.to_string(), message: msg.to_string() },
-            );
-        }
+    let run_id = format!("agent-{}", now_secs());
+    let mut step_index = 0u32;
+    let mode_label = match input.mode {
+        AgentMode::Create => "agent_create",
+        AgentMode::Continue => "agent_continue",
+    };
+    let (provider, model) = ai_provider_model(ai);
+
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some(mode_label.to_string()),
+            phase: Some("start".to_string()),
+            provider: provider.clone(),
+            model: model.clone(),
+            status: Some("started".to_string()),
+            prompt_chars: None,
+            completion_chars: None,
+            tool_name: None,
+            error_class: None,
+        },
+    );
+
+    let mut emit = |phase: &str, msg: &str, kind: Option<&str>, detail: Option<&str>| {
+        emit_generation_progress(
+            app_handle,
+            &run_id,
+            &mut step_index,
+            phase,
+            msg,
+            kind,
+            detail,
+        );
     };
 
-    emit("searching", "正在检索本地准则库…");
+    emit(
+        "searching",
+        "正在检索本地准则库…",
+        Some("retrieval"),
+        None,
+    );
     let _writing_spec = load_writing_spec(content_dir)?;
     let system_prompt = build_agent_system_prompt(content_dir, ai.allow_legacy_citations)?;
     let tools = pack_agent_tools();
@@ -1044,14 +1146,40 @@ pub async fn run_standards_agent(
     let mut phase = AgentPhase::Retrieving;
     let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
 
+    let log_chat_error = |phase: &str, messages: &[ApiChatMessage], error: String| {
+        append_ai_debug_event(
+            app_handle,
+            &AiDebugEvent {
+                ts_secs: now_secs(),
+                mode: Some(mode_label.to_string()),
+                phase: Some(phase.to_string()),
+                provider: provider.clone(),
+                model: model.clone(),
+                status: Some("error".to_string()),
+                prompt_chars: Some(count_api_message_chars(messages)),
+                completion_chars: None,
+                tool_name: None,
+                error_class: classify_debug_error(&error),
+            },
+        );
+        error
+    };
+
     for _round in 0..MAX_TOOL_ROUNDS {
-        let assistant = call_chat_with_tools(ai, &api_messages, &tools).await?;
+        let assistant = call_chat_with_tools(ai, &api_messages, &tools)
+            .await
+            .map_err(|error| log_chat_error("chat", &api_messages, error))?;
         api_messages.push(assistant.clone());
 
         if let Some(tool_calls) = assistant.tool_calls.as_ref() {
             if tool_calls.is_empty() {
                 phase = AgentPhase::Complete;
-                emit("generating", "正在生成项目笔记…");
+                emit(
+                    "generating",
+                    "正在生成项目笔记…",
+                    Some("writing"),
+                    None,
+                );
                 session.push(assistant_text_for_session(&assistant));
                 final_raw = assistant.content.unwrap_or_default();
                 break;
@@ -1063,7 +1191,22 @@ pub async fn run_standards_agent(
 
                 let tool_result = if is_repeated_tool_call(&recent_tool_calls, &tool_name, &tool_args)
                 {
-                    emit("searching", &format!("Skipped repeated tool call: {tool_name}"));
+                    emit("searching", &format!("Skipped repeated tool call: {tool_name}"), Some("tool"), Some("storm_skip"));
+                    append_ai_debug_event(
+                        app_handle,
+                        &AiDebugEvent {
+                            ts_secs: now_secs(),
+                            mode: Some(mode_label.to_string()),
+                            phase: Some("tool".to_string()),
+                            provider: provider.clone(),
+                            model: model.clone(),
+                            status: Some("skipped".to_string()),
+                            prompt_chars: None,
+                            completion_chars: None,
+                            tool_name: Some(tool_name.clone()),
+                            error_class: Some("storm".to_string()),
+                        },
+                    );
                     activity_log.push(AiConversationTurn {
                         role: "assistant".to_string(),
                         content: format!("Skipped repeated tool call: {tool_name}"),
@@ -1072,7 +1215,22 @@ pub async fn run_standards_agent(
                     });
                     json!({"error":"Repeated tool call skipped; synthesize with existing evidence or choose a different citation."}).to_string()
                 } else {
-                    emit("searching", &label);
+                    emit("searching", &label, Some("tool"), Some(&tool_name));
+                    append_ai_debug_event(
+                        app_handle,
+                        &AiDebugEvent {
+                            ts_secs: now_secs(),
+                            mode: Some(mode_label.to_string()),
+                            phase: Some("tool".to_string()),
+                            provider: provider.clone(),
+                            model: model.clone(),
+                            status: Some("dispatch".to_string()),
+                            prompt_chars: None,
+                            completion_chars: None,
+                            tool_name: Some(tool_name.clone()),
+                            error_class: None,
+                        },
+                    );
                     activity_log.push(AiConversationTurn {
                         role: "assistant".to_string(),
                         content: label.clone(),
@@ -1132,7 +1290,28 @@ pub async fn run_standards_agent(
 
     if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
         phase = AgentPhase::Synthesizing;
-        emit("generating", "正在合成最终项目笔记…");
+        debug_assert_eq!(phase, AgentPhase::Synthesizing);
+        append_ai_debug_event(
+            app_handle,
+            &AiDebugEvent {
+                ts_secs: now_secs(),
+                mode: Some(mode_label.to_string()),
+                phase: Some("synthesis_start".to_string()),
+                provider: provider.clone(),
+                model: model.clone(),
+                status: Some("started".to_string()),
+                prompt_chars: Some(count_api_message_chars(&api_messages)),
+                completion_chars: None,
+                tool_name: None,
+                error_class: None,
+            },
+        );
+        emit(
+            "generating",
+            "正在合成最终项目笔记…",
+            Some("synthesis"),
+            None,
+        );
         let synthesis_user = AiAgentMessage {
             role: "user".to_string(),
             content: Some(format!(
@@ -1152,14 +1331,29 @@ pub async fn run_standards_agent(
 
         // Use tool_choice: "none" rather than empty tools array —
         // some API providers reject mixed tool-call history without tool defs.
-        let assistant = call_chat_with_tools_synthesis(ai, &api_messages, &tools).await?;
+        let assistant = call_chat_with_tools_synthesis(ai, &api_messages, &tools)
+            .await
+            .map_err(|error| log_chat_error("synthesis", &api_messages, error))?;
         api_messages.push(assistant.clone());
         session.push(assistant_text_for_session(&assistant));
-        final_raw = assistant.content.unwrap_or_default();
+        final_raw = assistant.content.clone().unwrap_or_default();
         phase = AgentPhase::Complete;
+        append_ai_debug_event(
+            app_handle,
+            &AiDebugEvent {
+                ts_secs: now_secs(),
+                mode: Some(mode_label.to_string()),
+                phase: Some("synthesis_end".to_string()),
+                provider: provider.clone(),
+                model: model.clone(),
+                status: Some("ok".to_string()),
+                prompt_chars: Some(count_api_message_chars(&api_messages)),
+                completion_chars: Some(final_raw.len() as u64),
+                tool_name: None,
+                error_class: None,
+            },
+        );
     }
-
-    debug_assert_eq!(phase, AgentPhase::Complete);
 
     if final_raw.trim().is_empty() {
         return Err("Agent 未返回最终笔记内容。".to_string());
@@ -1168,6 +1362,24 @@ pub async fn run_standards_agent(
     parse_ai_response(&final_raw, None).map_err(|error| {
         format!("Agent 响应格式无效：{error}。请重试或缩短问题。")
     })?;
+
+    debug_assert_eq!(phase, AgentPhase::Complete);
+
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some(mode_label.to_string()),
+            phase: Some("complete".to_string()),
+            provider,
+            model,
+            status: Some("ok".to_string()),
+            prompt_chars: None,
+            completion_chars: Some(final_raw.len() as u64),
+            tool_name: None,
+            error_class: None,
+        },
+    );
 
     activity_log.push(AiConversationTurn {
         role: "assistant".to_string(),
@@ -1189,6 +1401,7 @@ pub async fn run_standards_agent(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::AiAgentToolCall;
     use std::fs;
     use tempfile::tempdir;
 

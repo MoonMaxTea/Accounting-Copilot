@@ -5,9 +5,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::citations::{resolve_citation, scan_citations};
 use crate::config::AiConfig;
-use crate::ai_agent::{AgentMode, AgentRunInput, AgentRunOutput, run_standards_agent};
+use crate::ai_agent::{
+    append_ai_debug_event, ai_provider_model, now_secs, AgentMode, AgentRunInput, AgentRunOutput,
+    run_standards_agent,
+};
 use crate::ai_pipeline::run_standards_pipeline;
-use crate::models::{AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult, ProjectValidationReport};
+use crate::models::{
+    AiAgentMessage, AiConversationTurn, AiDebugEvent, CitationScanResult, GenerateProjectResult,
+    ProjectValidationReport,
+};
 use crate::projects::{self, ParsedAiDocument};
 
 pub(crate) const PROJECT_NAME_START: &str = "<<<PROJECT_NAME>>>";
@@ -389,6 +395,24 @@ async fn run_standards_orchestrator(
     ai: &AiConfig,
     input: AgentRunInput<'_>,
 ) -> Result<AgentRunOutput, String> {
+    let mode = ai.generation_mode.as_deref().unwrap_or("pipeline");
+    let (provider, model) = ai_provider_model(ai);
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some(mode.to_string()),
+            phase: Some("orchestrator_start".to_string()),
+            provider,
+            model,
+            status: Some("started".to_string()),
+            prompt_chars: None,
+            completion_chars: None,
+            tool_name: None,
+            error_class: None,
+        },
+    );
+
     match ai.generation_mode.as_deref() {
         Some("agent") => run_standards_agent(app_handle, content_dir, ai, input).await,
         _ => run_standards_pipeline(app_handle, content_dir, ai, input).await,

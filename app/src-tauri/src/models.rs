@@ -205,9 +205,40 @@ pub struct SimilarProjectMatch {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AiDebugEvent {
+    pub ts_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_chars: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_chars: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_class: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct AiGenerationProgress {
     pub phase: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_index: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,14 +1,13 @@
 use std::path::Path;
 
-use tauri::Emitter;
-
 use crate::ai::parse_ai_response;
 use crate::ai_agent::{
-    build_core_writing_prompt, plain_chat_message, request_chat_plain, AgentMode, AgentRunInput,
-    AgentRunOutput, strip_tool_history,
+    append_ai_debug_event, build_core_writing_prompt, emit_generation_progress, ai_provider_model,
+    now_secs, plain_chat_message, request_chat_plain, AgentMode, AgentRunInput, AgentRunOutput,
+    strip_tool_history,
 };
 use crate::config::AiConfig;
-use crate::models::{AiAgentMessage, AiConversationTurn, AiGenerationProgress};
+use crate::models::{AiAgentMessage, AiConversationTurn, AiDebugEvent};
 use crate::retrieval::{
     derive_plan_from_question, gather_evidence, merge_retrieval_plans, summarize_for_planning,
     truncate_for_continue, CONTINUE_EVIDENCE_BUDGET, CREATE_EVIDENCE_BUDGET, EvidencePack,
@@ -163,22 +162,42 @@ pub async fn run_standards_pipeline(
     ai: &AiConfig,
     input: AgentRunInput<'_>,
 ) -> Result<AgentRunOutput, String> {
-    let emit = |phase: &str, msg: &str| {
-        if let Some(handle) = app_handle {
-            let _ = handle.emit(
-                "ai-generation-progress",
-                AiGenerationProgress {
-                    phase: phase.to_string(),
-                    message: msg.to_string(),
-                },
-            );
-        }
+    let run_id = format!("pipeline-{}", now_secs());
+    let mut step_index = 0u32;
+    let (provider, model) = ai_provider_model(ai);
+
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some("pipeline".to_string()),
+            phase: Some("start".to_string()),
+            provider: provider.clone(),
+            model: model.clone(),
+            status: Some("started".to_string()),
+            prompt_chars: None,
+            completion_chars: None,
+            tool_name: None,
+            error_class: None,
+        },
+    );
+
+    let mut emit = |phase: &str, msg: &str, kind: Option<&str>, detail: Option<&str>| {
+        emit_generation_progress(
+            app_handle,
+            &run_id,
+            &mut step_index,
+            phase,
+            msg,
+            kind,
+            detail,
+        );
     };
 
     let _ = &input.prior_messages;
     // prior_messages are never sent to LLM calls; session persistence appends stripped text below.
 
-    emit("searching", "正在规划检索…");
+    emit("searching", "正在规划检索…", Some("planning"), None);
 
     let doc_summary = input
         .existing_markdown
@@ -198,10 +217,20 @@ pub async fn run_standards_pipeline(
     };
 
     for query in &plan.queries {
-        emit("searching", &format!("正在检索：{query}"));
+        emit(
+            "searching",
+            &format!("正在检索：{query}"),
+            Some("retrieval"),
+            Some("query"),
+        );
     }
     for standard in &plan.standards {
-        emit("searching", &format!("正在读取准则：{standard}"));
+        emit(
+            "searching",
+            &format!("正在读取准则：{standard}"),
+            Some("retrieval"),
+            Some("standard"),
+        );
     }
 
     let evidence = gather_evidence(
@@ -212,10 +241,15 @@ pub async fn run_standards_pipeline(
     );
 
     for item in &evidence.items {
-        emit("searching", &format!("正在读取：{}", item.citation));
+        emit(
+            "searching",
+            &format!("正在读取：{}", item.citation),
+            Some("retrieval"),
+            Some("evidence"),
+        );
     }
 
-    emit("generating", "正在生成项目笔记…");
+    emit("generating", "正在生成项目笔记…", Some("writing"), None);
 
     let raw = write_note(
         ai,
@@ -227,6 +261,22 @@ pub async fn run_standards_pipeline(
         input.existing_markdown,
     )
     .await?;
+
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some("pipeline".to_string()),
+            phase: Some("write_end".to_string()),
+            provider,
+            model,
+            status: Some("ok".to_string()),
+            prompt_chars: None,
+            completion_chars: Some(raw.len() as u64),
+            tool_name: None,
+            error_class: None,
+        },
+    );
 
     parse_ai_response(&raw, Some(input.question)).map_err(|error| {
         format!("Pipeline 响应格式无效：{error}。请重试或缩短问题。")

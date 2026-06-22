@@ -151,6 +151,10 @@ pub async fn generate_project_document(
             crate::models::AiGenerationProgress {
                 phase: "error".to_string(),
                 message: error.clone(),
+                run_id: None,
+                step_index: None,
+                kind: None,
+                detail: None,
             },
         );
         error
@@ -160,6 +164,10 @@ pub async fn generate_project_document(
         crate::models::AiGenerationProgress {
             phase: "complete".to_string(),
             message: result.file_path.clone(),
+            run_id: None,
+            step_index: None,
+            kind: None,
+            detail: None,
         },
     );
     persist_agent_run(
@@ -206,6 +214,10 @@ pub async fn continue_project_document(
             crate::models::AiGenerationProgress {
                 phase: "error".to_string(),
                 message: error.clone(),
+                run_id: None,
+                step_index: None,
+                kind: None,
+                detail: None,
             },
         );
         error
@@ -215,6 +227,10 @@ pub async fn continue_project_document(
         crate::models::AiGenerationProgress {
             phase: "complete".to_string(),
             message: result.file_path.clone(),
+            run_id: None,
+            step_index: None,
+            kind: None,
+            detail: None,
         },
     );
     persist_agent_run(
