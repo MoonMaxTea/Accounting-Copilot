@@ -26,6 +26,15 @@ pub enum AgentMode {
     Continue,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgentPhase {
+    Retrieving,
+    Synthesizing,
+    Complete,
+}
+
+const TOOL_STORM_WINDOW: usize = 20;
+
 pub struct AgentRunInput<'a> {
     pub mode: AgentMode,
     pub question: &'a str,
@@ -393,6 +402,53 @@ fn from_api_message(message: &ApiChatMessage) -> AiAgentMessage {
     }
 }
 
+fn repair_truncated_json(raw: &str) -> String {
+    let mut open_braces = 0i32;
+    let mut open_brackets = 0i32;
+    for ch in raw.chars() {
+        match ch {
+            '{' => open_braces += 1,
+            '}' => open_braces -= 1,
+            '[' => open_brackets += 1,
+            ']' => open_brackets -= 1,
+            _ => {}
+        }
+    }
+    let mut repaired = raw.to_string();
+    for _ in 0..open_brackets.max(0) {
+        repaired.push(']');
+    }
+    for _ in 0..open_braces.max(0) {
+        repaired.push('}');
+    }
+    repaired
+}
+
+fn parse_tool_args_with_repair<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T, String> {
+    let trimmed = raw.trim();
+    match serde_json::from_str::<T>(trimmed) {
+        Ok(value) => Ok(value),
+        Err(original) => {
+            let repaired = repair_truncated_json(trimmed);
+            if repaired != trimmed {
+                serde_json::from_str(&repaired).map_err(|error| {
+                    format!("参数解析失败: {original}; repair attempt: {error}")
+                })
+            } else {
+                Err(format!("参数解析失败: {original}"))
+            }
+        }
+    }
+}
+
+fn is_repeated_tool_call(recent: &[(String, String)], name: &str, arguments: &str) -> bool {
+    recent
+        .iter()
+        .filter(|(tool_name, tool_args)| tool_name == name && tool_args == arguments)
+        .count()
+        >= 2
+}
+
 pub fn execute_pack_tool(
     content_dir: &Path,
     allow_legacy: bool,
@@ -401,8 +457,7 @@ pub fn execute_pack_tool(
 ) -> Result<String, String> {
     match tool_name {
         "search_local_pack" => {
-            let args: SearchLocalPackArgs =
-                serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
+            let args: SearchLocalPackArgs = parse_tool_args_with_repair(arguments)?;
             let limit = args.limit.unwrap_or(10).clamp(1, 20);
             let query = args.query.trim();
             let mut results: Vec<Value> = Vec::new();
@@ -480,8 +535,7 @@ pub fn execute_pack_tool(
                 .map_err(|error| error.to_string())
         }
         "get_pack_paragraph" => {
-            let args: GetPackParagraphArgs =
-                serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
+            let args: GetPackParagraphArgs = parse_tool_args_with_repair(arguments)?;
             let citation = args.citation.trim();
             let target = resolve_citation(content_dir, citation)?
                 .ok_or_else(|| {
@@ -514,8 +568,7 @@ pub fn execute_pack_tool(
             .map_err(|error| error.to_string())
         }
         "list_standard_paragraphs" => {
-            let args: ListStandardParagraphsArgs =
-                serde_json::from_str(arguments).map_err(|error| format!("参数解析失败: {error}"))?;
+            let args: ListStandardParagraphsArgs = parse_tool_args_with_repair(arguments)?;
             let entries = load_paragraphs(content_dir)?;
             let mut citations: Vec<&crate::citations::ParagraphRecord> = entries
                 .iter()
@@ -607,7 +660,10 @@ fn tool_activity_label(tool_name: &str, arguments: &str) -> String {
 }
 
 fn response_has_final_blocks(text: &str) -> bool {
-    text.contains(MARKDOWN_START) && text.contains(MARKDOWN_END)
+    text.contains(PROJECT_NAME_START)
+        && text.contains(PROJECT_NAME_END)
+        && text.contains(MARKDOWN_START)
+        && text.contains(MARKDOWN_END)
 }
 
 /// True when the provider rejected the request because of DeepSeek's
@@ -900,12 +956,42 @@ async fn chat_completion_with_recovery(
     }
 }
 
+fn is_retryable_provider_error(error: &str) -> bool {
+    if is_prefix_not_found_error(error) || is_context_length_error(error) {
+        return false;
+    }
+    let lowered = error.to_lowercase();
+    lowered.contains("429")
+        || lowered.contains("rate limit")
+        || lowered.contains("503")
+        || lowered.contains("service unavailable")
+}
+
+async fn chat_completion_with_backoff(
+    ai: &AiConfig,
+    messages: &[ApiChatMessage],
+    tools: &[Value],
+    tool_choice: &str,
+) -> Result<ApiChatMessage, String> {
+    const BACKOFF_MS: [u64; 2] = [500, 1000];
+    for attempt in 0..3 {
+        match chat_completion_with_recovery(ai, messages, tools, tool_choice).await {
+            Ok(message) => return Ok(message),
+            Err(error) if is_retryable_provider_error(&error) && attempt + 1 < 3 => {
+                tokio::time::sleep(std::time::Duration::from_millis(BACKOFF_MS[attempt])).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err("AI 请求重试次数已用尽".to_string())
+}
+
 async fn call_chat_with_tools(
     ai: &AiConfig,
     messages: &[ApiChatMessage],
     tools: &[Value],
 ) -> Result<ApiChatMessage, String> {
-    chat_completion_with_recovery(ai, messages, tools, "auto").await
+    chat_completion_with_backoff(ai, messages, tools, "auto").await
 }
 
 /// Like call_chat_with_tools but forces tool_choice: "none" so the model
@@ -916,7 +1002,7 @@ async fn call_chat_with_tools_synthesis(
     messages: &[ApiChatMessage],
     tools: &[Value],
 ) -> Result<ApiChatMessage, String> {
-    chat_completion_with_recovery(ai, messages, tools, "none").await
+    chat_completion_with_backoff(ai, messages, tools, "none").await
 }
 
 pub async fn run_standards_agent(
@@ -955,6 +1041,8 @@ pub async fn run_standards_agent(
     });
 
     let mut final_raw = String::new();
+    let mut phase = AgentPhase::Retrieving;
+    let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
 
     for _round in 0..MAX_TOOL_ROUNDS {
         let assistant = call_chat_with_tools(ai, &api_messages, &tools).await?;
@@ -962,29 +1050,49 @@ pub async fn run_standards_agent(
 
         if let Some(tool_calls) = assistant.tool_calls.as_ref() {
             if tool_calls.is_empty() {
+                phase = AgentPhase::Complete;
                 emit("generating", "正在生成项目笔记…");
                 session.push(assistant_text_for_session(&assistant));
                 final_raw = assistant.content.unwrap_or_default();
                 break;
             }
             for tool_call in tool_calls {
-                let label = tool_activity_label(&tool_call.function.name, &tool_call.function.arguments);
-                emit("searching", &label);
-                activity_log.push(AiConversationTurn {
-                    role: "assistant".to_string(),
-                    content: label.clone(),
-                    timestamp_secs: now_secs(),
-                    kind: "tool".to_string(),
-                });
+                let tool_name = tool_call.function.name.clone();
+                let tool_args = tool_call.function.arguments.clone();
+                let label = tool_activity_label(&tool_name, &tool_args);
 
-                let tool_result = match execute_pack_tool(
-                    content_dir,
-                    ai.allow_legacy_citations,
-                    &tool_call.function.name,
-                    &tool_call.function.arguments,
-                ) {
-                    Ok(result) => result,
-                    Err(error) => json!({ "error": error }).to_string(),
+                let tool_result = if is_repeated_tool_call(&recent_tool_calls, &tool_name, &tool_args)
+                {
+                    emit("searching", &format!("Skipped repeated tool call: {tool_name}"));
+                    activity_log.push(AiConversationTurn {
+                        role: "assistant".to_string(),
+                        content: format!("Skipped repeated tool call: {tool_name}"),
+                        timestamp_secs: now_secs(),
+                        kind: "tool".to_string(),
+                    });
+                    json!({"error":"Repeated tool call skipped; synthesize with existing evidence or choose a different citation."}).to_string()
+                } else {
+                    emit("searching", &label);
+                    activity_log.push(AiConversationTurn {
+                        role: "assistant".to_string(),
+                        content: label.clone(),
+                        timestamp_secs: now_secs(),
+                        kind: "tool".to_string(),
+                    });
+                    recent_tool_calls.push((tool_name.clone(), tool_args.clone()));
+                    if recent_tool_calls.len() > TOOL_STORM_WINDOW {
+                        let overflow = recent_tool_calls.len() - TOOL_STORM_WINDOW;
+                        recent_tool_calls.drain(0..overflow);
+                    }
+                    match execute_pack_tool(
+                        content_dir,
+                        ai.allow_legacy_citations,
+                        &tool_name,
+                        &tool_args,
+                    ) {
+                        Ok(result) => result,
+                        Err(error) => json!({ "error": error }).to_string(),
+                    }
                 };
 
                 let tool_message = AiAgentMessage {
@@ -992,7 +1100,7 @@ pub async fn run_standards_agent(
                     content: Some(tool_result),
                     tool_calls: None,
                     tool_call_id: Some(tool_call.id.clone()),
-                    name: Some(tool_call.function.name.clone()),
+                    name: Some(tool_name),
                 };
                 api_messages.push(to_api_message(&tool_message));
             }
@@ -1001,6 +1109,7 @@ pub async fn run_standards_agent(
 
         final_raw = assistant.content.clone().unwrap_or_default();
         if response_has_final_blocks(&final_raw) {
+            phase = AgentPhase::Complete;
             session.push(assistant_text_for_session(&assistant));
             break;
         }
@@ -1022,6 +1131,8 @@ pub async fn run_standards_agent(
     }
 
     if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
+        phase = AgentPhase::Synthesizing;
+        emit("generating", "正在合成最终项目笔记…");
         let synthesis_user = AiAgentMessage {
             role: "user".to_string(),
             content: Some(format!(
@@ -1045,7 +1156,10 @@ pub async fn run_standards_agent(
         api_messages.push(assistant.clone());
         session.push(assistant_text_for_session(&assistant));
         final_raw = assistant.content.unwrap_or_default();
+        phase = AgentPhase::Complete;
     }
+
+    debug_assert_eq!(phase, AgentPhase::Complete);
 
     if final_raw.trim().is_empty() {
         return Err("Agent 未返回最终笔记内容。".to_string());
@@ -1077,6 +1191,95 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn response_has_final_blocks_requires_project_name_and_markdown() {
+        let complete = format!(
+            "{PROJECT_NAME_START}Demo{PROJECT_NAME_END}\n{MARKDOWN_START}# Body{MARKDOWN_END}",
+            PROJECT_NAME_START = PROJECT_NAME_START,
+            PROJECT_NAME_END = PROJECT_NAME_END,
+            MARKDOWN_START = MARKDOWN_START,
+            MARKDOWN_END = MARKDOWN_END,
+        );
+        assert!(response_has_final_blocks(&complete));
+
+        let missing_name = format!("{MARKDOWN_START}# Body{MARKDOWN_END}", MARKDOWN_START = MARKDOWN_START, MARKDOWN_END = MARKDOWN_END);
+        assert!(!response_has_final_blocks(&missing_name));
+
+        let missing_markdown = format!(
+            "{PROJECT_NAME_START}Demo{PROJECT_NAME_END}",
+            PROJECT_NAME_START = PROJECT_NAME_START,
+            PROJECT_NAME_END = PROJECT_NAME_END,
+        );
+        assert!(!response_has_final_blocks(&missing_markdown));
+    }
+
+    #[test]
+    fn repeated_tool_call_detects_storm() {
+        let recent = vec![
+            ("search_local_pack".to_string(), r#"{"query":"IFRS 11"}"#.to_string()),
+            ("search_local_pack".to_string(), r#"{"query":"IFRS 11"}"#.to_string()),
+        ];
+        assert!(is_repeated_tool_call(
+            &recent,
+            "search_local_pack",
+            r#"{"query":"IFRS 11"}"#
+        ));
+    }
+
+    #[test]
+    fn repeated_tool_call_allows_different_arguments() {
+        let recent = vec![
+            ("search_local_pack".to_string(), r#"{"query":"IFRS 11"}"#.to_string()),
+            ("search_local_pack".to_string(), r#"{"query":"IAS 28"}"#.to_string()),
+        ];
+        assert!(!is_repeated_tool_call(
+            &recent,
+            "search_local_pack",
+            r#"{"query":"IAS 28"}"#
+        ));
+    }
+
+    #[test]
+    fn repeated_tool_call_allows_different_tools() {
+        let recent = vec![
+            ("search_local_pack".to_string(), r#"{"query":"IFRS 11"}"#.to_string()),
+            ("search_local_pack".to_string(), r#"{"query":"IFRS 11"}"#.to_string()),
+        ];
+        assert!(!is_repeated_tool_call(
+            &recent,
+            "get_pack_paragraph",
+            r#"{"citation":"IFRS 11 §7"}"#
+        ));
+    }
+
+    #[test]
+    fn parse_tool_args_with_repair_handles_complete_and_truncated_json() {
+        let complete: SearchLocalPackArgs =
+            parse_tool_args_with_repair(r#"{"query":"IFRS 11","limit":5}"#).expect("complete");
+        assert_eq!(complete.query, "IFRS 11");
+        assert_eq!(complete.limit, Some(5));
+
+        let trailing: SearchLocalPackArgs =
+            parse_tool_args_with_repair(r#"  {"query":"IFRS 11"}  "#).expect("trimmed");
+        assert_eq!(trailing.query, "IFRS 11");
+
+        let truncated: SearchLocalPackArgs =
+            parse_tool_args_with_repair(r#"{"query":"IFRS 11""#).expect("repaired");
+        assert_eq!(truncated.query, "IFRS 11");
+
+        assert!(parse_tool_args_with_repair::<SearchLocalPackArgs>("not-json").is_err());
+    }
+
+    #[test]
+    fn retryable_provider_error_classifies_transient_failures() {
+        assert!(is_retryable_provider_error("deepseek 返回错误 (429): rate limit"));
+        assert!(is_retryable_provider_error("503 Service Unavailable"));
+        assert!(!is_retryable_provider_error("401 invalid api key"));
+        assert!(!is_retryable_provider_error("403 forbidden"));
+        assert!(!is_retryable_provider_error("prefix not found"));
+        assert!(!is_retryable_provider_error("context_length_exceeded"));
+    }
 
     #[test]
     fn agent_turn_seed_uses_only_system_and_current_user_for_api() {
