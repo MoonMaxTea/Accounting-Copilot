@@ -234,6 +234,11 @@ pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Res
     ))
 }
 
+fn normalize_markdown_for_prompt(markdown: &str) -> String {
+    let stripped = markdown.strip_prefix('\u{feff}').unwrap_or(markdown);
+    stripped.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 fn build_user_turn(input: &AgentRunInput<'_>) -> String {
     let mut text = match input.mode {
         AgentMode::Create => format!("用户问题：\n{}", input.question.trim()),
@@ -246,9 +251,51 @@ fn build_user_turn(input: &AgentRunInput<'_>) -> String {
         text.push_str(&format!("\n\n补充事实：\n{facts}"));
     }
     if let Some(existing) = input.existing_markdown {
+        let existing = normalize_markdown_for_prompt(existing);
         text.push_str(&format!("\n\n---\n\n当前项目笔记全文：\n{existing}"));
     }
     text
+}
+
+/// Seed a new Agent run: persisted session keeps prior text + current user; API
+/// payload is stateless `[system, current user]` only.
+fn seed_agent_turn(
+    system_prompt: String,
+    prior_messages: Vec<AiAgentMessage>,
+    current_user_turn: String,
+) -> (Vec<AiAgentMessage>, Vec<ApiChatMessage>) {
+    let mut persisted_session = trim_session(strip_tool_history(prior_messages));
+    let current_user = AiAgentMessage {
+        role: "user".to_string(),
+        content: Some(current_user_turn),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+    };
+    persisted_session.push(current_user.clone());
+
+    let api_messages = vec![
+        ApiChatMessage {
+            role: "system".to_string(),
+            content: Some(system_prompt),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        },
+        to_api_message(&current_user),
+    ];
+
+    (persisted_session, api_messages)
+}
+
+fn assistant_text_for_session(message: &ApiChatMessage) -> AiAgentMessage {
+    AiAgentMessage {
+        role: "assistant".to_string(),
+        content: message.content.clone(),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+    }
 }
 
 fn trim_session(messages: Vec<AiAgentMessage>) -> Vec<AiAgentMessage> {
@@ -893,28 +940,8 @@ pub async fn run_standards_agent(
     let tools = pack_agent_tools();
 
     let user_turn = build_user_turn(&input);
-    // Seed from prior turns WITHOUT replaying their tool plumbing — replayed
-    // tool/tool_calls rows are what trigger DeepSeek's prefix / "last message
-    // must be a user message" rejections on follow-ups.
-    let mut session = trim_session(strip_tool_history(input.prior_messages));
-    session.push(AiAgentMessage {
-        role: "user".to_string(),
-        content: Some(user_turn),
-        tool_calls: None,
-        tool_call_id: None,
-        name: None,
-    });
-
-    let mut api_messages = vec![ApiChatMessage {
-        role: "system".to_string(),
-        content: Some(system_prompt),
-        tool_calls: None,
-        tool_call_id: None,
-        name: None,
-    }];
-    for message in &session {
-        api_messages.push(to_api_message(message));
-    }
+    let (mut session, mut api_messages) =
+        seed_agent_turn(system_prompt, input.prior_messages, user_turn);
 
     let mut activity_log = Vec::new();
     activity_log.push(AiConversationTurn {
@@ -931,13 +958,12 @@ pub async fn run_standards_agent(
 
     for _round in 0..MAX_TOOL_ROUNDS {
         let assistant = call_chat_with_tools(ai, &api_messages, &tools).await?;
-        let stored_assistant = from_api_message(&assistant);
-        session.push(stored_assistant.clone());
         api_messages.push(assistant.clone());
 
         if let Some(tool_calls) = assistant.tool_calls.as_ref() {
             if tool_calls.is_empty() {
                 emit("generating", "正在生成项目笔记…");
+                session.push(assistant_text_for_session(&assistant));
                 final_raw = assistant.content.unwrap_or_default();
                 break;
             }
@@ -963,19 +989,19 @@ pub async fn run_standards_agent(
 
                 let tool_message = AiAgentMessage {
                     role: "tool".to_string(),
-                    content: Some(tool_result.clone()),
+                    content: Some(tool_result),
                     tool_calls: None,
                     tool_call_id: Some(tool_call.id.clone()),
                     name: Some(tool_call.function.name.clone()),
                 };
-                session.push(tool_message.clone());
                 api_messages.push(to_api_message(&tool_message));
             }
             continue;
         }
 
-        final_raw = assistant.content.unwrap_or_default();
+        final_raw = assistant.content.clone().unwrap_or_default();
         if response_has_final_blocks(&final_raw) {
+            session.push(assistant_text_for_session(&assistant));
             break;
         }
         if _round + 1 >= MAX_TOOL_ROUNDS {
@@ -992,7 +1018,6 @@ pub async fn run_standards_agent(
             tool_call_id: None,
             name: None,
         };
-        session.push(nudge.clone());
         api_messages.push(to_api_message(&nudge));
     }
 
@@ -1012,15 +1037,13 @@ pub async fn run_standards_agent(
             tool_call_id: None,
             name: None,
         };
-        session.push(synthesis_user.clone());
         api_messages.push(to_api_message(&synthesis_user));
 
         // Use tool_choice: "none" rather than empty tools array —
         // some API providers reject mixed tool-call history without tool defs.
         let assistant = call_chat_with_tools_synthesis(ai, &api_messages, &tools).await?;
-        let stored_assistant = from_api_message(&assistant);
-        session.push(stored_assistant);
         api_messages.push(assistant.clone());
+        session.push(assistant_text_for_session(&assistant));
         final_raw = assistant.content.unwrap_or_default();
     }
 
@@ -1054,6 +1077,68 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn agent_turn_seed_uses_only_system_and_current_user_for_api() {
+        let prior = vec![
+            AiAgentMessage {
+                role: "user".to_string(),
+                content: Some("prior question".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "assistant".to_string(),
+                content: Some("prior answer".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "assistant".to_string(),
+                content: None,
+                tool_calls: Some(vec![AiAgentToolCall {
+                    id: "call_1".to_string(),
+                    name: "search_local_pack".to_string(),
+                    arguments: r#"{"query":"IFRS 11"}"#.to_string(),
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            AiAgentMessage {
+                role: "tool".to_string(),
+                content: Some("pack snippet".to_string()),
+                tool_calls: None,
+                tool_call_id: Some("call_1".to_string()),
+                name: Some("search_local_pack".to_string()),
+            },
+        ];
+
+        let (persisted, api_messages) =
+            seed_agent_turn("system prompt".to_string(), prior, "current turn".to_string());
+
+        let api_roles: Vec<&str> = api_messages.iter().map(|m| m.role.as_str()).collect();
+        assert_eq!(api_roles, vec!["system", "user"]);
+        assert_eq!(api_messages[0].content.as_deref(), Some("system prompt"));
+        assert_eq!(api_messages[1].content.as_deref(), Some("current turn"));
+
+        assert!(persisted.iter().all(|m| m.role != "tool"));
+        assert!(persisted.iter().all(|m| m.tool_calls.is_none()));
+        let persisted_roles: Vec<&str> = persisted.iter().map(|m| m.role.as_str()).collect();
+        assert_eq!(
+            persisted_roles,
+            vec!["user", "assistant", "user"],
+            "prior user/assistant text plus current user"
+        );
+        assert_eq!(persisted.last().and_then(|m| m.content.as_deref()), Some("current turn"));
+    }
+
+    #[test]
+    fn normalize_markdown_for_prompt_strips_bom_and_crlf() {
+        let raw = "\u{feff}line1\r\nline2\rline3";
+        assert_eq!(normalize_markdown_for_prompt(raw), "line1\nline2\nline3");
+    }
 
     #[test]
     fn list_standard_paragraphs_returns_indexed_citations() {
