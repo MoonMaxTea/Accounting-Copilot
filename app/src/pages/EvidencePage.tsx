@@ -70,8 +70,9 @@ interface EvidencePageProps {
   genError: string | null;
   genResultPath: string | null;
   genCounter: number;
+  genEpoch: number;
   onGenConsumed: () => void;
-  onGenerationStart: () => void;
+  onGenerationStart: () => number;
 }
 
 export function EvidencePage({
@@ -80,6 +81,7 @@ export function EvidencePage({
   genError,
   genResultPath,
   genCounter,
+  genEpoch,
   onGenConsumed,
   onGenerationStart,
 }: EvidencePageProps) {
@@ -273,8 +275,13 @@ export function EvidencePage({
 
   // React to AI generation results from global events (survives page switches)
   const genResultConsumedRef = useRef<number>(0);
+  const requestEpochRef = useRef(0);
   useEffect(() => {
     if (genCounter <= genResultConsumedRef.current) {
+      return;
+    }
+    if (genEpoch !== requestEpochRef.current) {
+      genResultConsumedRef.current = genCounter;
       return;
     }
     genResultConsumedRef.current = genCounter;
@@ -307,7 +314,7 @@ export function EvidencePage({
         onGenConsumed();
       });
     }
-  }, [genCounter, genError, genResultPath]);
+  }, [genCounter, genError, genResultPath, genEpoch]);
 
   const handleCitationClick = async (citation: string) => {
     setError(null);
@@ -394,7 +401,7 @@ export function EvidencePage({
       return;
     }
 
-    onGenerationStart();
+    requestEpochRef.current = onGenerationStart();
     setGenerating(true);
     setError(null);
     try {
@@ -433,7 +440,7 @@ export function EvidencePage({
       return;
     }
 
-    onGenerationStart();
+    requestEpochRef.current = onGenerationStart();
     setGenerating(true);
     setError(null);
     try {
@@ -451,7 +458,12 @@ export function EvidencePage({
       showToast(tr("projectNoteUpdated"));
       await refreshConversation(selected.relative_path);
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      const message = caught instanceof Error ? caught.message : String(caught);
+      const prefixed = message.startsWith("Continue failed:")
+        ? message
+        : `Continue failed: ${message}`;
+      setError(prefixed);
+      showToast(prefixed, "error");
     } finally {
       setGenerating(false);
     }

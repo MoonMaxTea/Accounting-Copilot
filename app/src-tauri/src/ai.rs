@@ -8,6 +8,7 @@ use crate::config::AiConfig;
 use crate::ai_agent::{
     AgentMode, AgentRunInput, run_standards_agent,
 };
+use crate::ai_continue::run_continue_writer;
 use crate::models::{
     AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult,
     ProjectValidationReport,
@@ -460,16 +461,20 @@ pub async fn continue_and_update_project(
     facts: Option<&str>,
     prior_session: Vec<AiAgentMessage>,
 ) -> Result<(GenerateProjectResult, Vec<AiAgentMessage>, Vec<AiConversationTurn>), String> {
-    let existing = projects::read_project_file(projects_root, file_path)?;
+    let canonical_root = projects_root
+        .canonicalize()
+        .map_err(|error| format!("项目目录无效: {error}"))?;
+    let validated = crate::config::validate_project_path(projects_root, file_path)?;
+    let existing = std::fs::read_to_string(&validated).map_err(|error| error.to_string())?;
     let preserve_date = projects::extract_frontmatter_date(&existing);
     let project_name = projects::extract_title_for_entry(&existing, "项目");
-    let folder_relative = file_path
+    let folder_relative = validated
         .parent()
-        .and_then(|parent| parent.strip_prefix(projects_root).ok())
+        .and_then(|parent| parent.strip_prefix(&canonical_root).ok())
         .map(|value| value.to_string_lossy().replace('\\', "/"))
         .filter(|value| !value.is_empty());
 
-    let agent_output = run_standards_agent(
+    let agent_output = run_continue_writer(
         app_handle,
         content_dir,
         ai,
@@ -498,7 +503,7 @@ pub async fn continue_and_update_project(
         Some(question),
         true,
     )?;
-    let entry = projects::update_project_file(projects_root, file_path, &normalized_markdown)?;
+    let entry = projects::update_project_file(projects_root, &validated, &normalized_markdown)?;
 
     Ok((
         GenerateProjectResult {

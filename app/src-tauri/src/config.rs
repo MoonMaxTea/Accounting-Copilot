@@ -311,3 +311,36 @@ pub fn validate_project_path(projects_root: &Path, file_path: &Path) -> Result<P
 
     Ok(canonical_file)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn validate_project_path_accepts_non_canonical_input() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("projects");
+        let folder = root.join("folder");
+        let file = folder.join("note.md");
+        fs::create_dir_all(&folder).expect("mkdir");
+        fs::write(&file, "# test").expect("write");
+
+        let via_dot = folder.join("..").join("folder").join("note.md");
+        let validated = validate_project_path(&root, &via_dot).expect("validate");
+        assert_eq!(validated, file.canonicalize().expect("canonical"));
+    }
+
+    #[test]
+    fn validate_project_path_rejects_outside_root() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("projects");
+        let outside = temp.path().join("outside.md");
+        fs::create_dir_all(&root).expect("mkdir");
+        fs::write(&outside, "# outside").expect("write");
+
+        let err = validate_project_path(&root, &outside).expect_err("outside");
+        assert!(err.contains("不在项目目录"));
+    }
+}

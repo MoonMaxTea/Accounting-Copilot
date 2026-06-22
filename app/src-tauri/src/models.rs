@@ -204,7 +204,7 @@ pub struct SimilarProjectMatch {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct AiDebugEvent {
     pub ts_secs: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -225,6 +225,12 @@ pub struct AiDebugEvent {
     pub tool_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_class: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

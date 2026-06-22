@@ -4,6 +4,7 @@ use tauri::AppHandle;
 use tauri::Emitter;
 
 use crate::ai;
+use crate::ai_agent::{self, now_secs};
 use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, scan_citations};
 use crate::config::{self, AiConfig};
 use crate::db;
@@ -189,49 +190,130 @@ pub async fn continue_project_document(
     question: String,
     facts: Option<String>,
 ) -> Result<GenerateProjectResult, String> {
-    let projects_root = config::ensure_projects_dir(&app)?;
-    let content_dir = content_dir(&app)?;
-    let config = config::load_config(&app)?;
-    let validated = config::validate_project_path(&projects_root, std::path::Path::new(&file_path))?;
+    let run_id = format!("continue-{}", now_secs());
+    ai_agent::log_continue_pre_ai(
+        Some(&app),
+        "continue_requested",
+        Some(&file_path),
+        None,
+        Some(&run_id),
+    );
+
+    let projects_root = config::ensure_projects_dir(&app).map_err(|error| {
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&file_path),
+            Some("projects_dir"),
+            Some(&run_id),
+        );
+        emit_continue_error(&app, &run_id, &error);
+        error
+    })?;
+    let content_dir = content_dir(&app).map_err(|error| {
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&file_path),
+            Some("content_dir"),
+            Some(&run_id),
+        );
+        emit_continue_error(&app, &run_id, &error);
+        error
+    })?;
+    let config = config::load_config(&app).map_err(|error| {
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&file_path),
+            Some("config"),
+            Some(&run_id),
+        );
+        emit_continue_error(&app, &run_id, &error);
+        error
+    })?;
+    let validated = config::validate_project_path(&projects_root, std::path::Path::new(&file_path))
+        .map_err(|error| {
+            ai_agent::log_continue_pre_ai(
+                Some(&app),
+                "continue_failed_before_ai",
+                Some(&file_path),
+                Some("path_validate"),
+                Some(&run_id),
+            );
+            emit_continue_error(&app, &run_id, &error);
+            error
+        })?;
+    let canonical_root = projects_root
+        .canonicalize()
+        .map_err(|error| {
+            let message = format!("项目目录无效: {error}");
+            ai_agent::log_continue_pre_ai(
+                Some(&app),
+                "continue_failed_before_ai",
+                Some(&file_path),
+                Some("projects_root"),
+                Some(&run_id),
+            );
+            emit_continue_error(&app, &run_id, &message);
+            message
+        })?;
     let relative_path = validated
-        .strip_prefix(&projects_root)
-        .map_err(|error| error.to_string())?
+        .strip_prefix(&canonical_root)
+        .map_err(|error| {
+            let message = error.to_string();
+            ai_agent::log_continue_pre_ai(
+                Some(&app),
+                "continue_failed_before_ai",
+                Some(&file_path),
+                Some("relative_path"),
+                Some(&run_id),
+            );
+            emit_continue_error(&app, &run_id, &message);
+            message
+        })?
         .to_string_lossy()
         .replace('\\', "/");
     let prior_session = session::load_session(&app, &relative_path)
         .map(|(messages, _)| messages)
         .unwrap_or_default();
+
+    ai_agent::log_continue_pre_ai(
+        Some(&app),
+        "continue_enter_ai",
+        Some(&relative_path),
+        None,
+        Some(&run_id),
+    );
+
     let (result, session, activity) = ai::continue_and_update_project(
         Some(&app),
         &projects_root,
         &content_dir,
         &config.ai,
-        std::path::Path::new(&file_path),
+        &validated,
         &question,
         facts.as_deref(),
         prior_session,
     )
     .await
     .map_err(|error| {
-        let _ = app.emit(
-            "ai-generation-progress",
-            crate::models::AiGenerationProgress {
-                phase: "error".to_string(),
-                message: error.clone(),
-                run_id: None,
-                step_index: None,
-                kind: None,
-                detail: None,
-            },
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&relative_path),
+            Some("ai"),
+            Some(&run_id),
         );
+        emit_continue_error(&app, &run_id, &error);
         error
     })?;
     let _ = app.emit(
         "ai-generation-progress",
         crate::models::AiGenerationProgress {
             phase: "complete".to_string(),
-            message: result.file_path.clone(),
-            run_id: None,
+            message: result.relative_path.clone(),
+            run_id: Some(run_id.clone()),
             step_index: None,
             kind: None,
             detail: None,
@@ -243,8 +325,33 @@ pub async fn continue_project_document(
         &relative_path,
         session,
         activity,
-    )?;
+    )
+    .map_err(|error| {
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&relative_path),
+            Some("persist"),
+            Some(&run_id),
+        );
+        emit_continue_error(&app, &run_id, &error);
+        error
+    })?;
     Ok(result)
+}
+
+fn emit_continue_error(app: &AppHandle, run_id: &str, message: &str) {
+    let _ = app.emit(
+        "ai-generation-progress",
+        crate::models::AiGenerationProgress {
+            phase: "error".to_string(),
+            message: format!("Continue failed: {message}"),
+            run_id: Some(run_id.to_string()),
+            step_index: None,
+            kind: None,
+            detail: None,
+        },
+    );
 }
 
 #[tauri::command]

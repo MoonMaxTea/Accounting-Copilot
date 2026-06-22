@@ -73,6 +73,12 @@ jobs:
       - name: Build shared workspace packages
         run: pnpm --filter @asd/shared-types build
 
+      - name: Run tests
+        run: pnpm test
+
+      - name: Run Rust tests
+        run: cd app/src-tauri && cargo test
+
       - name: Build desktop app
         run: pnpm app:build
 

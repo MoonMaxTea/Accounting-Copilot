@@ -477,6 +477,18 @@ pub fn summarize_for_planning(markdown: &str) -> String {
     truncate_chars(markdown, 1500)
 }
 
+/// Render evidence items for injection into Continue writer user messages.
+pub fn render_evidence_pack(pack: &EvidencePack) -> String {
+    if pack.items.is_empty() {
+        return "（本地检索未命中段落；请依据笔记已有内容作答，未覆盖处如实注明。）".to_string();
+    }
+    pack.items
+        .iter()
+        .map(|item| format!("### {}\n{}", item.citation, item.snippet_en))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// Phase C 用：按长度分级传入文档
 pub fn truncate_for_continue(markdown: &str, question: &str) -> String {
     let char_count = markdown.chars().count();

@@ -154,6 +154,10 @@ pub(crate) fn count_api_message_chars(messages: &[ApiChatMessage]) -> u64 {
         .sum()
 }
 
+fn debug_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
 pub(crate) fn append_ai_debug_event(
     app_handle: Option<&tauri::AppHandle>,
     event: &AiDebugEvent,
@@ -165,7 +169,11 @@ pub(crate) fn append_ai_debug_event(
         return;
     };
     let path = dir.join("ai-debug.log");
-    let Ok(line) = serde_json::to_string(event) else {
+    let mut enriched = event.clone();
+    if enriched.platform.is_none() {
+        enriched.platform = Some(debug_platform());
+    }
+    let Ok(line) = serde_json::to_string(&enriched) else {
         return;
     };
     let _ = std::fs::OpenOptions::new()
@@ -173,6 +181,34 @@ pub(crate) fn append_ai_debug_event(
         .append(true)
         .open(path)
         .and_then(|mut file| writeln!(file, "{line}"));
+}
+
+/// Pre-AI Continue flow events (`continue_requested`, `continue_failed_before_ai`, …).
+pub fn log_continue_pre_ai(
+    app_handle: Option<&tauri::AppHandle>,
+    phase: &str,
+    detail: Option<&str>,
+    error_class: Option<&str>,
+    run_id: Option<&str>,
+) {
+    append_ai_debug_event(
+        app_handle,
+        &AiDebugEvent {
+            ts_secs: now_secs(),
+            mode: Some("continue".to_string()),
+            phase: Some(phase.to_string()),
+            provider: None,
+            model: None,
+            status: None,
+            prompt_chars: None,
+            completion_chars: None,
+            tool_name: None,
+            error_class: error_class.map(str::to_string),
+            platform: Some(debug_platform()),
+            detail: detail.map(str::to_string),
+            run_id: run_id.map(str::to_string),
+        },
+    );
 }
 
 pub(crate) fn emit_generation_progress(
@@ -310,6 +346,22 @@ pub fn build_core_writing_prompt(content_dir: &Path) -> Result<String, String> {
         name_end = PROJECT_NAME_END,
         md_start = MARKDOWN_START,
         md_end = MARKDOWN_END,
+    ))
+}
+
+/// Continue writer path: core prompt + evidence-from-user-message rule (no tools).
+pub fn build_writer_system_prompt(content_dir: &Path) -> Result<String, String> {
+    let core = build_core_writing_prompt(content_dir)?;
+    Ok(format!(
+        "{core}\n\n\
+         ### 铁律 4：一切依据来自【检索证据】\n\
+         - 准则内容必须来自 user 消息中的【检索证据】段落\n\
+         - 证据未覆盖的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
+         - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
+         ## 工作流程（Continue）\n\
+         1. 阅读当前项目笔记全文与用户追问\n\
+         2. 依据【检索证据】更新笔记，输出完整新版 Markdown\n\
+         3. 保留已有正确内容，仅补充/修订与追问相关的部分"
     ))
 }
 
@@ -1102,6 +1154,7 @@ pub async fn run_standards_agent(
             completion_chars: None,
             tool_name: None,
             error_class: None,
+            ..Default::default()
         },
     );
 
@@ -1160,6 +1213,7 @@ pub async fn run_standards_agent(
                 completion_chars: None,
                 tool_name: None,
                 error_class: classify_debug_error(&error),
+                ..Default::default()
             },
         );
         error
@@ -1205,6 +1259,7 @@ pub async fn run_standards_agent(
                             completion_chars: None,
                             tool_name: Some(tool_name.clone()),
                             error_class: Some("storm".to_string()),
+                            ..Default::default()
                         },
                     );
                     activity_log.push(AiConversationTurn {
@@ -1229,6 +1284,7 @@ pub async fn run_standards_agent(
                             completion_chars: None,
                             tool_name: Some(tool_name.clone()),
                             error_class: None,
+                            ..Default::default()
                         },
                     );
                     activity_log.push(AiConversationTurn {
@@ -1304,6 +1360,7 @@ pub async fn run_standards_agent(
                 completion_chars: None,
                 tool_name: None,
                 error_class: None,
+                ..Default::default()
             },
         );
         emit(
@@ -1351,6 +1408,7 @@ pub async fn run_standards_agent(
                 completion_chars: Some(final_raw.len() as u64),
                 tool_name: None,
                 error_class: None,
+                ..Default::default()
             },
         );
     }
@@ -1378,6 +1436,7 @@ pub async fn run_standards_agent(
             completion_chars: Some(final_raw.len() as u64),
             tool_name: None,
             error_class: None,
+            ..Default::default()
         },
     );
 

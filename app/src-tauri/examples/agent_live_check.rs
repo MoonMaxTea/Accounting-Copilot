@@ -1,8 +1,10 @@
-//! Live DeepSeek test: create + 3 continues (agent-only).
+//! Live DeepSeek test: create + 3 continues (continue_writer path).
 //! Usage:
 //!   DEEPSEEK_API_KEY=sk-... cargo run --example agent_live_check -- [model]
 //! Default model: deepseek-v4-flash
 
+use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use app_lib::ai;
@@ -28,6 +30,26 @@ fn build_ai_config(model: &str) -> AiConfig {
     }
 }
 
+fn count_debug_modes(log_path: &PathBuf, mode: &str) -> usize {
+    let file = fs::File::open(log_path).ok();
+    let Some(file) = file else {
+        return 0;
+    };
+    BufReader::new(file)
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| line.contains(&format!("\"mode\":\"{mode}\"")))
+        .count()
+}
+
+fn last_debug_line(log_path: &PathBuf) -> Option<String> {
+    let file = fs::File::open(log_path).ok()?;
+    BufReader::new(file)
+        .lines()
+        .map_while(Result::ok)
+        .last()
+}
+
 #[tokio::main]
 async fn main() {
     let model = std::env::args()
@@ -43,10 +65,14 @@ async fn main() {
     let projects_root = std::env::var("ASD_PROJECTS_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/tmp/agent-live-projects"));
-    std::fs::create_dir_all(&projects_root).expect("create projects dir");
-    std::fs::create_dir_all(projects_root.join("agent-test")).expect("mkdir agent-test");
+    fs::create_dir_all(&projects_root).expect("create projects dir");
+    fs::create_dir_all(projects_root.join("agent-test")).expect("mkdir agent-test");
 
     let ai = build_ai_config(&model);
+    let debug_log = root.join("ai-debug.log");
+    let agent_create_before = count_debug_modes(&debug_log, "agent_create");
+    let continue_writer_before = count_debug_modes(&debug_log, "continue_writer");
+    let agent_continue_before = count_debug_modes(&debug_log, "agent_continue");
 
     println!("== Agent live check ==");
     println!("model: {model}");
@@ -71,6 +97,9 @@ async fn main() {
     .await
     .unwrap_or_else(|error| {
         eprintln!("CREATE FAILED: {error}");
+        if let Some(line) = last_debug_line(&debug_log) {
+            eprintln!("Last debug line: {line}");
+        }
         std::process::exit(1);
     });
 
@@ -106,6 +135,7 @@ async fn main() {
                 let tool_steps = activity.iter().filter(|t| t.kind == "tool").count();
                 let retrieval_steps = activity.iter().filter(|t| t.kind == "retrieval").count();
                 println!("  activity: tool={tool_steps} retrieval={retrieval_steps}");
+                assert_eq!(tool_steps, 0, "continue_writer must not emit tool activity");
                 session = new_session;
             }
             Err(error) => {
@@ -113,10 +143,29 @@ async fn main() {
                 if error.to_lowercase().contains("prefix") {
                     eprintln!("  >>> prefix error detected");
                 }
+                if let Some(line) = last_debug_line(&debug_log) {
+                    eprintln!("  Last debug line: {line}");
+                }
                 std::process::exit(1);
             }
         }
     }
+
+    let agent_create_after = count_debug_modes(&debug_log, "agent_create");
+    let continue_writer_after = count_debug_modes(&debug_log, "continue_writer");
+    let agent_continue_after = count_debug_modes(&debug_log, "agent_continue");
+
+    assert_eq!(agent_create_after - agent_create_before, 1, "expected 1 agent_create");
+    assert_eq!(
+        continue_writer_after - continue_writer_before,
+        3,
+        "expected 3 continue_writer"
+    );
+    assert_eq!(
+        agent_continue_after - agent_continue_before,
+        0,
+        "agent_continue must not appear"
+    );
 
     println!("\n=== ALL 4 ROUNDS PASSED (create + 3 continues) ===");
     println!("Session messages: {}", session.len());

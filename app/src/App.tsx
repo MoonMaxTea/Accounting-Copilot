@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   checkContentUpdates,
@@ -47,6 +47,8 @@ function AppShell() {
   const [genResultPath, setGenResultPath] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const [genCounter, setGenCounter] = useState(0);
+  const [genEpoch, setGenEpoch] = useState(0);
+  const genEpochRef = useRef(0);
 
   useEffect(() => {
     const unlisten = listen<AiGenerationProgress>("ai-generation-progress", (event) => {
@@ -57,6 +59,9 @@ function AppShell() {
         setGenError(null);
         setGenCounter((prev) => prev + 1);
       } else if (p.phase === "error") {
+        if (!p.run_id) {
+          return;
+        }
         setGenError(p.message);
         setGenProgress(null);
         setGenCounter((prev) => prev + 1);
@@ -265,15 +270,20 @@ function AppShell() {
                   genError={genError}
                   genResultPath={genResultPath}
                   genCounter={genCounter}
+                  genEpoch={genEpoch}
                   onGenConsumed={() => {
                     setGenProgress(null);
                     setGenError(null);
                     setGenResultPath(null);
                   }}
                   onGenerationStart={() => {
+                    const next = genEpochRef.current + 1;
+                    genEpochRef.current = next;
+                    setGenEpoch(next);
                     setGenError(null);
                     setGenResultPath(null);
                     setGenProgress(null);
+                    return next;
                   }}
                 />
               </div>
