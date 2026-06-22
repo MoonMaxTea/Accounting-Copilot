@@ -395,7 +395,7 @@ async fn run_standards_orchestrator(
     ai: &AiConfig,
     input: AgentRunInput<'_>,
 ) -> Result<AgentRunOutput, String> {
-    let mode = ai.generation_mode.as_deref().unwrap_or("pipeline");
+    let mode = ai.generation_mode.as_deref().unwrap_or("agent");
     let (provider, model) = ai_provider_model(ai);
     append_ai_debug_event(
         app_handle,
@@ -414,8 +414,8 @@ async fn run_standards_orchestrator(
     );
 
     match ai.generation_mode.as_deref() {
-        Some("agent") => run_standards_agent(app_handle, content_dir, ai, input).await,
-        _ => run_standards_pipeline(app_handle, content_dir, ai, input).await,
+        Some("pipeline") => run_standards_pipeline(app_handle, content_dir, ai, input).await,
+        _ => run_standards_agent(app_handle, content_dir, ai, input).await,
     }
 }
 

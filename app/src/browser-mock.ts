@@ -51,7 +51,7 @@ const MOCK_CONFIG: AppConfigResponse = {
     base_url: "https://api.openai.com/v1",
     model: "gpt-4o",
     allow_legacy_citations: false,
-    generation_mode: "pipeline",
+    generation_mode: "agent",
   },
   projects_ui: MOCK_UI_STATE,
   update: {
