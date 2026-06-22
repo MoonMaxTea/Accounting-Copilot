@@ -104,6 +104,10 @@ export interface ContentUpdateInfo {
 export interface AiGenerationProgress {
   phase: string;
   message: string;
+  run_id?: string;
+  step_index?: number;
+  kind?: string;
+  detail?: string;
 }
 
 export interface ContentDownloadProgress {
