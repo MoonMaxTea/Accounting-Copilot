@@ -1,6 +1,7 @@
 import type {
   AiConversationTurn,
   AppConfigResponse,
+  AiConversationIndexEntry,
   CitationScanResult,
   CitationTarget,
   ContentDownloadProgress,
@@ -314,6 +315,15 @@ export function browserMockInvoke<T>(
       return Promise.resolve([] as TrashEntry[] as T);
     case "get_project_conversation":
       return Promise.resolve([] as AiConversationTurn[] as T);
+    case "list_ai_conversation_index":
+      return Promise.resolve(
+        [
+          {
+            relative_path: "sample-project/revenue-memo.md",
+            latest_timestamp_secs: MOCK_NOW_SECS,
+          },
+        ] as AiConversationIndexEntry[] as T,
+      );
     case "save_projects_ui_state":
       return Promise.resolve(MOCK_UI_STATE as T);
     case "save_evidence_panel_collapsed":

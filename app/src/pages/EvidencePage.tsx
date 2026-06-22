@@ -8,6 +8,7 @@ import {
   getConfig,
   getProjectConversation,
   getStandard,
+  listAiConversationIndex,
   listProjectFiles,
   listProjectTree,
   listTrashItems,
@@ -37,10 +38,12 @@ import {
 } from "../components/ProjectFolderTree";
 import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
+import { findLatestConversationFolder } from "../lib/conversation";
 import { useHorizontalResize } from "../hooks/useHorizontalResize";
 import { usePreferences } from "../context/PreferencesContext";
 import type {
   AiConversationTurn,
+  AiConversationIndexEntry,
   CitationHighlight,
   CitationScanResult,
   CitationTarget,
@@ -60,42 +63,6 @@ const defaultUiState: ProjectsUiState = {
 };
 
 const DRAFT_THREAD_KEY = "__draft__";
-
-function findLatestConversationFolder(
-  aiThreads: Record<string, AiConversationTurn[]> | undefined,
-  lastEvidenceFile: string | null,
-  selectedRelativePath: string | null,
-): string | null {
-  if (selectedRelativePath) {
-    return folderRelativeForSelection(selectedRelativePath, null);
-  }
-
-  let latestRelative: string | null = null;
-  let latestTimestamp = 0;
-
-  if (aiThreads) {
-    for (const [relativePath, turns] of Object.entries(aiThreads)) {
-      if (relativePath === DRAFT_THREAD_KEY || turns.length === 0) {
-        continue;
-      }
-      const maxTimestamp = Math.max(...turns.map((turn) => turn.timestamp_secs));
-      if (maxTimestamp > latestTimestamp) {
-        latestTimestamp = maxTimestamp;
-        latestRelative = relativePath;
-      }
-    }
-  }
-
-  if (latestRelative) {
-    return folderRelativeForSelection(latestRelative, null);
-  }
-
-  if (lastEvidenceFile) {
-    return folderRelativeForSelection(lastEvidenceFile, null);
-  }
-
-  return null;
-}
 
 interface EvidencePageProps {
   onOpenSettings?: () => void;
@@ -138,6 +105,7 @@ export function EvidencePage({
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashItems, setTrashItems] = useState<TrashEntry[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
+  const [conversationIndex, setConversationIndex] = useState<AiConversationIndexEntry[]>([]);
   const [question, setQuestion] = useState("");
   const [facts, setFacts] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -154,10 +122,20 @@ export function EvidencePage({
     }
   }, []);
 
+  const refreshConversationIndex = useCallback(async () => {
+    try {
+      const index = await listAiConversationIndex();
+      setConversationIndex(index);
+    } catch {
+      setConversationIndex([]);
+    }
+  }, []);
+
   const refreshProjectsUi = useCallback(async () => {
     const config = await getConfig();
     setProjectsUi(config.projects_ui ?? defaultUiState);
-  }, []);
+    await refreshConversationIndex();
+  }, [refreshConversationIndex]);
 
   const refreshSidebar = useCallback(async (query: string) => {
     setLoadingFiles(true);
@@ -203,6 +181,10 @@ export function EvidencePage({
   useEffect(() => {
     void refreshTrash();
   }, [refreshTrash]);
+
+  useEffect(() => {
+    void refreshConversationIndex();
+  }, [refreshConversationIndex]);
 
   useEffect(() => {
     getConfig()
@@ -513,11 +495,12 @@ export function EvidencePage({
   const activeConversationFolder = useMemo(
     () =>
       findLatestConversationFolder(
-        projectsUi.ai_threads,
+        conversationIndex,
         projectsUi.last_evidence_file,
         selected?.relative_path ?? null,
+        folderRelativeForSelection,
       ),
-    [projectsUi.ai_threads, projectsUi.last_evidence_file, selected?.relative_path],
+    [conversationIndex, projectsUi.last_evidence_file, selected?.relative_path],
   );
 
   if (!projectsDir) {

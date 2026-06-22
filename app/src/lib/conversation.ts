@@ -63,3 +63,47 @@ export function roundKindLabel(
       ? "追问"
       : "Follow-up";
 }
+
+export interface ConversationIndexEntry {
+  relative_path: string;
+  latest_timestamp_secs: number;
+}
+
+export function findLatestConversationFolder(
+  index: ConversationIndexEntry[] | undefined,
+  lastEvidenceFile: string | null,
+  selectedRelativePath: string | null,
+  folderRelativeForSelection: (
+    relativePath: string | null,
+    selectedFolderRelative: string | null,
+  ) => string | null,
+): string | null {
+  if (selectedRelativePath) {
+    return folderRelativeForSelection(selectedRelativePath, null);
+  }
+
+  let latestRelative: string | null = null;
+  let latestTimestamp = 0;
+
+  if (index) {
+    for (const entry of index) {
+      if (entry.relative_path === "__draft__" || entry.latest_timestamp_secs === 0) {
+        continue;
+      }
+      if (entry.latest_timestamp_secs > latestTimestamp) {
+        latestTimestamp = entry.latest_timestamp_secs;
+        latestRelative = entry.relative_path;
+      }
+    }
+  }
+
+  if (latestRelative) {
+    return folderRelativeForSelection(latestRelative, null);
+  }
+
+  if (lastEvidenceFile) {
+    return folderRelativeForSelection(lastEvidenceFile, null);
+  }
+
+  return null;
+}

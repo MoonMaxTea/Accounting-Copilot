@@ -4,6 +4,7 @@ import type {
   AppConfigResponse,
   AiConfig,
   AiConversationTurn,
+  AiConversationIndexEntry,
   CitationScanResult,
   CitationTarget,
   ContentDownloadProgress,
@@ -158,6 +159,10 @@ export function saveEvidencePanelCollapsed(collapsed: boolean): Promise<Projects
 
 export function getProjectConversation(relativePath: string): Promise<AiConversationTurn[]> {
   return tauriInvoke<AiConversationTurn[]>("get_project_conversation", { relativePath });
+}
+
+export function listAiConversationIndex(): Promise<AiConversationIndexEntry[]> {
+  return tauriInvoke<AiConversationIndexEntry[]>("list_ai_conversation_index");
 }
 
 export function appendAiConversationTurn(

@@ -15,6 +15,7 @@ use crate::models::{
 use crate::pack::{self, content_dir, load_registry, read_standard_body};
 use crate::projects;
 use crate::trash::{TrashEntry, TrashStore};
+use crate::session;
 use crate::update;
 
 const DRAFT_AGENT_SESSION_KEY: &str = "__draft__";
@@ -23,26 +24,24 @@ fn persist_agent_run(
     app: &AppHandle,
     from_session_key: &str,
     to_session_key: &str,
-    session: Vec<crate::models::AiAgentMessage>,
+    session_messages: Vec<crate::models::AiAgentMessage>,
     activity: Vec<crate::models::AiConversationTurn>,
 ) -> Result<(), String> {
-    config::update_projects_ui(app, |ui| {
-        if from_session_key != to_session_key {
-            ui.ai_agent_sessions.remove(from_session_key);
-            if let Some(draft_turns) = ui.ai_threads.remove(from_session_key) {
-                let merged = ui
-                    .ai_threads
-                    .entry(to_session_key.to_string())
-                    .or_default();
-                merged.extend(draft_turns);
-            }
+    let (_, mut merged_activity) = session::load_session(app, to_session_key).unwrap_or_default();
+    if from_session_key != to_session_key {
+        let (_, draft_activity) = session::load_session(app, from_session_key).unwrap_or_default();
+        merged_activity = session::merge_activity_for_persist(merged_activity, draft_activity);
+        session::delete_session(app, from_session_key)?;
+    }
+    for turn in activity {
+        if !merged_activity
+            .iter()
+            .any(|item| session::turns_equal(item, &turn))
+        {
+            merged_activity.push(turn);
         }
-        ui.set_agent_session(to_session_key, session);
-        for turn in activity {
-            ui.append_ai_turn(to_session_key, turn);
-        }
-    })?;
-    Ok(())
+    }
+    session::save_session(app, to_session_key, &session_messages, &merged_activity)
 }
 
 #[tauri::command]
@@ -80,6 +79,7 @@ pub async fn pick_and_import_content_pack(app: AppHandle) -> Result<PackInfo, St
 
 #[tauri::command]
 pub fn get_config(app: AppHandle) -> Result<AppConfigResponse, String> {
+    session::migrate_config_sessions(&app)?;
     let config = config::load_config(&app)?;
     Ok(AppConfigResponse {
         projects_dir: config.projects_dir,
@@ -133,7 +133,9 @@ pub async fn generate_project_document(
     let projects_root = config::ensure_projects_dir(&app)?;
     let content_dir = content_dir(&app)?;
     let config = config::load_config(&app)?;
-    let prior_session = config.projects_ui.agent_session(DRAFT_AGENT_SESSION_KEY);
+    let prior_session = session::load_session(&app, DRAFT_AGENT_SESSION_KEY)
+        .map(|(messages, _)| messages)
+        .unwrap_or_default();
     let (result, session, activity) = ai::generate_and_save_project(
         Some(&app),
         &projects_root,
@@ -196,7 +198,9 @@ pub async fn continue_project_document(
         .map_err(|error| error.to_string())?
         .to_string_lossy()
         .replace('\\', "/");
-    let prior_session = config.projects_ui.agent_session(&relative_path);
+    let prior_session = session::load_session(&app, &relative_path)
+        .map(|(messages, _)| messages)
+        .unwrap_or_default();
     let (result, session, activity) = ai::continue_and_update_project(
         Some(&app),
         &projects_root,
@@ -287,6 +291,7 @@ pub fn rename_project_file(
     config::update_projects_ui(&app, |ui| {
         ui.migrate_path(&old_relative, &entry.relative_path);
     })?;
+    session::rename_session(&app, &old_relative, &entry.relative_path)?;
     Ok(entry)
 }
 
@@ -311,6 +316,7 @@ pub fn move_project_file(
     config::update_projects_ui(&app, |ui| {
         ui.migrate_path(&old_relative, &entry.relative_path);
     })?;
+    session::rename_session(&app, &old_relative, &entry.relative_path)?;
     Ok(entry)
 }
 
@@ -328,6 +334,7 @@ pub fn delete_project_folder(app: AppHandle, folder_relative: String) -> Result<
     config::update_projects_ui(&app, |ui| {
         ui.remove_folder_prefix(&folder_relative);
     })?;
+    session::delete_sessions_with_prefix(&app, &folder_relative)?;
     Ok(result)
 }
 
@@ -339,6 +346,7 @@ pub fn move_project_file_to_trash(app: AppHandle, file_path: String) -> Result<T
     config::update_projects_ui(&app, |ui| {
         ui.remove_path_references(&entry.original_relative_path);
     })?;
+    session::delete_session(&app, &entry.original_relative_path)?;
     Ok(entry)
 }
 
@@ -406,14 +414,20 @@ pub fn get_project_conversation(
     relative_path: String,
 ) -> Result<Vec<crate::models::AiConversationTurn>, String> {
     let config = config::load_config(&app)?;
-    let stored = config
-        .projects_ui
-        .ai_threads
-        .get(&relative_path)
-        .cloned()
-        .unwrap_or_default();
-    let session = config.projects_ui.agent_session(&relative_path);
-    let session_activity = projects::conversation_activity_from_agent_session(&session);
+    let (session_messages, session_file_activity) =
+        session::load_session(&app, &relative_path).unwrap_or_default();
+    let stored = if !session_file_activity.is_empty() {
+        session_file_activity
+    } else {
+        config
+            .projects_ui
+            .ai_threads
+            .get(&relative_path)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let session_activity =
+        projects::conversation_activity_from_agent_session(&session_messages);
 
     if relative_path == DRAFT_AGENT_SESSION_KEY {
         return Ok(projects::merge_conversation_sources(
@@ -447,9 +461,18 @@ pub fn append_ai_conversation_turn(
     relative_path: String,
     turn: crate::models::AiConversationTurn,
 ) -> Result<crate::config::ProjectsUiState, String> {
-    config::update_projects_ui(&app, |ui| {
-        ui.append_ai_turn(&relative_path, turn);
-    })
+    let (messages, mut activity) = session::load_session(&app, &relative_path).unwrap_or_default();
+    activity.push(turn);
+    session::save_session(&app, &relative_path, &messages, &activity)?;
+    Ok(config::load_config(&app)?.projects_ui)
+}
+
+#[tauri::command]
+pub fn list_ai_conversation_index(
+    app: AppHandle,
+) -> Result<Vec<crate::models::AiConversationIndexEntry>, String> {
+    let config = config::load_config(&app)?;
+    session::conversation_index_with_legacy(&app, &config.projects_ui)
 }
 
 #[tauri::command]

@@ -242,6 +242,20 @@ pub struct AiGenerationProgress {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConversationIndexEntry {
+    pub relative_path: String,
+    pub latest_timestamp_secs: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredAiSession {
+    pub version: u32,
+    pub project_relative_path: String,
+    pub messages: Vec<AiAgentMessage>,
+    pub activity: Vec<AiConversationTurn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiConversationTurn {
     pub role: String,
     pub content: String,

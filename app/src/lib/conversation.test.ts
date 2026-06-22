@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { groupConversationRounds, truncatePreview } from "./conversation";
+import {
+  findLatestConversationFolder,
+  groupConversationRounds,
+  truncatePreview,
+} from "./conversation";
 import type { AiConversationTurn } from "../types";
 
 describe("groupConversationRounds", () => {
@@ -50,5 +54,27 @@ describe("truncatePreview", () => {
   it("shortens long single-line text", () => {
     const text = "a".repeat(100);
     expect(truncatePreview(text, 20)).toBe(`${"a".repeat(20)}…`);
+  });
+});
+
+describe("findLatestConversationFolder", () => {
+  const folderFor = (relativePath: string | null) =>
+    relativePath?.includes("/") ? relativePath.split("/")[0] ?? null : relativePath;
+
+  it("prefers selected note folder", () => {
+    expect(
+      findLatestConversationFolder(
+        [{ relative_path: "other/note.md", latest_timestamp_secs: 99 }],
+        null,
+        "selected/note.md",
+        folderFor,
+      ),
+    ).toBe("selected");
+  });
+
+  it("falls back to last evidence file when index is empty", () => {
+    expect(
+      findLatestConversationFolder([], "fallback/note.md", null, folderFor),
+    ).toBe("fallback");
   });
 });

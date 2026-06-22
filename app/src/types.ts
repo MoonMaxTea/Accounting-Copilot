@@ -101,6 +101,11 @@ export interface ContentUpdateInfo {
   vault_commit: string | null;
 }
 
+export interface AiConversationIndexEntry {
+  relative_path: string;
+  latest_timestamp_secs: number;
+}
+
 export interface AiGenerationProgress {
   phase: string;
   message: string;

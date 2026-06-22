@@ -9,6 +9,7 @@ pub mod ai;
 pub mod ai_agent;
 mod ai_pipeline;
 pub mod retrieval;
+mod session;
 mod trash;
 pub mod update;
 
@@ -42,6 +43,7 @@ pub fn run() {
             commands::save_evidence_panel_collapsed,
             commands::append_ai_conversation_turn,
             commands::get_project_conversation,
+            commands::list_ai_conversation_index,
             commands::find_similar_projects,
             commands::reveal_project_file,
             commands::reveal_projects_dir,
