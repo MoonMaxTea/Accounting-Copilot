@@ -293,7 +293,7 @@ pub fn projects_dir(app: &AppHandle) -> Result<Option<PathBuf>, String> {
 
 pub fn ensure_projects_dir(app: &AppHandle) -> Result<PathBuf, String> {
     projects_dir(app)?.ok_or_else(|| {
-        "尚未设置项目目录。请在「设置」中选择 Obsidian 的 02 - 项目 文件夹。".to_string()
+        "尚未设置项目目录。请在「设置」中选择项目工作区文件夹。".to_string()
     })
 }
 

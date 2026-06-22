@@ -177,7 +177,7 @@ export function NotePanel({
               event.stopPropagation();
             }}
             className="inline text-brand-muted underline decoration-dotted underline-offset-2"
-            title={tr("obsidianLinkHint")}
+            title={tr("internalLinkHint")}
           >
             {children}
           </button>

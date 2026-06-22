@@ -163,8 +163,8 @@ const messages = {
     unresolvedCitations: "{count} unresolved citation(s) (click to expand)",
     unresolvedCitationsHint:
       "These citations may come from Vault full-text search. The desktop pack may not index the paragraph yet, or your content pack may need updating.",
-    obsidianLinkHint:
-      "This link works in Obsidian only. Use IFRS/IAS/ASC citation formats in the workbench.",
+    internalLinkHint:
+      "This is an internal wiki-style link and cannot be opened here. Use IFRS/IAS/ASC citation formats in the workbench.",
     citationHoverResolved:
       "Hover preview unavailable. Click to open the paragraph on the right.",
     citationHoverParagraphMissing:
@@ -430,7 +430,8 @@ const messages = {
     unresolvedCitations: "{count} 处未解析引用（点击展开）",
     unresolvedCitationsHint:
       "这些引用可能来自 Vault 全文搜索。桌面包可能尚未索引该段落，或需要更新内容包。",
-    obsidianLinkHint: "此链接仅在 Obsidian 中有效，请在工作台使用 IFRS/IAS/ASC 引用格式。",
+    internalLinkHint:
+      "此为内部 wiki 式链接，无法在本应用中打开。请在工作台使用 IFRS/IAS/ASC 引用格式。",
     citationHoverResolved: "暂无悬停预览，点击在右侧打开段落。",
     citationHoverParagraphMissing: "未定位到段落，点击在右侧打开完整准则。",
     citationHoverUnresolved: "本地内容包中未找到该引用。",
