@@ -10,8 +10,8 @@ Guide for AI coding agents working in this repository. Read this before making c
 | **Repo** | `MoonMaxTea/Accounting-Copilot` (often **private**) |
 | **Stack** | Tauri 2 + Rust + React 19 + TypeScript + Vite + Tailwind 4 |
 | **Package manager** | pnpm 9 (monorepo) |
-| **Current app version** | See `app/src-tauri/tauri.conf.json` (`version` field) |
-| **Content pack** | Built from Obsidian Vault via `tools/pack-builder` |
+| **Current app version** | **0.1.14** (`app-v0.1.14`) — see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) |
+| **Content pack** | Built from upstream standards vault via `tools/pack-builder` |
 
 **Purpose:** Offline IFRS / IAS / ASC standards browser + workbench for project notes, AI-assisted document writing, citation resolution, and GitHub-based content/app updates.
 
@@ -27,7 +27,8 @@ Guide for AI coding agents working in this repository. Read this before making c
 ├── CONTRIBUTING.md           ← git, test, release workflow
 ├── docs/
 │   ├── DESIGN.md             ← full product/design spec (Chinese)
-│   └── ARCHITECTURE.md       ← module map & data flow
+│   ├── ARCHITECTURE.md       ← module map & data flow
+│   └── RELEASE-NOTES.md      ← app release changelog
 ├── app/                      ← Tauri desktop app (main product)
 │   ├── src/                  ← React UI
 │   └── src-tauri/            ← Rust backend + Tauri commands
@@ -79,7 +80,7 @@ Tauri commands (app/src-tauri/src/commands.rs)
     ├── update.rs        manifest fetch, download, apply OTA
     ├── db.rs            SQLite FTS for standards search
     ├── citations.rs     paragraph index, citation resolve
-    ├── projects.rs      Obsidian projects folder tree / files
+    ├── projects.rs      local project folder tree / files
     ├── ai.rs / ai_agent.rs   LLM document generation (agent-only)
     ├── session.rs       AI session files (outside config.json)
     ├── config.rs        ~/.local/share/.../config.json

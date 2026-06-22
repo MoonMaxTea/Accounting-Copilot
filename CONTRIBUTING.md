@@ -36,7 +36,7 @@ cd app/src-tauri && cargo test
 - **TypeScript:** types on public APIs; functional React components.
 - **Rust:** explicit error messages (often bilingual in `update.rs` user strings); prefer `Result<T, String>` in command layer.
 - **Scope:** minimal diffs; do not refactor unrelated code.
-- **UI:** English strings; use existing Tailwind tokens (`brand-*`, `ui-focus-ring`).
+- **Product UI:** English strings; no third-party editor names in runtime copy (use “internal link”, “projects folder”).
 - **Dialogs:** use `DialogProvider`, not native `prompt`/`confirm`.
 
 ## Releases
@@ -56,7 +56,9 @@ git tag -a app-vX.Y.Z -m "Release notes summary"
 git push origin main app-vX.Y.Z
 ```
 
-GitHub Actions builds installers automatically.
+GitHub Actions builds installers automatically (`release-app.yml` runs tests on **Linux and Windows** before build).
+
+See [docs/RELEASE-NOTES.md](./docs/RELEASE-NOTES.md) for version history.
 
 ### Content pack (`content-YYYY.MM.DD`)
 
@@ -76,6 +78,7 @@ App and content releases are **independent**.
 |-----|----------|
 | [AGENTS.md](./AGENTS.md) | AI coding agents |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Module map |
+| [docs/RELEASE-NOTES.md](./docs/RELEASE-NOTES.md) | App release changelog |
 | [docs/DESIGN.md](./docs/DESIGN.md) | Product design (Chinese) |
 
 When adding major subsystems, update `AGENTS.md` and `docs/ARCHITECTURE.md`.

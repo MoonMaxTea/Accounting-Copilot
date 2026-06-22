@@ -2,7 +2,7 @@
 
 双准则（IFRS + US GAAP）桌面证据工作台：**离线全量准则包** + **AI 写项目文档** + **引用对照原文** + **官网二次验证**。
 
-> **Product UI name:** Accounting Copilot · **Latest app:** see [Releases](https://github.com/MoonMaxTea/Accounting-Copilot/releases)
+> **Product UI name:** Accounting Copilot · **Latest app:** [`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14) — [release notes](docs/RELEASE-NOTES.md)
 
 ## For developers & AI agents
 
@@ -10,6 +10,7 @@
 |-----|---------|
 | [**AGENTS.md**](AGENTS.md) | Start here — repo map, conventions, pitfalls |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map & data flows |
+| [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) | App release notes |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, tests, release workflow |
 | [docs/DESIGN.md](docs/DESIGN.md) | Full product design (Chinese) |
 

@@ -173,7 +173,7 @@ sequenceDiagram
 
 Key files: `ai_agent.rs` (loop), `ai.rs` (post-process), `config.rs` (`relative_project_path`), `session.rs` (persistence).
 
-**Windows 0.1.13 bug:** `validated.strip_prefix(&projects_root)` without canonicalizing root — Continue failed before AI; Generate unaffected.
+**Windows 0.1.13 bug (fixed in 0.1.14):** `validated.strip_prefix(&projects_root)` without canonicalizing root — Continue failed before AI; Generate unaffected.
 
 Live checks:
 

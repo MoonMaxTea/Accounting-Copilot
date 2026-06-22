@@ -16,7 +16,8 @@ Read `/AGENTS.md` before coding.
 - Download progress: Tauri IPC `Channel`, not event-only listeners.
 - Private GitHub updates: token → `api.github.com` in `update.rs`.
 - If `pack.loaded == false`, user has no standards pack installed.
-- UI copy is English; minimal focused diffs.
+- UI copy is English; no third-party editor names in product UI.
+- Continue (Follow-up): use `config::relative_project_path`; debug via `ai-debug.log` (`continue_requested` → `agent_continue`).
 
 ## Commands
 
