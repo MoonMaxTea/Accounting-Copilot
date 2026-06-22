@@ -104,6 +104,7 @@ interface EvidencePageProps {
   genResultPath: string | null;
   genCounter: number;
   onGenConsumed: () => void;
+  onGenerationStart: () => void;
 }
 
 export function EvidencePage({
@@ -113,6 +114,7 @@ export function EvidencePage({
   genResultPath,
   genCounter,
   onGenConsumed,
+  onGenerationStart,
 }: EvidencePageProps) {
   const { showToast } = useToast();
   const { tr, trf } = usePreferences();
@@ -410,6 +412,7 @@ export function EvidencePage({
       return;
     }
 
+    onGenerationStart();
     setGenerating(true);
     setError(null);
     try {
@@ -448,6 +451,7 @@ export function EvidencePage({
       return;
     }
 
+    onGenerationStart();
     setGenerating(true);
     setError(null);
     try {

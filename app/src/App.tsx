@@ -270,6 +270,11 @@ function AppShell() {
                     setGenError(null);
                     setGenResultPath(null);
                   }}
+                  onGenerationStart={() => {
+                    setGenError(null);
+                    setGenResultPath(null);
+                    setGenProgress(null);
+                  }}
                 />
               </div>
             )}
