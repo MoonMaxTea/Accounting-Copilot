@@ -9,6 +9,7 @@ import {
   saveUpdateConfig,
 } from "../api";
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
+import { useToast } from "../components/Toast";
 import { usePreferences } from "../context/PreferencesContext";
 import type { AiConfig, ContentDownloadProgress, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
 
@@ -19,6 +20,7 @@ interface SettingsPageProps {
 
 export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const { tr, trf } = usePreferences();
+  const { showToast } = useToast();
   const [appVersion, setAppVersion] = useState("0.1.0");
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>({
@@ -122,6 +124,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       const config = await saveAiConfig(aiConfig);
       setAiConfig(config.ai);
       setNotice(tr("aiSettingsSaved"));
+      showToast(tr("aiSettingsSaved"), "success");
     } catch (caught: unknown) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -184,6 +187,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
       const config = await saveUpdateConfig(updateConfig);
       setUpdateConfig(config.update);
       setNotice(tr("updateSettingsSaved"));
+      showToast(tr("updateSettingsSaved"), "success");
     } catch (caught: unknown) {
       setNotice(caught instanceof Error ? caught.message : String(caught));
     } finally {
