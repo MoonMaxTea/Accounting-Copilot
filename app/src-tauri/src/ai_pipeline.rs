@@ -47,12 +47,22 @@ pub fn parse_retrieval_plan_from_text(raw: &str) -> Option<RetrievalPlan> {
     serde_json::from_str::<RetrievalPlan>(json_text).ok()
 }
 
+fn is_planner_auth_error(error: &str) -> bool {
+    let lowered = error.to_lowercase();
+    lowered.contains("401")
+        || lowered.contains("403")
+        || lowered.contains("unauthorized")
+        || lowered.contains("forbidden")
+        || lowered.contains("invalid api key")
+        || lowered.contains("authentication")
+}
+
 pub async fn plan_retrieval(
     ai: &AiConfig,
     question: &str,
     facts: Option<&str>,
     doc_summary: Option<&str>,
-) -> RetrievalPlan {
+) -> Result<RetrievalPlan, String> {
     let baseline = derive_plan_from_question(question, facts);
 
     let mut user = format!("用户问题：\n{}", question.trim());
@@ -74,10 +84,11 @@ pub async fn plan_retrieval(
             .as_deref()
             .and_then(parse_retrieval_plan_from_text)
             .unwrap_or_default(),
-        Err(_) => RetrievalPlan::default(),
+        Err(error) if is_planner_auth_error(&error) => return Err(error),
+        Err(_) => return Ok(baseline),
     };
 
-    merge_retrieval_plans(&baseline, &llm_plan)
+    Ok(merge_retrieval_plans(&baseline, &llm_plan))
 }
 
 fn render_evidence_pack(evidence: &EvidencePack) -> String {
@@ -179,7 +190,7 @@ pub async fn run_standards_pipeline(
         input.facts,
         doc_summary.as_deref(),
     )
-    .await;
+    .await?;
 
     let budget = match input.mode {
         AgentMode::Create => CREATE_EVIDENCE_BUDGET,
@@ -284,6 +295,21 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn planner_error_auth_is_fatal() {
+        assert!(is_planner_auth_error("deepseek 返回错误 (401): invalid api key"));
+        assert!(is_planner_auth_error("HTTP 403 Forbidden"));
+        assert!(is_planner_auth_error("Unauthorized: bad token"));
+        assert!(is_planner_auth_error("authentication failed"));
+    }
+
+    #[test]
+    fn planner_error_non_auth_can_fallback() {
+        assert!(!is_planner_auth_error("network timeout"));
+        assert!(!is_planner_auth_error("malformed JSON in response"));
+        assert!(!is_planner_auth_error("context_length_exceeded"));
+    }
 
     #[test]
     fn parse_retrieval_plan_accepts_json_fence() {
