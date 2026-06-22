@@ -244,36 +244,17 @@ pub async fn continue_project_document(
             emit_continue_error(&app, &run_id, &error);
             error
         })?;
-    let canonical_root = projects_root
-        .canonicalize()
-        .map_err(|error| {
-            let message = format!("项目目录无效: {error}");
-            ai_agent::log_continue_pre_ai(
-                Some(&app),
-                "continue_failed_before_ai",
-                Some(&file_path),
-                Some("projects_root"),
-                Some(&run_id),
-            );
-            emit_continue_error(&app, &run_id, &message);
-            message
-        })?;
-    let relative_path = validated
-        .strip_prefix(&canonical_root)
-        .map_err(|error| {
-            let message = error.to_string();
-            ai_agent::log_continue_pre_ai(
-                Some(&app),
-                "continue_failed_before_ai",
-                Some(&file_path),
-                Some("relative_path"),
-                Some(&run_id),
-            );
-            emit_continue_error(&app, &run_id, &message);
-            message
-        })?
-        .to_string_lossy()
-        .replace('\\', "/");
+    let relative_path = config::relative_project_path(&projects_root, &validated).map_err(|error| {
+        ai_agent::log_continue_pre_ai(
+            Some(&app),
+            "continue_failed_before_ai",
+            Some(&file_path),
+            Some("relative_path"),
+            Some(&run_id),
+        );
+        emit_continue_error(&app, &run_id, &error);
+        error
+    })?;
     let prior_session = session::load_session(&app, &relative_path)
         .map(|(messages, _)| messages)
         .unwrap_or_default();

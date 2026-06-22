@@ -7,7 +7,6 @@ pub mod pack;
 pub mod projects;
 pub mod ai;
 pub mod ai_agent;
-pub mod ai_continue;
 pub mod retrieval;
 mod session;
 mod trash;

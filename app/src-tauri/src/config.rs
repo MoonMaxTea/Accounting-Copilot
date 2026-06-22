@@ -312,11 +312,67 @@ pub fn validate_project_path(projects_root: &Path, file_path: &Path) -> Result<P
     Ok(canonical_file)
 }
 
+/// Relative path from projects root to a validated file (Windows-safe).
+///
+/// 0.1.13 bug: `validated.strip_prefix(&projects_root)` fails on Windows when
+/// `projects_root` is not canonicalized (e.g. `D:\…` vs `\\?\D:\…`). Linux
+/// often masked this because canonical paths matched config strings.
+pub fn relative_project_path(projects_root: &Path, validated_file: &Path) -> Result<String, String> {
+    let canonical_root = projects_root
+        .canonicalize()
+        .map_err(|error| format!("项目目录无效: {error}"))?;
+    validated_file
+        .strip_prefix(&canonical_root)
+        .map_err(|error| error.to_string())
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn relative_project_path_uses_canonical_root() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path().join("projects");
+        let file = root.join("folder").join("note.md");
+        fs::create_dir_all(file.parent().unwrap()).expect("mkdir");
+        fs::write(&file, "# test").expect("write");
+
+        let validated = validate_project_path(&root, &file).expect("validate");
+        let relative = relative_project_path(&root, &validated).expect("relative");
+        assert_eq!(relative, "folder/note.md");
+    }
+
+    #[test]
+    fn relative_project_path_fails_with_old_strip_prefix_bug_via_symlink() {
+        let temp = tempdir().expect("tempdir");
+        let real_root = temp.path().join("real_projects");
+        let link_root = temp.path().join("link_projects");
+        fs::create_dir_all(&real_root).expect("mkdir");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real_root, &link_root).expect("symlink");
+        #[cfg(not(unix))]
+        return;
+
+        let file = real_root.join("note.md");
+        fs::write(&file, "# test").expect("write");
+
+        let validated =
+            validate_project_path(&link_root, &link_root.join("note.md")).expect("validate");
+        // Old 0.1.13 code: validated.strip_prefix(&link_root) — fails when
+        // canonical file path resolves through the symlink target.
+        assert!(
+            validated.strip_prefix(&link_root).is_err(),
+            "non-canonical strip_prefix should fail (Windows-class bug)"
+        );
+        assert_eq!(
+            relative_project_path(&link_root, &validated).expect("fixed"),
+            "note.md"
+        );
+    }
 
     #[test]
     fn validate_project_path_accepts_non_canonical_input() {

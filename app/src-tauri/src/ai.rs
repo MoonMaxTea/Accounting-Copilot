@@ -8,7 +8,6 @@ use crate::config::AiConfig;
 use crate::ai_agent::{
     AgentMode, AgentRunInput, run_standards_agent,
 };
-use crate::ai_continue::run_continue_writer;
 use crate::models::{
     AiAgentMessage, AiConversationTurn, CitationScanResult, GenerateProjectResult,
     ProjectValidationReport,
@@ -474,7 +473,7 @@ pub async fn continue_and_update_project(
         .map(|value| value.to_string_lossy().replace('\\', "/"))
         .filter(|value| !value.is_empty());
 
-    let agent_output = run_continue_writer(
+    let agent_output = run_standards_agent(
         app_handle,
         content_dir,
         ai,

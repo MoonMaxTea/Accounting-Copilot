@@ -1,4 +1,4 @@
-//! Live DeepSeek test: create + 3 continues (continue_writer path).
+//! Live DeepSeek test: create + 3 continues (agent Continue path).
 //! Usage:
 //!   DEEPSEEK_API_KEY=sk-... cargo run --example agent_live_check -- [model]
 //! Default model: deepseek-v4-flash
@@ -71,7 +71,6 @@ async fn main() {
     let ai = build_ai_config(&model);
     let debug_log = root.join("ai-debug.log");
     let agent_create_before = count_debug_modes(&debug_log, "agent_create");
-    let continue_writer_before = count_debug_modes(&debug_log, "continue_writer");
     let agent_continue_before = count_debug_modes(&debug_log, "agent_continue");
 
     println!("== Agent live check ==");
@@ -135,7 +134,6 @@ async fn main() {
                 let tool_steps = activity.iter().filter(|t| t.kind == "tool").count();
                 let retrieval_steps = activity.iter().filter(|t| t.kind == "retrieval").count();
                 println!("  activity: tool={tool_steps} retrieval={retrieval_steps}");
-                assert_eq!(tool_steps, 0, "continue_writer must not emit tool activity");
                 session = new_session;
             }
             Err(error) => {
@@ -152,19 +150,13 @@ async fn main() {
     }
 
     let agent_create_after = count_debug_modes(&debug_log, "agent_create");
-    let continue_writer_after = count_debug_modes(&debug_log, "continue_writer");
     let agent_continue_after = count_debug_modes(&debug_log, "agent_continue");
 
     assert_eq!(agent_create_after - agent_create_before, 1, "expected 1 agent_create");
     assert_eq!(
-        continue_writer_after - continue_writer_before,
-        3,
-        "expected 3 continue_writer"
-    );
-    assert_eq!(
         agent_continue_after - agent_continue_before,
-        0,
-        "agent_continue must not appear"
+        3,
+        "expected 3 agent_continue"
     );
 
     println!("\n=== ALL 4 ROUNDS PASSED (create + 3 continues) ===");

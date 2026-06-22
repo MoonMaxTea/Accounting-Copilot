@@ -140,9 +140,7 @@ Events are global (not tied to component lifecycle). Switching tabs does not int
 
 Progress payload (`AiGenerationProgress`) may include `run_id`, `step_index`, `kind` (`tool` / `retrieval` / `writing` / `synthesis`), and `detail`.
 
-## AI document generation
-
-**Generate** uses the agent + tools loop. **Continue / Follow-up** uses local retrieval + plain chat (no tools).
+## AI document generation (agent-only — Generate and Continue)
 
 ```mermaid
 sequenceDiagram
@@ -150,33 +148,32 @@ sequenceDiagram
   participant CMD as commands.rs
   participant AI as ai.rs
   participant AG as ai_agent.rs
-  participant CW as ai_continue.rs
   participant LLM as Provider API
   participant Pack as pack + citations
 
   UI->>CMD: generate_project_document
   CMD->>AI: generate_and_save_project
-  AI->>AG: run_standards_agent
+  AI->>AG: run_standards_agent Create
+  loop up to 12 rounds
+    AG->>LLM: chat/completions + tools
+    AG->>Pack: search / list / get_paragraph
+  end
+
+  UI->>CMD: continue_project_document
+  Note over CMD: continue_requested + relative_project_path
+  CMD->>AI: continue_and_update_project validated path
+  AI->>AG: run_standards_agent Continue
   loop up to 12 rounds
     AG->>LLM: chat/completions + tools
     AG->>Pack: search / list / get_paragraph
   end
   AG-->>AI: raw_response + session + activity
   AI->>AI: finalize_project_markdown
-
-  UI->>CMD: continue_project_document
-  Note over CMD: ai-debug continue_requested
-  CMD->>CMD: validate_project_path → canonical path
-  CMD->>AI: continue_and_update_project
-  AI->>CW: run_continue_writer
-  CW->>Pack: derive_plan + gather_evidence
-  CW->>LLM: request_chat_plain (no tools)
-  CW-->>AI: raw_response + session + activity
-  AI->>AI: finalize_project_markdown
-  CMD->>CMD: session::save_session
 ```
 
-Key files: `ai_agent.rs` (Generate loop), `ai_continue.rs` (Follow-up writer), `ai.rs` (post-process), `session.rs` (persistence).
+Key files: `ai_agent.rs` (loop), `ai.rs` (post-process), `config.rs` (`relative_project_path`), `session.rs` (persistence).
+
+**Windows 0.1.13 bug:** `validated.strip_prefix(&projects_root)` without canonicalizing root — Continue failed before AI; Generate unaffected.
 
 Live checks:
 

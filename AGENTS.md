@@ -216,14 +216,14 @@ CI `release-app.yml` builds NSIS/MSI (Windows) and deb/AppImage (Linux).
 
 ## AI subsystem
 
-Split generation paths:
+Agent-only document generation for **both Generate and Continue**: `ai.rs` calls `ai_agent::run_standards_agent` (same Agent + 3 tools path as Linux 0.1.13).
 
 | Operation | Rust entry | AI path | Debug `mode` |
 |-----------|------------|---------|--------------|
-| **Generate** | `generate_and_save_project` | `run_standards_agent` (3 tools, up to 12 rounds) | `agent_create` |
-| **Continue / Follow-up** | `continue_and_update_project` | `run_continue_writer` (local retrieval + single `request_chat_plain`, **no tools**) | `continue_writer` |
+| **Generate** | `generate_and_save_project` | `run_standards_agent` Create | `agent_create` |
+| **Continue / Follow-up** | `continue_and_update_project` | `run_standards_agent` Continue | `agent_continue` |
 
-### Agent tools (Generate only — 3)
+### Agent tools (3)
 
 | Tool | Purpose | Key detail |
 |------|---------|------------|
@@ -233,17 +233,24 @@ Split generation paths:
 
 ### Architecture
 
-- **`ai_agent.rs`:** Agent loop for **Generate**. `build_agent_system_prompt` = `build_core_writing_prompt` + tool workflow. Provider error classification, recovery retries, storm guard, synthesis fallback. Shared helpers: `request_chat_plain`, `build_core_writing_prompt`, `build_writer_system_prompt`, `append_ai_debug_event`.
-- **`ai_continue.rs`:** **Continue / Follow-up** writer — `derive_plan_from_question` + `gather_evidence` + one plain chat call.
-- **`ai.rs`:** Post-processing (**pack quote capping** ≤ 600 chars), project save. Wires Generate → agent, Continue → writer.
+- **`ai_agent.rs`:** Self-contained system prompt + agent loop (Generate **and** Continue). `build_agent_system_prompt` = `build_core_writing_prompt` + tool workflow. Provider error classification, recovery retries, storm guard, synthesis fallback. `append_ai_debug_event`, `log_continue_pre_ai`.
+- **`ai.rs`:** Post-processing (**pack quote capping** ≤ 600 chars), project save. Calls `run_standards_agent` for create/continue.
 - **`session.rs`:** Persists AI sessions under `sessions/<sha256(key)>.json` (migrated from `config.json` on `get_config`).
-- **`retrieval.rs`:** Local FTS/registry retrieval + `render_evidence_pack` for Continue writer.
+- **`config.rs`:** `relative_project_path` — canonical-root `strip_prefix` (fixes Windows Continue pre-AI failure).
 
-### Cross-turn API shape
+### Cross-turn API shape (stateless)
 
-**Generate:** Each run seeds the API with **`[system, current user_turn]` only** via `seed_agent_turn`. Prior turns are stripped of `tool` rows / `tool_calls` before persistence.
+Each run seeds the API with **`[system, current user_turn]` only** via `seed_agent_turn`. Prior turns are stripped of `tool` rows / `tool_calls` before persistence. Continue mode embeds the **full normalized `.md`** in the user turn; the current turn re-runs pack tools live.
 
-**Continue:** One plain-chat request per follow-up. User message = 追问 + facts + `【检索证据】` + **full normalized note** (no tool loop, no prior API replay).
+### Windows Continue failure (0.1.13 root cause)
+
+Same binary as Linux. **Generate worked; Continue often produced no `ai-debug.log` line** because 0.1.13 did:
+
+```rust
+validated.strip_prefix(&projects_root)  // projects_root NOT canonicalized
+```
+
+On Windows, `validated` is often `\\?\D:\…` while `projects_root` from config is `D:\…` → `strip_prefix` fails **before** `run_standards_agent`. Linux paths usually matched by luck. **Fix:** `config::relative_project_path` canonicalizes the root; pass **validated** path through the Continue chain.
 
 ### Session storage
 
@@ -264,31 +271,34 @@ Split generation paths:
 |-------|------|
 | `continue_requested` | `continue_project_document` entry (always) |
 | `continue_failed_before_ai` | path validate / read / config / persist failure (`error_class` set) |
-| `continue_enter_ai` | Passed pre-checks, entering `run_continue_writer` |
-| `continue_writer` start/retrieval/write/complete/error | Inside Continue writer |
+| `continue_enter_ai` | Passed pre-checks, entering `run_standards_agent` |
+| `agent_continue` start/complete/error | Inside Agent Continue (same as Linux 0.1.13) |
 
-If Send follow-up produces **no new log line**, failure is before Rust (`continue_requested` missing → frontend/invoke issue).
+If Send follow-up produces **no new log line**, failure is before Rust (`continue_requested` missing → frontend/invoke issue). If `continue_requested` but no `agent_continue`, check `error_class`: `relative_path` = canonical path bug.
 
 ### System prompt
 
-- **Generate:** `build_agent_system_prompt` — loads writing spec + tool workflow
-- **Continue:** `build_writer_system_prompt` — core writing spec + 「依据来自【检索证据】」
+- Built by `build_agent_system_prompt` (ai_agent.rs) — loads writing spec from content pack
 - Agent runs max 12 tool rounds (`MAX_TOOL_ROUNDS`), then forced synthesis (`tool_choice: "none"`)
 
 ### Generation lifecycle
 
 1. Frontend calls `generateProjectDocument` / `continueProjectDocument`
-2. Continue command logs `continue_requested` immediately; passes **canonical validated path** to AI layer
+2. Continue command logs `continue_requested` immediately; **`relative_project_path` + validated path**
 3. Progress events emit `ai-generation-progress` with `run_id` (Continue errors prefixed `Continue failed:` in UI)
 4. App.tsx listens globally → `genEpoch` gating prevents stale error toasts
 5. `finalize_project_markdown`: parse → inject_pack_quotes (**caps** over-long quotes) → … → save
 6. AI disclaimer auto-added at end
 
-### Follow-up (Continue) — plain chat path
+### Follow-up DeepSeek prefix error — structural fix (primary)
 
-Continue no longer calls `run_standards_agent` / `agent_continue`. It uses local retrieval (`CONTINUE_EVIDENCE_BUDGET`) + a single plain chat completion. This avoids DeepSeek/Tencent gateway prefix/tool-history issues on follow-ups while keeping full note grounding in the user message.
+Follow-ups seed the agent with the prior saved session. **Do not replay the
+prior turn's tool plumbing.** `run_standards_agent` runs the seed through
+`strip_tool_history`, which drops `tool` rows and strips assistant `tool_calls`
+while keeping prior user/assistant **text** turns. Continue embeds the full
+document; the current turn re-runs pack tools live.
 
-### Error recovery (Generate agent — prefix / context overflow)
+### Error recovery (prefix / context overflow) — safety net
 
 All chat calls also go through `chat_completion_with_recovery` (ai_agent.rs). The
 full history is tried first; it retries **once** with tool history stripped only
@@ -321,8 +331,10 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | Wide unrelated diffs | User prefers minimal, focused changes |
 | Hardcoding framework names in regex | Framework-agnostic retrieval is now handled by the Agent's `search_local_pack` tool (FTS5 + registry fallback) |
 | Mermaid `securityLevel: "sandbox"` | Breaks `<br>` tags in node labels; use `"loose"` with `suppressErrorRendering: true` |
-| Continue passes raw `file_path` instead of validated canonical path | Windows `strip_prefix` / read failures before AI; no `continue_writer` log |
+| Continue passes raw `file_path` instead of validated canonical path | Windows `strip_prefix` / read failures before AI; no `agent_continue` log |
+| `validated.strip_prefix(&projects_root)` without canonical root | **0.1.13 Windows bug** — use `relative_project_path` |
 | Ignoring `continue_requested` in ai-debug.log | If missing on Send follow-up, invoke never reached Rust |
+| DeepSeek "prefix not found" on follow-up | **Do not replay tool history.** `seed_agent_turn` + `strip_tool_history`; Continue embeds full document. `chat_completion_with_recovery` retries once as safety net. |
 | Expanding quotes in `inject_pack_quotes` | It must **cap** (≤ 600 chars), never paste the 4 000-char `snippet_en` into the note — expanding overrides the prompt's ≤4-sentence rule and bloats follow-up context |
 | Byte-slicing `char_start` | `char_start` is a JS **UTF-16** offset; slice via `slice_utf16` (citations.rs), never `body[start..end]` by bytes — byte slicing mis-aligns on non-ASCII packs and can panic |
 | Using `find()` to resolve paragraph index entries | ASC codification files have an amendment-metadata table ("00 Status") at the top that repeats every paragraph number — earliest char_start entries contain boilerplate ("Amended … Accounting Standards Update"), not substantive text. Use `max_by_key(char_start)` to pick the latest occurrence, and **always try exact paragraph match before falling back to normalized matching** (ASC `paragraph_normalized` is just the topic number "718", matching every entry in the standard) |

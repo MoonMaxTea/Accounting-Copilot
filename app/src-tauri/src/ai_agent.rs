@@ -349,22 +349,6 @@ pub fn build_core_writing_prompt(content_dir: &Path) -> Result<String, String> {
     ))
 }
 
-/// Continue writer path: core prompt + evidence-from-user-message rule (no tools).
-pub fn build_writer_system_prompt(content_dir: &Path) -> Result<String, String> {
-    let core = build_core_writing_prompt(content_dir)?;
-    Ok(format!(
-        "{core}\n\n\
-         ### 铁律 4：一切依据来自【检索证据】\n\
-         - 准则内容必须来自 user 消息中的【检索证据】段落\n\
-         - 证据未覆盖的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
-         - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
-         ## 工作流程（Continue）\n\
-         1. 阅读当前项目笔记全文与用户追问\n\
-         2. 依据【检索证据】更新笔记，输出完整新版 Markdown\n\
-         3. 保留已有正确内容，仅补充/修订与追问相关的部分"
-    ))
-}
-
 pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Result<String, String> {
     let core = build_core_writing_prompt(content_dir)?;
     Ok(format!(
