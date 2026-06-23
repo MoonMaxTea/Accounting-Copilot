@@ -174,6 +174,12 @@ export function EvidenceSidePanel({
       setExpandedRoundIds(new Set());
       return;
     }
+    if (conversationRounds.length >= 2) {
+      const first = conversationRounds[0];
+      const latest = conversationRounds[conversationRounds.length - 1];
+      setExpandedRoundIds(new Set([first.id, latest.id]));
+      return;
+    }
     const latest = conversationRounds[conversationRounds.length - 1];
     if (latest) {
       setExpandedRoundIds(new Set([latest.id]));
