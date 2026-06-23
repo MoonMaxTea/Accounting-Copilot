@@ -80,6 +80,8 @@ App and content releases are **independent**.
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Module map |
 | [docs/RELEASE-NOTES.md](./docs/RELEASE-NOTES.md) | App release changelog |
 | [docs/DESIGN.md](./docs/DESIGN.md) | Product design (Chinese) |
+| [docs/AI-GENERATION-REWRITE-PLAN.md](./docs/AI-GENERATION-REWRITE-PLAN.md) | Historical pipeline plan (superseded by Agent-only v0.1.13+) |
+| [docs/P2-PLAN.md](./docs/P2-PLAN.md) | Long-term architecture backlog |
 
 When adding major subsystems, update `AGENTS.md` and `docs/ARCHITECTURE.md`.
 

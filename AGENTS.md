@@ -356,7 +356,10 @@ Product owner often communicates in **Chinese**. Keep **UI strings in English** 
 - [docs/DESIGN.md](docs/DESIGN.md) — full design spec
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contributor workflow
-- [app/README.md](app/README.md) — app-specific dev notes (partially outdated; prefer this file)
+- [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) — app release changelog
+- [docs/P2-PLAN.md](docs/P2-PLAN.md) — long-term backlog
+- [docs/AI-GENERATION-REWRITE-PLAN.md](docs/AI-GENERATION-REWRITE-PLAN.md) — historical (superseded)
+- [app/README.md](app/README.md) — app-specific dev notes & Continue troubleshooting
 
 ---
 

@@ -1,5 +1,7 @@
 # Accounting Copilot — 实施路线图
 
+> **Historical roadmap (2026-06-18).** All phases 0–4 complete; current app **v0.1.14**. See [RELEASE-NOTES.md](../../RELEASE-NOTES.md).
+
 > **日期**: 2026-06-18  
 > **设计规格**: [2026-06-18-desktop-app-design.md](../specs/2026-06-18-desktop-app-design.md)  
 > **产品需求**: [DESIGN.md](../../DESIGN.md)

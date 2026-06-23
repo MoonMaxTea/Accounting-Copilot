@@ -46,4 +46,12 @@ Continue pre-AI debug phases in `ai-debug.log`:
 
 ## app-v0.1.13 (2026-06-21)
 
-Agent-only generation; pipeline mode removed. See git history / prior PRs (#21).
+**Tag:** [`app-v0.1.13`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.13)
+
+### Summary
+
+Agent-only document generation; **pipeline mode removed**. Stateless Agent seeding, session files under `sessions/`, `ai-debug.log` observability. See PR #21 and [ARCHITECTURE.md](./ARCHITECTURE.md) changelog (v0.1.13).
+
+### Note
+
+Windows Follow-up could still fail **before AI** on 0.1.13 due to path canonicalization — fixed in **0.1.14**.
