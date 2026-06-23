@@ -1,10 +1,16 @@
 # Agent-only AI Rewrite Reviewed Implementation Plan
 
+> **Historical — completed through app-v0.1.14 (2026-06-22).**  
+> Pipeline mode was removed in v0.1.13. Windows Continue path fix shipped in v0.1.14 (PR #22).  
+> **Current source of truth:** [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), [RELEASE-NOTES.md](../../RELEASE-NOTES.md).
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix Windows Continue/provider failures and improve Agent reliability without prematurely deleting the tested Pipeline path.
 
-**Architecture:** Keep the current shared command/post-processing flow. First make Agent calls stateless per turn, normalize Continue document input, harden retries, and add observability. Only switch default Agent-only and remove Pipeline after live VM and Windows gates prove Agent quality and provider stability.
+**Outcome (as shipped):** Agent-only generation; Pipeline deleted; Continue uses same `run_standards_agent` on Windows and Linux.
 
 **Tech Stack:** Tauri 2, Rust, React 19, TypeScript, Vite, pnpm 9, DeepSeek/OpenAI-compatible chat APIs, local standards pack.
 

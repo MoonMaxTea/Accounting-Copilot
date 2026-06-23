@@ -2,6 +2,8 @@
 
 Concise map for developers and agents. Full product spec: [DESIGN.md](./DESIGN.md).
 
+**Current app release:** [`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14) — see [RELEASE-NOTES.md](./RELEASE-NOTES.md).
+
 ## System context
 
 ```mermaid
@@ -266,24 +268,44 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 | Filter/navigation UX | `lib/standards-navigation.ts`, `StandardsCategoryNav.tsx` |
 | New accounting framework | Add to vault + rebuild pack — no code changes needed (framework-agnostic retrieval) |
 
-## Recent changelog (2026-06-21, follow-up DeepSeek prefix fix — v0.1.11)
+## Changelog (app-v0.1.14, 2026-06-22)
 
 ### Fixed
-- **Follow-up "prefix not found" persisted through 0.1.9/0.1.10** (`ai_agent.rs`): the normal Continue path replayed the prior session's `tool`/`tool_calls` rows, which DeepSeek (`deepseek-reasoner` / `/beta` endpoint) rejects. The error-string retry never fired because DeepSeek's real wording ("…must be a user message, or an assistant message with prefix mode on") isn't the literal "prefix not found". Fixed structurally with `strip_tool_history` at seed time (prior tool plumbing removed, prior user/assistant text kept; current turn re-runs tools live, Continue embeds the full document → grounding unchanged). `is_prefix_not_found_error` broadened to all known DeepSeek wordings as a safety net.
+- **Windows Continue pre-AI failure:** `continue_project_document` failed when `validated.strip_prefix(&projects_root)` mismatched canonical vs config paths. Fixed with `config::relative_project_path` and passing validated canonical paths through the Continue chain.
+- **Stale error toasts:** `genEpoch` gating in `App.tsx` / `EvidencePage.tsx`.
+- **Product copy:** Neutral internal-link hint; no third-party editor names in runtime UI.
 
-## Recent changelog (2026-06-22, agent-only rewrite)
+### Added
+- Continue debug phases in `ai-debug.log`: `continue_requested`, `continue_failed_before_ai`, `continue_enter_ai`, `agent_continue`.
+- `continue_path_check` example; Windows release CI runs `pnpm test` + `cargo test`.
+
+### Unchanged
+- Generate and Continue both use `run_standards_agent` (3 tools, 12 rounds max).
+
+---
+
+## Changelog (agent-only rewrite, v0.1.13, 2026-06-22)
 
 ### Removed
 - **Pipeline generation mode** (`ai_pipeline.rs`, `AiConfig.generation_mode`, Settings toggle). Document generation is agent-only via `run_standards_agent`.
 - **`pipeline_live_check`** example → renamed **`agent_live_check`**.
 
-### Added / changed (PR-1–PR-5, summarized)
+### Added / changed
 - **Stateless cross-turn API:** each run sends `[system, current user]`; session files store text-only history under `sessions/`.
 - **Session migration** from `config.json` on `get_config`.
 - **Agent hardening:** phases, synthesis guard, tool storm skip, JSON repair, 429/503 backoff.
 - **`ai-debug.log`:** redacted run metadata in app data dir.
 
-## Recent changelog (2026-06-21, technical audit — P0/P1)
+---
+
+## Changelog (follow-up DeepSeek prefix fix — v0.1.11, 2026-06-21)
+
+### Fixed
+- **Follow-up "prefix not found" persisted through 0.1.9/0.1.10** (`ai_agent.rs`): fixed structurally with `strip_tool_history` at seed time. `is_prefix_not_found_error` broadened as safety net.
+
+---
+
+## Changelog (technical audit — P0/P1, 2026-06-21)
 
 > Supersedes some earlier notes below. The "AI output pasting raw English" issue
 > was **not** primarily the flash model; the deterministic cause was
@@ -304,7 +326,9 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 ### Deferred
 - Long-term architecture work (semantic retrieval + rerank, prompt caching, session-cost治理, observability, doc/code consistency tests) is planned in [`docs/P2-PLAN.md`](P2-PLAN.md).
 
-## Recent changelog (2026-06-21)
+---
+
+## Changelog (2026-06-21)
 
 ### Fixed
 - **ASC substantive content not retrieved**: `resolve_from_index` was returning amendment-metadata table entries (lowest char_start) instead of substantive paragraphs. Fixed by using `max_by_key(char_start)` + exact-match-first resolution. Also fixed `list_standard_paragraphs` dedup to keep highest-char_start entry per paragraph.
@@ -317,7 +341,9 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 - **`get_pack_paragraph` snippet**: 2000 → 4000 chars from file body for deeper AI reading context.
 - **`list_standard_paragraphs` dedup**: Now sorts by `(paragraph, char_start DESC)` before dedup to keep substantive entries, not amendment metadata.
 
-## Recent changelog (2026-06-20)
+---
+
+## Changelog (2026-06-20)
 
 ### Added
 - **In-document search**: `useBodySearch` hook + `BodySearchBar` in standards panels

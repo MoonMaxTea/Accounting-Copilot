@@ -1,7 +1,8 @@
 # 双准则桌面 App — 设计说明
 
-> **状态**：设计稿 v1（**已落地本仓库**）  
-> **内容源**：[AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) 的 `03 - 知识库/`
+> **状态**：设计稿 v1 — **已落地**（当前 App **v0.1.14**，[`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14)）  
+> **内容源**：[AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) 的 `03 - 知识库/`  
+> **实现细节**：见 [ARCHITECTURE.md](./ARCHITECTURE.md)、[RELEASE-NOTES.md](./RELEASE-NOTES.md)、[AGENTS.md](../AGENTS.md)
 
 ---
 
@@ -16,13 +17,14 @@
 | 优先级 | 能力 | 说明 |
 |--------|------|------|
 | P0 | 准则全量浏览 + 全文搜索 | 现行 + 旧准则 |
-| P0 | Evidence 分屏 | 项目笔记 ↔ 准则段落对照 |
+| P0 | Workbench 分屏 | 项目笔记 ↔ 准则段落对照 |
 | P0 | 官网验证链接 | 每条准则 `official_url` |
 | P0 | AI 写项目文档 | 仅引 pack 内段落；默认仅 `current` |
 | P0 | 检查更新 | GitHub Releases：App + content pack |
 | P1 | 旧准则标签与对照 | `legacy` 徽章、`superseded_by` 跳转 |
 | P1 | 引用校验 | 生成后扫描引用是否存在于 index |
-| P2 | 指向 Obsidian Vault 项目目录 | 与现有 `02 - 项目/` 共用 |
+| P1 | 用户自选项目目录 | Settings → projects folder；扫描 `.md` 树 |
+| P2 | 与 Vault `02 - 项目/` 目录对齐 | 可选；用户自行指定路径即可 |
 | P2 | 写回 Vault PR | 可选 |
 
 ### 1.3 明确不做（v1）
@@ -43,11 +45,11 @@ flowchart TB
         SPEC["02 - 项目/项目编写说明 + .cursor/skills/"]
     end
 
-    subgraph desktop["Desktop App 仓库（新建）"]
+    subgraph desktop["Desktop App 仓库（本仓库）"]
         REG["standards-registry.yaml"]
         BUILD["tools/pack-builder"]
-        APP["src-tauri + ui"]
-        REL[".github/workflows/release.yml"]
+        APP["app/ (Tauri + React)"]
+        REL[".github/workflows/"]
     end
 
     subgraph gh["GitHub Releases"]
@@ -91,8 +93,9 @@ Accounting-Copilot/
 │   └── schema/                   ← JSON Schema 校验
 ├── updates/
 │   └── manifest.json             ← latest 指针（或 Release 资产）
-├── src/                          ← 前端 UI
-├── src-tauri/                    ← Tauri 壳
+├── app/
+│   ├── src/                      ← React UI
+│   └── src-tauri/                ← Tauri 壳 + Rust 后端
 ├── writing-spec/                 ← 从 Vault 同步的编写规范副本
 │   ├── 项目编写说明.md
 │   └── SKILL.md
@@ -261,8 +264,8 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 | 类型 | Tag 示例 | 资产 |
 |------|----------|------|
 | Content only | `content-2026.06.18` | `standards-pack-2026.06.18.zip` |
-| App | `app-v1.0.0` | `Accounting.Copilot_1.0.0_x64-setup.exe` 等 |
-| 联合发版 | `v1.0.0+content-2026.06.18` | 两者皆有 |
+| App | `app-v0.1.14` | `Accounting Copilot_0.1.14_x64-setup.exe` 等 |
+| 联合发版 | `app-v0.1.14+content-2026.06.18` | 两者皆有 |
 
 **原则**：content 可独立于 app 发版；发 content 后必须更新 `updates/manifest.json` 的 `content` 段。
 
@@ -274,9 +277,11 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 
 | 路径 | 说明 |
 |------|------|
-| `{AppData}/Accounting Copilot/content/` | 准则 pack（应用更新） |
-| `{AppData}/Accounting Copilot/config.json` | 用户项目目录、AI Key、更新通道 |
-| `{用户自选}/.../02 - 项目/` | 项目笔记（默认不在 AppData） |
+| `{AppData}/com.moonmaxtea.accounting-copilot/content/` | 准则 pack |
+| `{AppData}/com.moonmaxtea.accounting-copilot/config.json` | projects folder、更新通道等 |
+| `{AppData}/com.moonmaxtea.accounting-copilot/sessions/` | AI 会话（按项目相对路径 hash） |
+| `{AppData}/com.moonmaxtea.accounting-copilot/ai-debug.log` | AI 运行元数据（不含密钥/全文） |
+| `{用户自选 projects_dir}/` | 项目笔记 `.md`（默认不在 AppData） |
 
 `config.json` 示例：
 
@@ -357,7 +362,7 @@ stateDiagram-v2
 - 勾选「显示旧准则」：含 `archive/`
 - 框架筛选：IFRS / IAS / ASC
 
-### 6.4 Evidence 分屏
+### 6.4 Workbench 分屏（Evidence）
 
 ```
 ┌──────────────────────┬──────────────────────┐
@@ -378,14 +383,14 @@ stateDiagram-v2
 > - **历史项目**：默认按 **最近修改时间** 从新到旧；支持 **搜索**（标题 / 文件名 / 正文关键词）。
 > - **新建文件名**：全自动 — `{项目名}-{YYYY-MM-DD}.md`；**项目名由 AI 根据用户问题自动生成**（用户无需填写）。
 
-**入口：** 顶部主导航 `[准则库] [Evidence] [项目] [设置]`
+**入口：** 顶部主导航 `[Standards] [Workbench] [Settings]`（Setup 在首次安装）
 
-**页面布局：**
+**页面布局（Workbench）：**
 
 ```
 ┌──────────────────────┬──────────────────────────────┐
-│ 历史项目              │ 新建项目笔记                  │
-│ 🔍 搜索…             │ （问题输入 + 生成）           │
+│ 历史项目              │ 新建 / 打开项目笔记           │
+│ 🔍 搜索…             │ （问题输入 + Generate / Follow-up） │
 │ （按最近修改排序）     │                              │
 └──────────────────────┴──────────────────────────────┘
 ```
@@ -394,11 +399,11 @@ stateDiagram-v2
 
 | 规则 | 说明 |
 |------|------|
-| 数据来源 | 扫描 `{projects_dir}` 下全部 `.md`（与 Obsidian 共用，含子文件夹） |
+| 数据来源 | 扫描 Settings 中 `{projects_dir}` 下全部 `.md`（含子文件夹） |
 | 默认排序 | **最近修改** 在最上（`mtime` 降序） |
 | 搜索 | 匹配：文件名、笔记首个 `# 标题`、正文前 N 字；实时过滤列表 |
-| 点击条目 | **[在 Evidence 中打开]** / 打开所在文件夹 |
-| 索引文件 | 若存在 `项目索引.md`，新建后追加链接；**列表排序仍以最近修改为准** |
+| 点击条目 | 在 Workbench 分屏打开 / 打开所在文件夹 |
+| 索引文件 | 若存在 `项目索引.md`，新建后追加内部链接；**列表排序仍以最近修改为准** |
 
 **新建 — 输入：** 用户问题 + 可选事实表（如 50:50 合营）
 
@@ -407,7 +412,7 @@ stateDiagram-v2
 1. AI 根据用户问题生成 **短项目名**（2–12 字为宜，如 `合营安排判断`、`ASC740递延所得税`）
 2. 文件名：`{项目名}-{YYYY-MM-DD}.md`（例：`合营安排判断-2026-06-18.md`）
 3. 同日重名：追加序号，如 `合营安排判断-2026-06-18-2.md`
-4. 笔记正文首个一级标题 `# …` 与项目名一致（便于搜索与 Obsidian 显示）
+4. 笔记正文首个一级标题 `# …` 与项目名一致（便于搜索与列表显示）
 
 **System 约束（摘自 Vault）：**
 
@@ -417,8 +422,8 @@ stateDiagram-v2
 
 **输出与保存：**
 
-- AI 流式生成完成后，**自动写入** `{projects_dir}/{项目名}-{YYYY-MM-DD}.md`
-- 保存成功后提示：「已保存至 xxx.md」+ **[在 Evidence 中打开]**
+- 生成完成后，**自动写入** `{projects_dir}/{项目名}-{YYYY-MM-DD}.md`
+- 保存成功后提示路径；Workbench 自动刷新项目树
 - 自动更新 `项目索引.md`（若存在）
 
 **生成后校验（不阻断保存，仅提示）：**
@@ -429,17 +434,43 @@ stateDiagram-v2
 | 中文提炼未标成「原文」 | 警告 |
 | B-实务决策 缺操作结论 | 警告 |
 
-**后续修改：** 用户在 Obsidian 改稿；改后按 **最近修改** 浮到历史列表顶部。
+**追问（Follow-up / Continue，v0.1.14）：**
+
+- 在同一 `.md` 上追加用户问题；Rust 读取**全文笔记**后进入 Agent Continue（`agent_continue`）
+- Generate 与 Continue **同一引擎**：`run_standards_agent` + 3 工具，最多 12 轮
+- 每文件独立会话：`sessions/<sha256(relative_path)>.json`
+- Windows 0.1.14 修复：`relative_project_path` 在 canonical 根路径上计算相对路径
+
+**后续修改：** 用户可在任意编辑器改稿；改后按 **最近修改** 浮到历史列表顶部。
 
 ### 6.6 设置页 — 版本信息
 
 ```
 准则库版本：2026.06.18
-Vault commit：a1b2c3d
-App 版本：1.0.0
-上次检查更新：2026-06-18 10:00
-[检查更新]
+Content pack commit：（pack-manifest）
+App 版本：0.1.14
+上次检查更新：2026-06-22 10:00
+[Check for updates]
 ```
+
+（产品 UI 为英文；上图为信息结构示意。）
+
+### 6.7 AI 生成架构（v0.1.14）
+
+| 操作 | Tauri 命令 | Rust 入口 | Debug mode |
+|------|------------|-----------|------------|
+| 新建 Generate | `generate_project_document` | `run_standards_agent` Create | `agent_create` |
+| 追问 Continue | `continue_project_document` | `run_standards_agent` Continue | `agent_continue` |
+
+**工具（3）：** `search_local_pack`、`list_standard_paragraphs`、`get_pack_paragraph`
+
+**跨轮 API：** 每轮仅发送 `[system, current_user_turn]`；不 replay 旧 `tool` 行。Continue 在 user turn 嵌入全文 `.md`，当前轮重新跑工具检索。
+
+**后处理（不变）：** `parse_ai_response` → `inject_pack_quotes`（≤600 字 cap）→ frontmatter / 日志 / 免责声明 → 写盘。
+
+**可观测性：** `ai-debug.log` 记录 `continue_requested` → `continue_enter_ai` → `agent_continue`；失败时 `continue_failed_before_ai` + `error_class`。
+
+详见 [ARCHITECTURE.md](./ARCHITECTURE.md) 与 [RELEASE-NOTES.md](./RELEASE-NOTES.md#app-v0114-2026-06-22)。
 
 ---
 
@@ -473,7 +504,7 @@ App 版本：1.0.0
 | 准则正文 | **仅**来自 Vault `03 - 知识库/`，pack-builder 不得改正文 |
 | 元数据 | Desktop 仓库 `standards-registry.yaml` |
 | 编写规范 | 每次 build 从 Vault 复制最新 `项目编写说明` + SKILL |
-| 项目笔记 | **不**打入 pack；用户本地或 Obsidian |
+| 项目笔记 | **不**打入 pack；仅存用户 `projects_dir` |
 
 ---
 
@@ -510,13 +541,13 @@ App 版本：1.0.0
 
 ## 十、实施阶段
 
-| 阶段 | 交付 |
-|------|------|
-| **Phase 0** | ~~新建 Desktop 仓库~~；`standards-registry.yaml` 首版（130 条骨架）；pack-builder CLI |
-| **Phase 1** | Tauri 壳 + 准则浏览 + 搜索 + 官网链接 + 旧准则 UI |
-| **Phase 2** | Evidence 分屏 + 本地项目目录 |
-| **Phase 3** | AI 写文档 + 引用校验 |
-| **Phase 4** | GitHub Release 自动更新 + 设置页 |
+| 阶段 | 交付 | 状态 |
+|------|------|------|
+| **Phase 0** | `standards-registry.yaml` 首版；pack-builder CLI | ✅ |
+| **Phase 1** | Tauri 壳 + 准则浏览 + 搜索 + 官网链接 + 旧准则 UI | ✅ |
+| **Phase 2** | Workbench 分屏 + 本地项目目录 | ✅ |
+| **Phase 3** | AI Agent 写文档 + 引用校验 + Follow-up | ✅（v0.1.14） |
+| **Phase 4** | GitHub Release 自动更新 + 设置页 | ✅ |
 
 ---
 
@@ -535,3 +566,5 @@ App 版本：1.0.0
 
 - 2026-06-18：初稿 — 桌面 Only、GitHub Releases、全量 pack、旧准则、官网链接、AI 写文档
 - 2026-06-18：迁移至 Accounting-Copilot 仓库；registry 130 条骨架
+- 2026-06-21：Agent-only 生成；pipeline 模式移除（v0.1.13）
+- 2026-06-22：**v0.1.14** — Windows Continue 路径修复；`ai-debug.log` 诊断；产品 UI 去除第三方编辑器名称

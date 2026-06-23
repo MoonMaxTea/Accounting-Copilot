@@ -53,7 +53,7 @@ Manual zip import exists in Rust (`pick_and_import_content_pack`) but is not exp
 
 | Symptom | Check |
 |---------|--------|
-| Follow-up does nothing; no new log | `%APPDATA%\com.moonmaxtea.accounting-copilot\ai-debug.log` (Windows) or `~/.local/share/com.moonmaxtea.accounting-copilot/` (Linux) |
+| Follow-up does nothing; no new log | `%APPDATA%\com.moonmaxtea.accounting-copilot\ai-debug.log` (Windows) or `~/.local/share/com.moonmaxtea.accounting-copilot/ai-debug.log` (Linux) |
 | No `continue_requested` | Frontend / invoke did not reach Rust |
 | `continue_requested` but no `agent_continue` | Pre-AI path error — see `error_class` (`relative_path` = canonical path issue on 0.1.13) |
 | Success | `continue_requested` → `continue_enter_ai` → `agent_continue` |

@@ -31,3 +31,7 @@ pnpm app:build
 ## Branches
 
 `cursor/<descriptive-name>-1b98` off `main`. Never commit secrets.
+
+## Version
+
+Current release: **0.1.14** (`app-v0.1.14`). Bump `app/package.json`, `app/src-tauri/Cargo.toml`, `app/src-tauri/tauri.conf.json` together.

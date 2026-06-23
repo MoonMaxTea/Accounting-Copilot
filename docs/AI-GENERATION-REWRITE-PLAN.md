@@ -1,19 +1,19 @@
 # 重构工作单（Engineering Handoff）：Tools-free 三阶段生成管道
 
-> 状态：**已实施（pipeline 默认）**。详见 `docs/AI-GENERATION-REWRITE-PLAN.md`。
-> 负责人视角（Manager）编写：下面每一步都写明「改哪个文件、加什么函数/结构、消息长什么样、怎么测、验收标准」，实施 Agent 照做即可，无需再猜。
+> **状态：历史文档（已 superseded）**  
+> **当前产品（v0.1.14）：** Generate 与 Continue **均**使用 **Agent + 3 工具**（`run_standards_agent`）。Pipeline 模式已在 **v0.1.13** 删除。Windows Follow-up 路径问题在 **v0.1.14** 修复。  
+> **请以 [AGENTS.md](../AGENTS.md)、[ARCHITECTURE.md](./ARCHITECTURE.md)、[RELEASE-NOTES.md](./RELEASE-NOTES.md) 为准。**
 
 ---
 
-## 0. 给实施 Agent 的 TL;DR
+> 以下为 2026-06 期间的 pipeline 重构草案，**未作为最终架构落地**。保留仅供追溯决策过程。
 
-- **要做的事**：把 AI 生成笔记的编排从「LLM function-calling 多轮工具循环」改为「**Rust 确定性检索 + 不带 `tools` 的纯对话三阶段管道**」。
-- **为什么（重构目标，非 bug 补丁）**：
-  - 使 **create / follow-up（Continue）每次 LLM 调用形态一致**：无状态 `[system, user]`，永不发送 `tools`/`tool_calls`/`tool` 消息。
-  - 将检索从「依赖模型多轮探索」升级为「**可测试、可观测的确定性管道**」，与 provider 的 function-calling 限制解耦。
-  - 现场已验证：换模型（flash / pro / hy3preview 等）不能根治 follow-up 失败；必须从架构上消除对 function-calling 与多轮历史的依赖。
-- **红线**：不得降低核心检索/输出效果；新模式用配置开关灰度，旧 `agent` 模式保留一个版本周期可回退。
-- **不要做**：不要继续在 function-calling 上打补丁；不要把本次工作当作「修某个模型的 bug」。
+---
+
+## 0. 给实施 Agent 的 TL;DR（历史）
+
+- **原计划**：把 AI 生成笔记的编排从「LLM function-calling 多轮工具循环」改为「**Rust 确定性检索 + 不带 `tools` 的纯对话三阶段管道**」。
+- **实际结果（v0.1.13+）**：保留并强化 **Agent** 路径；通过 `strip_tool_history`、stateless seed、`relative_project_path`（0.1.14）解决 Continue 与 Windows 问题。**未**采用 pipeline 作为默认或并存模式。
 
 ---
 

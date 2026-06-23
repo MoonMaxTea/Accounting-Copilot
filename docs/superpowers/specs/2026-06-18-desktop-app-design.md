@@ -1,5 +1,7 @@
 # Accounting Copilot — 技术设计规格
 
+> **Historical spec (2026-06-18).** Phases 0–4 shipped; current release **v0.1.14**. See [DESIGN.md](../../DESIGN.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), [RELEASE-NOTES.md](../../RELEASE-NOTES.md).
+
 > **状态**: Superpowers Brainstorming 产出 v1  
 > **日期**: 2026-06-18  
 > **前置文档**: [docs/DESIGN.md](../../DESIGN.md)（产品级设计稿）  
@@ -9,7 +11,7 @@
 
 ## 1. 执行摘要
 
-Accounting Copilot 是一个**离线优先的 Tauri 桌面应用**，从 Obsidian Vault（`AccoutingStandards-IFRS-USGaap`）构建 content pack，为用户提供 IFRS/IAS/ASC 准则浏览、Evidence 分屏、AI 写项目文档、GitHub Releases 更新能力。
+Accounting Copilot 是一个**离线优先的 Tauri 桌面应用**，从内容源 Vault（`AccoutingStandards-IFRS-USGaap`）构建 content pack，为用户提供 IFRS/IAS/ASC 准则浏览、Workbench 分屏、AI Agent 写项目文档、GitHub Releases 更新能力。
 
 **推荐技术路线**：
 
