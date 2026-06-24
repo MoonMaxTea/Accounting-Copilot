@@ -26,14 +26,14 @@ export interface WritePackOptions {
   packBuilderVersion?: string;
 }
 
-function countByFramework(
+function countByCategory(
   files: CopiedStandardFile[],
-): { ifrs: number; ias: number; asc: number } {
-  const counts = { ifrs: 0, ias: 0, asc: 0 };
+): Record<string, Record<string, number>> {
+  const counts: Record<string, Record<string, number>> = {};
   for (const file of files) {
-    if (file.entry.framework === 'IFRS') counts.ifrs += 1;
-    if (file.entry.framework === 'IAS') counts.ias += 1;
-    if (file.entry.framework === 'ASC') counts.asc += 1;
+    const category = file.entry.category ?? 'accounting-standards';
+    counts[category] ??= {};
+    counts[category][file.entry.framework] = (counts[category][file.entry.framework] ?? 0) + 1;
   }
   return counts;
 }
@@ -51,6 +51,7 @@ function buildRegistryJson(
     id: entry.id,
     title: entry.title,
     title_zh: entry.title_zh ?? null,
+    category: entry.category ?? null,
     framework: entry.framework,
     status: entry.status,
     legacy_label: entry.legacy_label ?? null,
@@ -77,8 +78,8 @@ function buildRegistryJson(
     built_at: new Date().toISOString(),
     standards,
     counts: {
-      current: countByFramework(currentFiles),
-      legacy: countByFramework(legacyFiles),
+      current: countByCategory(currentFiles),
+      legacy: countByCategory(legacyFiles),
     },
   };
 }
@@ -159,8 +160,8 @@ export async function writePack(options: WritePackOptions): Promise<PackBuildRes
     built_at: new Date().toISOString(),
     pack_builder_version: packBuilderVersion,
     counts: {
-      current: countByFramework(currentFiles),
-      legacy: countByFramework(legacyFiles),
+      current: countByCategory(currentFiles),
+      legacy: countByCategory(legacyFiles),
       total_files: copiedFiles.length,
       paragraph_index_entries: paragraphEntries.length,
     },

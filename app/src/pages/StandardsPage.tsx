@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { listStandards } from "../api";
+import { getPackInfo, listStandards } from "../api";
 import { SearchBar } from "../components/SearchBar";
 import { StandardDetailPanel } from "../components/StandardDetailPanel";
 import { StandardList } from "../components/StandardList";
@@ -11,15 +11,15 @@ import {
   defaultTertiary,
   navigationForStandard,
   resolveStandardsQuery,
-  type StandardsPrimaryCategory,
-  type StandardsSecondary,
 } from "../lib/standards-navigation";
-import type { FrameworkFilter, StandardSummary } from "../types";
+import type { CategoryMeta, FrameworkFilter, StandardSummary } from "../types";
 
 export function StandardsPage() {
   const { tr, trf, locale } = usePreferences();
-  const [primary, setPrimary] = useState<StandardsPrimaryCategory>("accounting-standards");
-  const [secondary, setSecondary] = useState<StandardsSecondary>("ifrs");
+  const [categoryMeta, setCategoryMeta] = useState<CategoryMeta[]>([]);
+
+  const [primary, setPrimary] = useState<string>("accounting-standards");
+  const [secondary, setSecondary] = useState<string>("ALL");
   const [tertiary, setTertiary] = useState<FrameworkFilter>("ALL");
   const [includeLegacy, setIncludeLegacy] = useState(false);
   const [standards, setStandards] = useState<StandardSummary[]>([]);
@@ -27,11 +27,31 @@ export function StandardsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const applyNavigation = useCallback((next: ReturnType<typeof navigationForStandard>) => {
-    setPrimary(next.primary);
-    setSecondary(next.secondary);
-    setTertiary(next.tertiary);
+  // Load category meta from pack info on mount
+  useEffect(() => {
+    getPackInfo()
+      .then((pack) => {
+        const meta = pack.category_meta ?? [];
+        setCategoryMeta(meta);
+        if (meta.length > 0) {
+          const firstCategory = meta[0].id;
+          setPrimary(firstCategory);
+          const defSec = defaultSecondary(firstCategory, meta);
+          setSecondary(defSec);
+          setTertiary(defaultTertiary(firstCategory, defSec));
+        }
+      })
+      .catch(() => undefined);
   }, []);
+
+  const applyNavigation = useCallback(
+    (next: ReturnType<typeof navigationForStandard>) => {
+      setPrimary(next.primary);
+      setSecondary(next.secondary);
+      setTertiary(next.tertiary);
+    },
+    [],
+  );
 
   const loadStandards = useCallback(async () => {
     setLoading(true);
@@ -65,8 +85,11 @@ export function StandardsPage() {
   }, [primary, secondary, tertiary, includeLegacy]);
 
   useEffect(() => {
+    if (categoryMeta.length === 0) {
+      return;
+    }
     void loadStandards();
-  }, [loadStandards]);
+  }, [loadStandards, categoryMeta]);
 
   const selectedSummary = useMemo(() => {
     if (!selected) {
@@ -79,7 +102,7 @@ export function StandardsPage() {
     (standardId: string) => {
       const match = standards.find((item) => item.id === standardId);
       if (match) {
-        applyNavigation(navigationForStandard(match));
+        applyNavigation(navigationForStandard(match, categoryMeta));
         setSelected(match);
         return;
       }
@@ -88,23 +111,23 @@ export function StandardsPage() {
         .then((all) => {
           const found = all.find((item) => item.id === standardId) ?? null;
           if (found) {
-            applyNavigation(navigationForStandard(found));
+            applyNavigation(navigationForStandard(found, categoryMeta));
           }
           setSelected(found);
         })
         .catch(() => undefined);
     },
-    [applyNavigation, standards],
+    [applyNavigation, categoryMeta, standards],
   );
 
-  const handlePrimaryChange = (value: StandardsPrimaryCategory) => {
-    const nextSecondary = defaultSecondary(value);
+  const handlePrimaryChange = (value: string) => {
+    const nextSecondary = defaultSecondary(value, categoryMeta);
     setPrimary(value);
     setSecondary(nextSecondary);
     setTertiary(defaultTertiary(value, nextSecondary));
   };
 
-  const handleSecondaryChange = (value: StandardsSecondary) => {
+  const handleSecondaryChange = (value: string) => {
     setSecondary(value);
     setTertiary(defaultTertiary(primary, value));
   };
@@ -113,7 +136,17 @@ export function StandardsPage() {
     primary === "listing-rules"
       ? trf("listingRulesEmpty", { market: navLabel(locale, secondary) })
       : tr("noStandardsMatch");
-  const showListingRulesEmptyState = primary === "listing-rules" && !loading && standards.length === 0;
+  const showListingRulesEmptyState =
+    primary === "listing-rules" && !loading && standards.length === 0;
+
+  // Fallback: if no pack loaded, show loading
+  if (categoryMeta.length === 0 && !loading) {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <p className="ui-panel p-6 text-sm text-brand-muted">{tr("loadingStandards")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -124,6 +157,7 @@ export function StandardsPage() {
         secondary={secondary}
         tertiary={tertiary}
         includeLegacy={includeLegacy}
+        categoryMeta={categoryMeta}
         onPrimaryChange={handlePrimaryChange}
         onSecondaryChange={handleSecondaryChange}
         onTertiaryChange={setTertiary}

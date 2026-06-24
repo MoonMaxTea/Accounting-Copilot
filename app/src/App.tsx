@@ -27,6 +27,7 @@ const EMPTY_PACK_INFO: PackInfo = {
   content_version: null,
   vault_commit: null,
   counts: null,
+  category_meta: null,
   content_dir: null,
 };
 

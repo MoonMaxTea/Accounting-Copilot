@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
-export const FrameworkSchema = z.enum(['IFRS', 'IAS', 'ASC']);
+export const FrameworkSchema = z.enum([
+  'IFRS', 'IAS', 'ASC',       // accounting-standards
+  'HK', 'SEC',                 // listing-rules
+  'CN', 'DE', 'US', 'INTL',   // tax
+]);
 export const StatusSchema = z.enum(['current', 'legacy']);
 
 export const RegistryEntrySchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   title_zh: z.string().optional(),
+  category: z.string().optional(),
   framework: FrameworkSchema,
   status: StatusSchema,
   legacy_label: z.string().optional(),

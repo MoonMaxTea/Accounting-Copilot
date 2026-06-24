@@ -572,20 +572,28 @@ export function navLabel(locale: Locale, id: string): string {
       return t(locale, "accountingStandards");
     case "listing-rules":
       return t(locale, "listingRules");
-    case "ifrs":
+    case "tax":
+      return locale === "zh" ? "税法" : "Tax Law";
+    case "IFRS":
       return "IFRS";
-    case "us-gaap":
-      return "US GAAP";
-    case "hk":
+    case "IAS":
+      return "IAS";
+    case "ASC":
+      return "ASC";
+    case "HK":
       return locale === "zh" ? "香港" : "HK";
-    case "us":
+    case "SEC":
+      return locale === "zh" ? "美国SEC" : "SEC";
+    case "CN":
+      return locale === "zh" ? "中国大陆" : "CN";
+    case "DE":
+      return locale === "zh" ? "德国" : "DE";
+    case "INTL":
+      return locale === "zh" ? "国际" : "International";
+    case "US":
       return locale === "zh" ? "美国" : "US";
     case "ALL":
       return t(locale, "all");
-    case "IFRS":
-    case "IAS":
-    case "ASC":
-      return id;
     default:
       return id;
   }

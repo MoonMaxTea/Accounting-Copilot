@@ -1,12 +1,13 @@
-export interface FrameworkCounts {
-  ifrs: number;
-  ias: number;
-  asc: number;
-}
+export type CategoryCounts = Record<string, Record<string, number>>;
 
 export interface RegistryCounts {
-  current: FrameworkCounts;
-  legacy: FrameworkCounts;
+  current: CategoryCounts;
+  legacy: CategoryCounts;
+}
+
+export interface CategoryMeta {
+  id: string;
+  frameworks: string[];
 }
 
 export interface PackInfo {
@@ -14,6 +15,7 @@ export interface PackInfo {
   content_version: string | null;
   vault_commit: string | null;
   counts: RegistryCounts | null;
+  category_meta: CategoryMeta[] | null;
   content_dir: string | null;
 }
 
@@ -21,6 +23,7 @@ export interface StandardSummary {
   id: string;
   title: string;
   title_zh: string | null;
+  category: string | null;
   framework: string;
   status: string;
   legacy_label: string | null;
@@ -42,7 +45,7 @@ export interface SearchHit {
   snippet: string;
 }
 
-export type FrameworkFilter = "ALL" | "IFRS" | "IAS" | "ASC";
+export type FrameworkFilter = "ALL" | string;
 export type AppTab = "standards" | "evidence" | "settings";
 
 export interface AiConfig {

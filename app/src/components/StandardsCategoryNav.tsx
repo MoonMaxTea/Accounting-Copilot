@@ -4,21 +4,20 @@ import { navLabel } from "../lib/i18n";
 import { IconChevronDown, IconFilter } from "./icons";
 import { FilterSelect } from "./FilterSelect";
 import {
-  PRIMARY_CATEGORIES,
-  secondaryOptions,
-  type StandardsPrimaryCategory,
-  type StandardsSecondary,
+  buildPrimaryCategories,
+  secondaryOptionsForCategory,
   tertiaryOptions,
 } from "../lib/standards-navigation";
-import type { FrameworkFilter } from "../types";
+import type { CategoryMeta, FrameworkFilter } from "../types";
 
 interface StandardsCategoryNavProps {
-  primary: StandardsPrimaryCategory;
-  secondary: StandardsSecondary;
+  primary: string;
+  secondary: string;
   tertiary: FrameworkFilter;
   includeLegacy: boolean;
-  onPrimaryChange: (value: StandardsPrimaryCategory) => void;
-  onSecondaryChange: (value: StandardsSecondary) => void;
+  categoryMeta: CategoryMeta[];
+  onPrimaryChange: (value: string) => void;
+  onSecondaryChange: (value: string) => void;
   onTertiaryChange: (value: FrameworkFilter) => void;
   onIncludeLegacyChange: (value: boolean) => void;
 }
@@ -28,6 +27,7 @@ export function StandardsCategoryNav({
   secondary,
   tertiary,
   includeLegacy,
+  categoryMeta,
   onPrimaryChange,
   onSecondaryChange,
   onTertiaryChange,
@@ -110,7 +110,7 @@ export function StandardsCategoryNav({
             <FilterSelect
               label={tr("contentType")}
               value={primary}
-              options={PRIMARY_CATEGORIES.map((item) => ({
+              options={buildPrimaryCategories(categoryMeta).map((item) => ({
                 id: item.id,
                 label: navLabel(locale, item.id),
               }))}
@@ -119,7 +119,7 @@ export function StandardsCategoryNav({
             <FilterSelect
               label={primary === "listing-rules" ? tr("market") : tr("standardsSystem")}
               value={secondary}
-              options={secondaryOptions(primary).map((item) => ({
+              options={secondaryOptionsForCategory(primary, categoryMeta).map((item) => ({
                 id: item.id,
                 label: navLabel(locale, item.id),
               }))}
