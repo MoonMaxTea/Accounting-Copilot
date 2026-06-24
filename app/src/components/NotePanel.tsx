@@ -92,10 +92,10 @@ function CitationLink({
         className={[
           "inline rounded px-0.5 font-medium underline decoration-2 underline-offset-2",
           !resolved
-            ? "text-amber-800 decoration-amber-400 hover:bg-amber-50"
+            ? "ui-citation-unresolved"
             : paragraphResolved
-              ? "text-blue-700 decoration-blue-400 hover:bg-blue-50"
-              : "text-violet-700 decoration-violet-400 hover:bg-violet-50",
+              ? "ui-citation-resolved"
+              : "ui-citation-partial",
         ].join(" ")}
       >
         {children}

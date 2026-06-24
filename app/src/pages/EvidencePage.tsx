@@ -40,6 +40,7 @@ import { TrashPanel } from "../components/TrashPanel";
 import { useToast } from "../components/Toast";
 import { findLatestConversationFolder } from "../lib/conversation";
 import { useHorizontalResize } from "../hooks/useHorizontalResize";
+import { UI_BREAKPOINTS, useMediaQuery } from "../hooks/useMediaQuery";
 import { usePreferences } from "../context/PreferencesContext";
 import type {
   AiConversationTurn,
@@ -88,6 +89,8 @@ export function EvidencePage({
   const { showToast } = useToast();
   const { tr, trf } = usePreferences();
   const { confirm } = useDialog();
+  const narrow = useMediaQuery(UI_BREAKPOINTS.narrow);
+  const [narrowPane, setNarrowPane] = useState<"tree" | "note" | "panel">("note");
   const sidebar = useHorizontalResize(240, 200, 360);
   const [projectsDir, setProjectsDir] = useState<string | null>(null);
   const [projectsUi, setProjectsUi] = useState<ProjectsUiState>(defaultUiState);
@@ -539,7 +542,7 @@ export function EvidencePage({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="ui-focus-ring mt-4 rounded-lg bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
+            className="ui-btn-primary ui-focus-ring mt-4 rounded-lg px-4 py-2 text-sm font-medium"
           >
             {tr("openSettings")}
           </button>
@@ -628,8 +631,39 @@ export function EvidencePage({
 
       {error && <p className="ui-alert-error rounded-lg px-4 py-3 text-sm">{error}</p>}
 
+      {narrow && (
+        <div
+          className="flex shrink-0 gap-1 rounded-lg border border-brand-border bg-brand-surface p-1"
+          role="tablist"
+          aria-label={tr("workbench")}
+        >
+          {(
+            [
+              ["tree", tr("workbenchPaneFiles")],
+              ["note", tr("workbenchPaneNote")],
+              ["panel", tr("panel")],
+            ] as const
+          ).map(([pane, label]) => (
+            <button
+              key={pane}
+              type="button"
+              role="tab"
+              aria-selected={narrowPane === pane}
+              onClick={() => setNarrowPane(pane)}
+              className={[
+                "ui-focus-ring flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition",
+                narrowPane === pane ? "ui-tab-active" : "ui-tab-inactive",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="h-full shrink-0" style={{ width: sidebar.width }}>
+        {(!narrow || narrowPane === "tree") && (
+        <div className="h-full shrink-0" style={{ width: narrow ? "100%" : sidebar.width }}>
         <ProjectFolderTree
           nodes={tree}
           searchResults={searchResults}
@@ -702,7 +736,9 @@ export function EvidencePage({
           }}
         />
         </div>
+        )}
 
+        {!narrow && (
         <button
           type="button"
           aria-label={tr("resizeSidebar")}
@@ -714,7 +750,9 @@ export function EvidencePage({
         >
           <IconGrip className="h-4 w-4 text-brand-muted" />
         </button>
+        )}
 
+        {(!narrow || narrowPane === "note") && (
         <div className="min-h-0 min-w-0 flex-1 border border-brand-border bg-brand-surface">
         <NotePanel
           title={selected?.title ?? tr("projectNote")}
@@ -724,8 +762,18 @@ export function EvidencePage({
           onCitationClick={(citation) => void handleCitationClick(citation)}
         />
         </div>
+        )}
 
-        <div className={panelCollapsed ? "h-full shrink-0" : "min-h-0 min-w-0 flex-1"}>
+        {(!narrow || narrowPane === "panel") && (
+        <div
+          className={
+            panelCollapsed
+              ? "h-full shrink-0"
+              : narrow
+                ? "min-h-0 min-w-0 flex-1"
+                : "h-full w-[min(400px,32%)] shrink-0"
+          }
+        >
         <EvidenceSidePanel
           collapsed={panelCollapsed}
           onToggleCollapsed={handleTogglePanel}
@@ -746,6 +794,7 @@ export function EvidencePage({
           onOpenSuperseded={(standardId) => void handleOpenSuperseded(standardId)}
         />
         </div>
+        )}
       </div>
     </div>
   );

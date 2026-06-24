@@ -138,7 +138,7 @@ export function SetupPage({
             type="button"
             disabled={downloading}
             onClick={() => void handleDownload()}
-            className="btn-primary ui-focus-ring rounded-lg px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
+            className="ui-btn-primary ui-focus-ring rounded-lg px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
           >
             {downloading ? tr("downloading") : tr("downloadStandardsPack")}
           </button>

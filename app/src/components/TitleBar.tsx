@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { usePreferences } from "../context/PreferencesContext";
+import type { AppTab } from "../types";
 import { BrandMark } from "./Wordmark";
 import {
   IconClose,
@@ -9,13 +10,14 @@ import {
   IconMinimize,
   IconMoon,
   IconRestore,
-  IconSettings,
   IconSun,
 } from "./icons";
 
 interface TitleBarProps {
-  settingsActive: boolean;
-  onOpenSettings: () => void;
+  activeTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
+  showNav: boolean;
+  packLoaded?: boolean;
 }
 
 function TitleBarButton({
@@ -68,7 +70,7 @@ function WindowControl({
       aria-label={title}
       onClick={onClick}
       className={[
-        "ui-focus-ring flex h-8 w-11 items-center justify-center transition",
+        "ui-focus-ring flex h-10 w-11 items-center justify-center transition",
         danger
           ? "hover:bg-red-500 hover:text-white"
           : "text-brand-muted hover:bg-brand-hover hover:text-brand-ink",
@@ -79,7 +81,7 @@ function WindowControl({
   );
 }
 
-export function TitleBar({ settingsActive, onOpenSettings }: TitleBarProps) {
+export function TitleBar({ activeTab, onTabChange, showNav, packLoaded = false }: TitleBarProps) {
   const { locale, theme, toggleLocale, toggleTheme, tr } = usePreferences();
   const [desktop, setDesktop] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -102,6 +104,23 @@ export function TitleBar({ settingsActive, onOpenSettings }: TitleBarProps) {
     };
   }, []);
 
+  const tabLabel = (tab: AppTab): string => {
+    switch (tab) {
+      case "standards":
+        return tr("standards");
+      case "settings":
+        return tr("settings");
+      default:
+        return tr("workbench");
+    }
+  };
+
+  const navTabs: AppTab[] = !showNav
+    ? []
+    : packLoaded
+      ? ["evidence", "standards", "settings"]
+      : ["settings"];
+
   const handleMinimize = () => {
     void getCurrentWindow().minimize();
   };
@@ -115,16 +134,46 @@ export function TitleBar({ settingsActive, onOpenSettings }: TitleBarProps) {
   };
 
   return (
-    <header className="flex h-8 shrink-0 items-stretch border-b border-brand-border bg-brand-titlebar">
+    <header className="flex h-10 shrink-0 items-stretch border-b border-brand-border bg-brand-titlebar">
       <div
         data-tauri-drag-region
-        className="flex min-w-0 flex-1 items-center gap-2 pl-3 text-xs text-brand-muted select-none"
+        className="flex min-w-0 items-center gap-2 pl-3 text-xs text-brand-muted select-none"
       >
-        <BrandMark className="h-4 w-4" />
-        <span className="truncate font-medium text-brand-ink">Accounting Copilot</span>
+        <BrandMark className="h-5 w-5 shrink-0" />
+        <span className="hidden truncate font-medium text-brand-ink sm:inline">
+          Accounting Copilot
+        </span>
       </div>
 
-      <div className="flex items-center gap-0.5 px-1">
+      {showNav && (
+        <nav
+          aria-label={tr("mainNavigation")}
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-2"
+        >
+          {navTabs.map((tab) => {
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => onTabChange(tab)}
+                className={[
+                  "ui-focus-ring relative shrink-0 px-3 py-2 text-sm font-medium transition",
+                  active ? "text-brand-ink" : "text-brand-muted hover:text-brand-ink",
+                ].join(" ")}
+              >
+                {tabLabel(tab)}
+                {active && (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-brand-accent" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      )}
+
+      <div className="ml-auto flex items-center gap-0.5 px-1">
         <TitleBarButton
           title={locale === "en" ? tr("switchToChinese") : tr("switchToEnglish")}
           onClick={toggleLocale}
@@ -141,14 +190,6 @@ export function TitleBar({ settingsActive, onOpenSettings }: TitleBarProps) {
           ) : (
             <IconSun className="h-4 w-4" />
           )}
-        </TitleBarButton>
-
-        <TitleBarButton
-          title={tr("settings")}
-          active={settingsActive}
-          onClick={onOpenSettings}
-        >
-          <IconSettings className="h-4 w-4" />
         </TitleBarButton>
       </div>
 

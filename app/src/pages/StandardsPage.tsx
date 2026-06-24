@@ -4,6 +4,7 @@ import { SearchBar } from "../components/SearchBar";
 import { StandardDetailPanel } from "../components/StandardDetailPanel";
 import { StandardList } from "../components/StandardList";
 import { StandardsCategoryNav } from "../components/StandardsCategoryNav";
+import { UI_BREAKPOINTS, useMediaQuery } from "../hooks/useMediaQuery";
 import { usePreferences } from "../context/PreferencesContext";
 import { navLabel } from "../lib/i18n";
 import {
@@ -16,6 +17,8 @@ import type { CategoryMeta, FrameworkFilter, StandardSummary } from "../types";
 
 export function StandardsPage() {
   const { tr, trf, locale } = usePreferences();
+  const narrow = useMediaQuery(UI_BREAKPOINTS.narrow);
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [categoryMeta, setCategoryMeta] = useState<CategoryMeta[]>([]);
 
   const [primary, setPrimary] = useState<string>("accounting-standards");
@@ -104,6 +107,9 @@ export function StandardsPage() {
       if (match) {
         applyNavigation(navigationForStandard(match, categoryMeta));
         setSelected(match);
+        if (narrow) {
+          setMobilePane("detail");
+        }
         return;
       }
 
@@ -114,10 +120,13 @@ export function StandardsPage() {
             applyNavigation(navigationForStandard(found, categoryMeta));
           }
           setSelected(found);
+          if (found && narrow) {
+            setMobilePane("detail");
+          }
         })
         .catch(() => undefined);
     },
-    [applyNavigation, categoryMeta, standards],
+    [applyNavigation, categoryMeta, narrow, standards],
   );
 
   const handlePrimaryChange = (value: string) => {
@@ -166,12 +175,18 @@ export function StandardsPage() {
 
       {error && <p className="ui-alert-error shrink-0 rounded-xl px-4 py-3 text-sm">{error}</p>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,280px)_minmax(0,1fr)] gap-3 overflow-hidden">
+      <div
+        className={[
+          "grid min-h-0 flex-1 gap-3 overflow-hidden",
+          narrow ? "grid-cols-1" : "grid-cols-[minmax(240px,280px)_minmax(0,1fr)]",
+        ].join(" ")}
+      >
+        {(!narrow || mobilePane === "list") && (
         <div className="min-h-0 overflow-auto">
           {loading ? (
             <p className="ui-panel p-6 text-sm text-brand-muted">{tr("loadingStandards")}</p>
           ) : showListingRulesEmptyState ? (
-            <div className="ui-panel rounded-lg border-dashed p-6">
+            <div className="ui-panel border-dashed p-6">
               <h3 className="text-sm font-semibold text-brand-ink">{tr("listingRulesComingSoon")}</h3>
               <p className="mt-2 text-sm leading-6 text-brand-muted">{emptyMessage}</p>
             </div>
@@ -179,17 +194,36 @@ export function StandardsPage() {
             <StandardList
               standards={standards}
               selectedId={selectedSummary?.id ?? null}
-              onSelect={setSelected}
+              onSelect={(standard) => {
+                setSelected(standard);
+                if (narrow) {
+                  setMobilePane("detail");
+                }
+              }}
               emptyMessage={emptyMessage}
             />
           )}
         </div>
-        <div className="min-h-0 overflow-hidden">
-          <StandardDetailPanel
-            summary={selectedSummary}
-            onOpenSuperseded={openStandardById}
-          />
+        )}
+        {(!narrow || mobilePane === "detail") && (
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          {narrow && (
+            <button
+              type="button"
+              onClick={() => setMobilePane("list")}
+              className="ui-btn-secondary ui-focus-ring mb-2 w-fit rounded-lg px-3 py-1.5 text-sm font-medium"
+            >
+              {tr("backToList")}
+            </button>
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <StandardDetailPanel
+              summary={selectedSummary}
+              onOpenSuperseded={openStandardById}
+            />
+          </div>
         </div>
+        )}
       </div>
     </div>
   );

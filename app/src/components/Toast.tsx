@@ -37,15 +37,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2">
+      <div
+        className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2"
+        aria-live="polite"
+        aria-relevant="additions"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
+            role="status"
             className={[
-              "rounded-xl px-4 py-3 text-sm shadow-lg ring-1 backdrop-blur",
-              toast.variant === "success" && "bg-emerald-950/95 text-emerald-50 ring-emerald-800",
+              "rounded-lg px-4 py-3 text-sm shadow-lg ring-1 backdrop-blur",
+              toast.variant === "success" && "ui-banner-success ring-[var(--color-success-border)]",
               toast.variant === "info" && "bg-brand-ink/95 text-brand-surface ring-brand-border",
-              toast.variant === "error" && "bg-red-950/95 text-red-50 ring-red-800",
+              toast.variant === "error" && "ui-alert-error",
             ]
               .filter(Boolean)
               .join(" ")}

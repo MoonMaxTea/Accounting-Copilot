@@ -35,9 +35,9 @@ export function StandardList({
             type="button"
             onClick={() => onSelect(standard)}
             className={[
-              "w-full rounded-2xl border px-4 py-3 text-left transition",
+              "ui-focus-ring w-full rounded-lg border px-4 py-3 text-left transition",
               active
-                ? "border-brand-accent bg-brand-accent text-white shadow-sm"
+                ? "ui-selected-item border-brand-border text-brand-ink"
                 : "border-brand-border bg-brand-surface text-brand-ink hover:border-brand-muted",
             ].join(" ")}
           >
@@ -46,7 +46,7 @@ export function StandardList({
               <span
                 className={[
                   "rounded-full px-2 py-0.5 text-xs",
-                  active ? "bg-white/15 text-white" : "bg-brand-paper text-brand-muted",
+                  active ? "bg-brand-accent/15 text-brand-accent" : "bg-brand-paper text-brand-muted",
                 ].join(" ")}
               >
                 {standard.framework}
