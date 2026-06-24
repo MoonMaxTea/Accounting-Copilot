@@ -10,10 +10,10 @@ Guide for AI coding agents working in this repository. Read this before making c
 | **Repo** | `MoonMaxTea/Accounting-Copilot` (often **private**) |
 | **Stack** | Tauri 2 + Rust + React 19 + TypeScript + Vite + Tailwind 4 |
 | **Package manager** | pnpm 9 (monorepo) |
-| **Current app version** | **0.1.14** (`app-v0.1.14`) — see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) |
+| **Current app version** | **0.1.15** (`app-v0.1.15`) — see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) |
 | **Content pack** | Built from upstream standards vault via `tools/pack-builder` |
 
-**Purpose:** Offline IFRS / IAS / ASC standards browser + workbench for project notes, AI-assisted document writing, citation resolution, and GitHub-based content/app updates.
+**Purpose:** Offline IFRS / IAS / ASC standards browser + listing rules (HK / SEC) + tax law (CN / DE / US / INTL) — workbench for project notes, AI-assisted document writing, citation resolution, and GitHub-based content/app updates.
 
 **Content source vault:** [AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) (`03 - 知识库/`).
 
@@ -28,7 +28,8 @@ Guide for AI coding agents working in this repository. Read this before making c
 ├── docs/
 │   ├── DESIGN.md             ← full product/design spec (Chinese)
 │   ├── ARCHITECTURE.md       ← module map & data flow
-│   └── RELEASE-NOTES.md      ← app release changelog
+│   ├── RELEASE-NOTES.md      ← app release changelog
+│   └── plans/                ← completed work summaries
 ├── app/                      ← Tauri desktop app (main product)
 │   ├── src/                  ← React UI
 │   └── src-tauri/            ← Rust backend + Tauri commands
@@ -342,6 +343,9 @@ If AI response lacks `<<<PROJECT_NAME>>>` block, `parse_ai_response` falls back 
 | `dedup_by` keeping the first entry after paragraph-sort | The paragraph index is sorted by char_start; after sorting by paragraph ID, entries with the same paragraph are in char_start order. `dedup_by` keeps the first (lowest char_start = amendment metadata). Sort by `(paragraph, char_start DESC)` before dedup |
 | `paragraph_normalized` loose matching | `normalizeParagraph("718-10-35-3")` → `"718"` — matches every entry in ASC 718. Always gate with exact paragraph match first; only fall back to normalized when no exact match exists |
 | Using `deepseek-v4-flash` for document generation | Flash models have weaker instruction-following. NOTE: the 2026-06-21 audit found the *primary* cause of multi-thousand-char English dumps was `inject_pack_quotes` expanding quotes (a code bug, now fixed), **not** the model. Stronger models (`deepseek-v4-pro` / `deepseek-chat`) are still preferred for adherence, but the deterministic cap now enforces quote length regardless of model |
+| Hardcoding framework/category enums in frontend navigation | `standards-navigation.ts` is now data-driven from `CategoryMeta`; `FrameworkFilter` is `"ALL" \| string`. Adding a new category/framework requires YAML + pack rebuild only, never frontend enum changes (except i18n labels) |
+| Manual `RegistryCounts` parsing without `convert_counts` | `RegistryFile.counts` is `Option<serde_json::Value>` for backward compatibility. Always use `convert_counts()` to handle both old flat `{"ifrs":17}` and new nested `{"accounting-standards":{"IFRS":17}}` formats |
+| `pack_info.loaded == true` but `category_meta` is `None` | Old packs lack `category_meta`. Fall back to all-standards scroll without category tabs |
 
 ---
 
@@ -358,7 +362,7 @@ Product owner often communicates in **Chinese**. Keep **UI strings in English** 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contributor workflow
 - [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) — app release changelog
 - [docs/P2-PLAN.md](docs/P2-PLAN.md) — long-term backlog
-- [docs/AI-GENERATION-REWRITE-PLAN.md](docs/AI-GENERATION-REWRITE-PLAN.md) — historical (superseded)
+- [docs/plans/completed-work-summary.md](docs/plans/completed-work-summary.md) — completed feature work
 - [app/README.md](app/README.md) — app-specific dev notes & Continue troubleshooting
 
 ---

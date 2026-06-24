@@ -2,7 +2,7 @@
 
 Concise map for developers and agents. Full product spec: [DESIGN.md](./DESIGN.md).
 
-**Current app release:** [`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14) — see [RELEASE-NOTES.md](./RELEASE-NOTES.md).
+**Current app release:** [`app-v0.1.15`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.15) — see [RELEASE-NOTES.md](./RELEASE-NOTES.md).
 
 ## System context
 
@@ -267,6 +267,22 @@ Root scripts: `package.json` → `pnpm app:dev`, `pnpm app:build`, `pnpm pack:bu
 | Update manifest schema | `update.rs`, `models.rs`, `updates/manifest.json` |
 | Filter/navigation UX | `lib/standards-navigation.ts`, `StandardsCategoryNav.tsx` |
 | New accounting framework | Add to vault + rebuild pack — no code changes needed (framework-agnostic retrieval) |
+
+## Changelog (app-v0.1.15, 2026-06-24)
+
+### Added
+- **Multi-category standards navigation:** Data-driven from `CategoryMeta` (pack-builder → backend → frontend). `category` field in `standards-registry.yaml` entries and `registry.json`. `countByCategory` (nested) replaces `countByFramework`. `RegistryFile.counts` is `serde_json::Value` for backward compatibility; `convert_counts()` handles old flat and new nested formats.
+- **Three UX fixes:** (1) dynamic progress bar width from `phase` + `stepIndex` with CSS transition; (2) excerpt collapse/expand toggle in compact EvidenceSidePanel; (3) auto-expand first + latest conversation rounds.
+
+### Changed
+- **`standards-navigation.ts`:** Fully data-driven — `buildPrimaryCategories`, `secondaryOptionsForCategory` from `CategoryMeta`. `FrameworkFilter` expanded to `"ALL" | string`.
+- **`StandardsPage.tsx`:** Initializes primary/secondary/tertiary from `categoryMeta`. Falls back gracefully for old packs lacking `category_meta`.
+- **`shared-types`:** `FrameworkSchema` expanded to include `HK`, `SEC`, `CN`, `DE`, `US`, `INTL`. `RegistryEntrySchema` gains optional `category`.
+
+### Docs
+- Removed 22 stale files (superseded plans, git temp files). Added `docs/plans/completed-work-summary.md`.
+
+---
 
 ## Changelog (app-v0.1.14, 2026-06-22)
 

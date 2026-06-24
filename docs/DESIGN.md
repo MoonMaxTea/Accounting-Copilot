@@ -1,6 +1,6 @@
-# 双准则桌面 App — 设计说明
+# 多分类准则桌面 App — 设计说明
 
-> **状态**：设计稿 v1 — **已落地**（当前 App **v0.1.14**，[`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14)）  
+> **状态**：设计稿 v1 — **已落地**（当前 App **v0.1.15**，[`app-v0.1.15`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.15)）  
 > **内容源**：[AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) 的 `03 - 知识库/`  
 > **实现细节**：见 [ARCHITECTURE.md](./ARCHITECTURE.md)、[RELEASE-NOTES.md](./RELEASE-NOTES.md)、[AGENTS.md](../AGENTS.md)
 
@@ -10,7 +10,7 @@
 
 ### 1.1 一句话
 
-**离线优先的 Tauri 桌面「双准则证据工作台」**：全量内置 IFRS/IAS/ASC 准则包；AI 按 Vault 规范生成本地项目文档；每条引用可对照本地原文并跳转官网二次验证；准则库通过 GitHub Releases 检查更新；旧准则留存并标「旧准则」。
+**离线优先的 Tauri 桌面「多分类准则证据工作台」**：全量内置 IFRS / IAS / ASC 会计准则 + HK / SEC 上市规则 + CN / DE / US / 国际税法；AI 按 Vault 规范生成本地项目文档；每条引用可对照本地原文并跳转官网二次验证；准则库通过 GitHub Releases 检查更新；旧准则留存并标「旧准则」。
 
 ### 1.2 核心能力（优先级）
 
@@ -121,7 +121,8 @@ Accounting-Copilot/
 | `id` | string | ✅ | 稳定标识，如 `IFRS 11`、`IAS 12`、`ASC 740` |
 | `title` | string | ✅ | 英文或官方标题 |
 | `title_zh` | string |  | 中文标题（若有） |
-| `framework` | enum | ✅ | `IFRS` \| `IAS` \| `ASC` |
+| `framework` | enum | ✅ | `IFRS` \| `IAS` \| `ASC` \| `HK` \| `SEC` \| `CN` \| `DE` \| `US` \| `INTL` |
+| `category` | enum |  | `accounting-standards` \| `listing-rules` \| `tax`（数据驱动，新增分类仅需 YAML + pack rebuild） |
 | `status` | enum | ✅ | `current` \| `legacy` |
 | `legacy_label` | string |  | 默认 `旧准则`；仅 `status: legacy` 时显示 |
 | `effective_from` | date |  | ISO 8601，可选 |
@@ -264,8 +265,8 @@ App 检查更新的**唯一入口**（可放在 App 仓库 main 分支，或 Lat
 | 类型 | Tag 示例 | 资产 |
 |------|----------|------|
 | Content only | `content-2026.06.18` | `standards-pack-2026.06.18.zip` |
-| App | `app-v0.1.14` | `Accounting Copilot_0.1.14_x64-setup.exe` 等 |
-| 联合发版 | `app-v0.1.14+content-2026.06.18` | 两者皆有 |
+| App | `app-v0.1.15` | `Accounting Copilot_0.1.15_x64-setup.exe` 等 |
+| 联合发版 | `app-v0.1.15+content-2026.06.24` | 两者皆有 |
 
 **原则**：content 可独立于 app 发版；发 content 后必须更新 `updates/manifest.json` 的 `content` 段。
 
@@ -360,7 +361,7 @@ stateDiagram-v2
 
 - 默认：仅 `current`
 - 勾选「显示旧准则」：含 `archive/`
-- 框架筛选：IFRS / IAS / ASC
+- 框架筛选：IFRS / IAS / ASC / HK / SEC / CN / DE / US / INTL（由 `category_meta` 数据驱动）
 
 ### 6.4 Workbench 分屏（Evidence）
 
@@ -448,14 +449,14 @@ stateDiagram-v2
 ```
 准则库版本：2026.06.18
 Content pack commit：（pack-manifest）
-App 版本：0.1.14
+App 版本：0.1.15
 上次检查更新：2026-06-22 10:00
 [Check for updates]
 ```
 
 （产品 UI 为英文；上图为信息结构示意。）
 
-### 6.7 AI 生成架构（v0.1.14）
+### 6.7 AI 生成架构（v0.1.15）
 
 | 操作 | Tauri 命令 | Rust 入口 | Debug mode |
 |------|------------|-----------|------------|
@@ -546,7 +547,7 @@ App 版本：0.1.14
 | **Phase 0** | `standards-registry.yaml` 首版；pack-builder CLI | ✅ |
 | **Phase 1** | Tauri 壳 + 准则浏览 + 搜索 + 官网链接 + 旧准则 UI | ✅ |
 | **Phase 2** | Workbench 分屏 + 本地项目目录 | ✅ |
-| **Phase 3** | AI Agent 写文档 + 引用校验 + Follow-up | ✅（v0.1.14） |
+| **Phase 3** | AI Agent 写文档 + 引用校验 + Follow-up | ✅（v0.1.15） |
 | **Phase 4** | GitHub Release 自动更新 + 设置页 | ✅ |
 
 ---
@@ -568,3 +569,4 @@ App 版本：0.1.14
 - 2026-06-18：迁移至 Accounting-Copilot 仓库；registry 130 条骨架
 - 2026-06-21：Agent-only 生成；pipeline 模式移除（v0.1.13）
 - 2026-06-22：**v0.1.14** — Windows Continue 路径修复；`ai-debug.log` 诊断；产品 UI 去除第三方编辑器名称
+- 2026-06-24：**v0.1.15** — 多分类准则导航（会计准则 / 上市规则 / 税法）；三项 UX 修复（进度条动画、引用摘录折叠、对话日志可见性）；文档清理

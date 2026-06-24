@@ -1,5 +1,31 @@
 # Release notes
 
+## app-v0.1.15 (2026-06-24)
+
+**Tag:** [`app-v0.1.15`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.15)
+
+### Summary
+
+Three UX fixes, data-driven multi-category standards navigation (listing rules, tax law), and documentation cleanup.
+
+### Features
+
+- **Multi-category standards navigation:** Data-driven from `standards-registry.yaml` `category` field. Supports Accounting Standards (IFRS/IAS/ASC), Listing Rules (HK, SEC), Tax Law (CN, DE, US, INTL). Navigation engine (`standards-navigation.ts`) dynamically generates filter options from `CategoryMeta`; adding a new category requires YAML + pack rebuild only. Zero UI visual changes.
+- **Backward-compatible pack counts:** `countByCategory` (nested `category → framework → count`) replaces `countByFramework`. Old flat-format packs are auto-converted by `convert_counts` in Rust.
+
+### UX fixes
+
+- **Progress bar animation:** Replaced hardcoded `width: "60%"` with dynamic `getProgressPercent(phase, stepIndex)` + CSS `transition-all duration-500` smooth left-to-right animation.
+- **Citation excerpt collapse toggle:** Added expand/collapse button for matched excerpt panel in compact mode (EvidenceSidePanel).
+- **Conversation log visibility:** Auto-expands both first and latest conversation rounds when multiple rounds exist.
+
+### Docs
+
+- Removed 22 stale files (superseded plans, git temp files, terminal logs).
+- Added `docs/plans/completed-work-summary.md` — all shipped feature work in one place.
+
+---
+
 ## app-v0.1.14 (2026-06-22)
 
 **Tag:** [`app-v0.1.14`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.14)  
