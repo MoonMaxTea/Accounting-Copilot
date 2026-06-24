@@ -477,13 +477,32 @@ mod tests {
         fs::create_dir_all(temp.path().join("index")).expect("mkdir");
         fs::create_dir_all(temp.path().join("current/ASC")).expect("mkdir standards");
 
-        // Amendment entry has HIGHER char_start (8000) than substantive (5000).
-        // The bug: old max_by_key would pick 8000 = amendment boilerplate.
+        // Amendment entry has HIGHER char_start (10000) than substantive (5000).
+        // The bug: old max_by_key would pick the amendment boilerplate.
         // The fix: keyword filter skips the amendment entry, returning the substantive one.
+        // Body padding aligns char_start with real UTF-16 offsets (slice_utf16 reads from file).
+        // Amendment is placed beyond the 4 000-char read window from the substantive offset.
+        const SUBSTANTIVE_OFFSET: usize = 5000;
+        const AMENDMENT_OFFSET: usize = 10_000;
+        let substantive =
+            "842-20-25-1 A lessee shall recognize a right-of-use asset and a lease liability at commencement date";
+        let amendment =
+            "842-20-25-1 Added by ASU 2016-02 Lease. Amendments to Subtopic 842-20";
+        let between_len = AMENDMENT_OFFSET
+            .saturating_sub(SUBSTANTIVE_OFFSET)
+            .saturating_sub(substantive.encode_utf16().count());
+        let body = format!(
+            "{}{}{}{}",
+            " ".repeat(SUBSTANTIVE_OFFSET),
+            substantive,
+            " ".repeat(between_len),
+            amendment
+        );
+
         fs::write(
             temp.path().join("index/paragraphs.json"),
             r#"{"entries":[
-                {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":8000,"char_end":8200,"snippet_en":"842-20-25-1 Added by ASU 2016-02 Lease. Amendments to Subtopic 842-20","status":"current"},
+                {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":10000,"char_end":10200,"snippet_en":"842-20-25-1 Added by ASU 2016-02 Lease. Amendments to Subtopic 842-20","status":"current"},
                 {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":5000,"char_end":5200,"snippet_en":"842-20-25-1 A lessee shall recognize a right-of-use asset and a lease liability at commencement date","status":"current"}
             ]}"#,
         )
@@ -493,11 +512,7 @@ mod tests {
             r#"{"schema_version":1,"content_version":"test","standards":[{"id":"ASC 842","title":"Leases","framework":"US GAAP","status":"current","official_url":"https://example.com","pack_path":"current/ASC/asc842.md"}]}"#,
         )
         .expect("write registry");
-        fs::write(
-            temp.path().join("current/ASC/asc842.md"),
-            "Amendment:\n842-20-25-1 Added by ASU 2016-02\n\nContent:\n842-20-25-1 A lessee shall recognize a right-of-use asset and a lease liability at commencement date.",
-        )
-        .expect("write body");
+        fs::write(temp.path().join("current/ASC/asc842.md"), body).expect("write body");
 
         let resolved = resolve_citation(temp.path(), "ASC 842-20-25-1")
             .expect("resolve")
