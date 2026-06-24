@@ -126,13 +126,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: windows-installer
-          path: app/src-tauri/target/release/bundle/nsis/
+          path: downloads/
 
       - name: Download Linux installer
         uses: actions/download-artifact@v4
         with:
           name: linux-installer
-          path: app/src-tauri/target/release/bundle/deb/
+          path: downloads/
 
       - name: Commit installers and update app manifest
         run: |
@@ -142,11 +142,10 @@ jobs:
           TAG="${{ github.ref_name }}"
           mkdir -p updates/installers
 
-          # Windows
-          cp app/src-tauri/target/release/bundle/nsis/*-setup.exe updates/installers/windows-x86_64-latest.exe || true
-
-          # Linux
-          cp app/src-tauri/target/release/bundle/deb/*.deb updates/installers/linux-x86_64-latest.deb || true
+          # download-artifact preserves directory structure, so files are at:
+          # downloads/app/src-tauri/target/release/bundle/nsis/*.exe etc.
+          cp downloads/app/src-tauri/target/release/bundle/nsis/*-setup.exe updates/installers/windows-x86_64-latest.exe || true
+          cp downloads/app/src-tauri/target/release/bundle/deb/*.deb updates/installers/linux-x86_64-latest.deb || true
 
           # Update manifest
           node scripts/update-app-manifest.mjs --version "$TAG" --tag "$TAG"
