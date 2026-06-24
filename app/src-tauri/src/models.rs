@@ -8,27 +8,23 @@ pub struct RegistryFile {
     pub vault_commit: Option<String>,
     pub built_at: Option<String>,
     pub standards: Vec<StandardRecord>,
-    pub counts: Option<RegistryCounts>,
+    pub counts: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryCounts {
-    pub current: FrameworkCounts,
-    pub legacy: FrameworkCounts,
+    pub current: CategoryCounts,
+    pub legacy: CategoryCounts,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FrameworkCounts {
-    pub ifrs: u32,
-    pub ias: u32,
-    pub asc: u32,
-}
+pub type CategoryCounts = std::collections::HashMap<String, std::collections::HashMap<String, u32>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StandardRecord {
     pub id: String,
     pub title: String,
     pub title_zh: Option<String>,
+    pub category: Option<String>,
     pub framework: String,
     pub status: String,
     pub legacy_label: Option<String>,
@@ -48,7 +44,14 @@ pub struct PackInfo {
     pub content_version: Option<String>,
     pub vault_commit: Option<String>,
     pub counts: Option<RegistryCounts>,
+    pub category_meta: Option<Vec<CategoryMeta>>,
     pub content_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategoryMeta {
+    pub id: String,
+    pub frameworks: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,6 +59,7 @@ pub struct StandardSummary {
     pub id: String,
     pub title: String,
     pub title_zh: Option<String>,
+    pub category: Option<String>,
     pub framework: String,
     pub status: String,
     pub legacy_label: Option<String>,
@@ -300,6 +304,7 @@ impl From<&StandardRecord> for StandardSummary {
             id: record.id.clone(),
             title: record.title.clone(),
             title_zh: record.title_zh.clone(),
+            category: record.category.clone(),
             status: record.status.clone(),
             framework: record.framework.clone(),
             legacy_label: record.legacy_label.clone(),

@@ -515,6 +515,20 @@ export function EvidencePage({
     [conversationIndex, projectsUi.last_evidence_file, selected?.relative_path],
   );
 
+  function getProgressPercent(phase: string, stepIndex: number | undefined): number {
+    const s = stepIndex ?? 0;
+    switch (phase) {
+      case "searching":
+        return Math.min(10 + s * 5, 55);
+      case "generating":
+        return 80;
+      default:
+        return 5;
+    }
+  }
+
+  const showProgressBar = genProgress && genProgress.phase !== "complete" && genProgress.phase !== "error";
+
   if (!projectsDir) {
     return (
       <section className="ui-alert-warning rounded-lg p-8">
@@ -536,21 +550,20 @@ export function EvidencePage({
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {genProgress && genProgress.phase !== "complete" && genProgress.phase !== "error" && (
+      {showProgressBar && (
         <div className="rounded-lg border border-brand-border bg-brand-surface px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-accent border-t-transparent" />
             <span className="text-sm text-brand-ink">
-              {genProgress.phase === "searching"
-                ? genProgress.message
-                : genProgress.message || tr("generating")}
+              {genProgress.message || tr("generating")}
             </span>
           </div>
-          {genProgress.phase === "searching" && (
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-brand-hover">
-              <div className="h-full animate-pulse rounded-full bg-brand-accent" style={{ width: "60%" }} />
-            </div>
-          )}
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-brand-hover">
+            <div
+              className="h-full rounded-full bg-brand-accent transition-all duration-500"
+              style={{ width: `${getProgressPercent(genProgress.phase, genProgress.step_index)}%` }}
+            />
+          </div>
         </div>
       )}
 

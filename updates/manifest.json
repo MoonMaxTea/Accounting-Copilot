@@ -5,6 +5,7 @@
     "latest_version": "2026.06.24",
     "release_tag": "content-2026.06.24",
     "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.24/standards-pack-2026.06.24.zip",
+    "pack_url_alt": null,
     "pack_sha256": "ce6a479a73ade85293d6ac4f89cc8dd26e6dfe206b4291c1cfa0e7d7656b5bc0",
     "pack_size_bytes": 16993073,
     "min_app_version": "0.1.0",
@@ -12,5 +13,5 @@
     "vault_commit": null
   },
   "app": null,
-  "_comment": "Phase 4 首次 content/app Release 后由 CI 填充。示例见 examples/updates-manifest.example.json"
+  "_comment": "pack_url_alt 可设为国内镜像/代理地址以加速下载。示例见 examples/updates-manifest.example.json"
 }

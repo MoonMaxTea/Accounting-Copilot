@@ -6,7 +6,9 @@ use tauri::AppHandle;
 use tauri::Manager;
 use zip::ZipArchive;
 
-use crate::models::{PackInfo, RegistryFile};
+use std::collections::HashMap;
+
+use crate::models::{CategoryMeta, PackInfo, RegistryCounts, RegistryFile};
 
 pub fn content_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
@@ -52,17 +54,75 @@ pub fn pack_info_from_dir(content_path: &Path) -> Result<PackInfo, String> {
             content_version: None,
             vault_commit: None,
             counts: None,
+            category_meta: None,
             content_dir: Some(content_path.display().to_string()),
         });
     }
 
     let registry = load_registry(content_path)?;
+    let counts = registry.counts.as_ref().and_then(convert_counts);
+    let category_meta = counts.as_ref().map(|c| {
+        c.current
+            .keys()
+            .map(|id| CategoryMeta {
+                id: id.clone(),
+                frameworks: c
+                    .current
+                    .get(id)
+                    .map(|fw_map| fw_map.keys().cloned().collect())
+                    .unwrap_or_default(),
+            })
+            .collect()
+    });
     Ok(PackInfo {
         loaded: true,
         content_version: Some(registry.content_version),
         vault_commit: registry.vault_commit,
-        counts: registry.counts,
+        counts,
+        category_meta,
         content_dir: Some(content_path.display().to_string()),
+    })
+}
+
+/// Convert `registry.json` counts `serde_json::Value` to `RegistryCounts`.
+///
+/// Handles both legacy format (`{ "ifrs": 17, "ias": 22, "asc": 53 }`)
+/// and new nested format (`{ "accounting-standards": { "IFRS": 17, ... } }`).
+fn convert_counts(value: &serde_json::Value) -> Option<RegistryCounts> {
+    let obj = value.as_object()?;
+    let current = obj.get("current")?;
+    let legacy = obj.get("legacy")?;
+
+    let parse = |val: &serde_json::Value| -> HashMap<String, HashMap<String, u32>> {
+        let mut result = HashMap::new();
+        let map = match val.as_object() {
+            Some(m) => m,
+            None => return result,
+        };
+        let is_nested = map.values().any(|v| v.is_object());
+        if is_nested {
+            for (cat, fw_val) in map {
+                if let Some(fw_map) = fw_val.as_object() {
+                    let inner: HashMap<String, u32> = fw_map
+                        .iter()
+                        .filter_map(|(k, v)| v.as_u64().map(|n| (k.clone(), n as u32)))
+                        .collect();
+                    result.insert(cat.clone(), inner);
+                }
+            }
+        } else {
+            let inner: HashMap<String, u32> = map
+                .iter()
+                .filter_map(|(k, v)| v.as_u64().map(|n| (k.to_uppercase(), n as u32)))
+                .collect();
+            result.insert("accounting-standards".to_string(), inner);
+        }
+        result
+    };
+
+    Some(RegistryCounts {
+        current: parse(current),
+        legacy: parse(legacy),
     })
 }
 
@@ -74,6 +134,7 @@ pub fn get_pack_info(app: &AppHandle) -> Result<PackInfo, String> {
             content_version: None,
             vault_commit: None,
             counts: None,
+            category_meta: None,
             content_dir: Some(dir.display().to_string()),
         });
     }

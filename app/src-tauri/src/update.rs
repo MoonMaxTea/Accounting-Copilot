@@ -304,71 +304,189 @@ async fn obtain_pack_download_response(
     let token = access_token.map(str::trim).filter(|value| !value.is_empty());
     let parsed_release = parse_release_download_url(&content.pack_url);
 
-    // If we have a token, prefer the authenticated GitHub API
+    // If we have a token, prefer the authenticated GitHub API.
+    // Also race against pack_url_alt (CDN mirror) when available.
     if let (Some(token), Some((owner, repo, tag, asset_name))) =
         (token, parsed_release.as_ref())
     {
-        return download_release_asset_via_github_api(
+        let alt_url = content.pack_url_alt.clone().filter(|u| !u.trim().is_empty());
+
+        let github_fut = download_release_asset_via_github_api(
             &client, owner, repo, tag, asset_name, token,
-        )
-        .await;
+        );
+
+        if let Some(alt) = alt_url {
+            let alt_fut = async {
+                authorized_get(client, &alt, Some(token))
+                    .send()
+                    .await
+                    .map_err(|error| network_error_hint("从镜像下载准则库失败", &error))
+            };
+
+            futures_util::pin_mut!(github_fut);
+            futures_util::pin_mut!(alt_fut);
+
+            return match futures_util::future::select(github_fut, alt_fut).await {
+                futures_util::future::Either::Left((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Right((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Left((Err(github_err), alt_fut)) => {
+                    match alt_fut.await {
+                        Ok(response) => Ok(response),
+                        Err(alt_err) => Err(format!(
+                            "下载准则库失败。GitHub API 错误: {github_err}；镜像错误: {alt_err}"
+                        )),
+                    }
+                }
+                futures_util::future::Either::Right((Err(alt_err), github_fut)) => {
+                    match github_fut.await {
+                        Ok(response) => Ok(response),
+                        Err(github_err) => Err(format!(
+                            "下载准则库失败。镜像错误: {alt_err}；GitHub API 错误: {github_err}"
+                        )),
+                    }
+                }
+            };
+        }
+
+        return github_fut.await;
     }
 
     // For public repos (or when no token): try GitHub API (public) in parallel
     // with the direct download URL.  api.github.com is accessible from mainland
     // China while github.com/releases/download often is not.
+    // If pack_url_alt (CDN mirror) is available, race it against the GitHub download.
     if let Some((owner, repo, tag, asset_name)) = parsed_release.as_ref() {
-        // Clone strings to move into the async block
         let owner = owner.clone();
         let repo = repo.clone();
         let tag = tag.clone();
         let asset_name = asset_name.clone();
         let direct_url = content.pack_url.clone();
+        let alt_url = content.pack_url_alt.clone().filter(|u| !u.trim().is_empty());
 
-        let api_fut = async {
-            download_release_asset_via_github_api_public(
+        let github_fut = async {
+            let api_fut = download_release_asset_via_github_api_public(
                 client, &owner, &repo, &tag, &asset_name,
-            )
-            .await
+            );
+            let direct_fut = async {
+                authorized_get(client, &direct_url, token)
+                    .send()
+                    .await
+                    .map_err(|error| network_error_hint("下载准则库失败", &error))
+            };
+
+            futures_util::pin_mut!(api_fut);
+            futures_util::pin_mut!(direct_fut);
+
+            match futures_util::future::select(api_fut, direct_fut).await {
+                futures_util::future::Either::Left((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Right((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Left((Err(api_err), direct_fut)) => {
+                    match direct_fut.await {
+                        Ok(response) if response.status().is_success() => Ok(response),
+                        Ok(response) => {
+                            let status = response.status();
+                            Err(format!(
+                                "下载准则库失败: {}。{}",
+                                status,
+                                auth_error_hint(status)
+                            ))
+                        }
+                        Err(direct_err) => Err(format!(
+                            "下载准则库失败。GitHub API 错误: {api_err}；直接下载错误: {direct_err}"
+                        )),
+                    }
+                }
+                futures_util::future::Either::Right((Err(direct_err), api_fut)) => {
+                    match api_fut.await {
+                        Ok(response) => Ok(response),
+                        Err(api_err) => Err(format!(
+                            "下载准则库失败。直接下载错误: {direct_err}；GitHub API 错误: {api_err}"
+                        )),
+                    }
+                }
+            }
         };
-        let direct_fut = async {
-            authorized_get(client, &direct_url, token)
+
+        // If a CDN alternative is provided, race GitHub download vs CDN
+        if let Some(alt) = alt_url {
+            let alt_fut = async {
+                authorized_get(client, &alt, token)
+                    .send()
+                    .await
+                    .map_err(|error| network_error_hint("从镜像下载准则库失败", &error))
+            };
+
+            futures_util::pin_mut!(github_fut);
+            futures_util::pin_mut!(alt_fut);
+
+            return match futures_util::future::select(github_fut, alt_fut).await {
+                futures_util::future::Either::Left((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Right((Ok(response), _)) => Ok(response),
+                futures_util::future::Either::Left((Err(github_err), alt_fut)) => {
+                    match alt_fut.await {
+                        Ok(response) => Ok(response),
+                        Err(alt_err) => Err(format!(
+                            "下载准则库失败。GitHub 错误: {github_err}；镜像错误: {alt_err}"
+                        )),
+                    }
+                }
+                futures_util::future::Either::Right((Err(alt_err), github_fut)) => {
+                    match github_fut.await {
+                        Ok(response) => Ok(response),
+                        Err(github_err) => Err(format!(
+                            "下载准则库失败。镜像错误: {alt_err}；GitHub 错误: {github_err}"
+                        )),
+                    }
+                }
+            };
+        }
+
+        return github_fut.await;
+    }
+
+    // Not a GitHub release URL — simple direct download.
+    // Also race against pack_url_alt (CDN mirror) when available.
+    let alt_url = content.pack_url_alt.clone().filter(|u| !u.trim().is_empty());
+
+    if let Some(alt) = alt_url {
+        let primary_fut = async {
+            authorized_get(&client, &content.pack_url, token)
                 .send()
                 .await
                 .map_err(|error| network_error_hint("下载准则库失败", &error))
         };
+        let alt_fut = async {
+            authorized_get(&client, &alt, token)
+                .send()
+                .await
+                .map_err(|error| network_error_hint("从镜像下载准则库失败", &error))
+        };
 
-        futures_util::pin_mut!(api_fut);
-        futures_util::pin_mut!(direct_fut);
+        futures_util::pin_mut!(primary_fut);
+        futures_util::pin_mut!(alt_fut);
 
-        // Race: first successful response wins
-        return match futures_util::future::select(api_fut, direct_fut).await {
+        return match futures_util::future::select(primary_fut, alt_fut).await {
             futures_util::future::Either::Left((Ok(response), _)) => Ok(response),
             futures_util::future::Either::Right((Ok(response), _)) => Ok(response),
-            futures_util::future::Either::Left((Err(api_err), direct_fut)) => {
-                match direct_fut.await {
-                    Ok(response) if response.status().is_success() => Ok(response),
-                    Ok(response) => {
-                        let status = response.status();
-                        Err(format!("下载准则库失败: {}。{}", status, auth_error_hint(status)))
-                    }
-                    Err(direct_err) => Err(format!(
-                        "下载准则库失败。GitHub API 错误: {api_err}；直接下载错误: {direct_err}"
+            futures_util::future::Either::Left((Err(primary_err), alt_fut)) => {
+                match alt_fut.await {
+                    Ok(response) => Ok(response),
+                    Err(alt_err) => Err(format!(
+                        "下载准则库失败。主 URL 错误: {primary_err}；镜像错误: {alt_err}"
                     )),
                 }
             }
-            futures_util::future::Either::Right((Err(direct_err), api_fut)) => {
-                match api_fut.await {
+            futures_util::future::Either::Right((Err(alt_err), primary_fut)) => {
+                match primary_fut.await {
                     Ok(response) => Ok(response),
-                    Err(api_err) => Err(format!(
-                        "下载准则库失败。直接下载错误: {direct_err}；GitHub API 错误: {api_err}"
+                    Err(primary_err) => Err(format!(
+                        "下载准则库失败。镜像错误: {alt_err}；主 URL 错误: {primary_err}"
                     )),
                 }
             }
         };
     }
 
-    // Not a GitHub release URL — simple direct download
     let response = match authorized_get(&client, &content.pack_url, token)
         .send()
         .await
