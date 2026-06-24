@@ -7,10 +7,18 @@ pub mod pack;
 pub mod projects;
 pub mod ai;
 pub mod ai_agent;
-pub mod retrieval;
 mod session;
 mod trash;
 pub mod update;
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub(crate) fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

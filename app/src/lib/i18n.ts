@@ -238,7 +238,6 @@ const messages = {
       "Try another citation, or check Settings to confirm your content pack is up to date.",
     citationLine: "Citation: {citation}{paragraph}",
     paragraphSuffix: " · Paragraph {paragraph}",
-    matchedExcerpt: "Matched excerpt: {snippet}",
     standardFallbackMessage:
       'Could not locate paragraph "{citation}". Showing full text of {standard} instead. When drafting notes with AI, use citation formats the pack can resolve.',
     toastCitationNotFound: "Citation not found: {citation}",
@@ -505,7 +504,6 @@ const messages = {
     tryAnotherCitation: "请尝试其他引用，或在设置中确认内容包已更新。",
     citationLine: "引用：{citation}{paragraph}",
     paragraphSuffix: " · 段落 {paragraph}",
-    matchedExcerpt: "匹配摘录：{snippet}",
     standardFallbackMessage:
       "无法定位段落「{citation}」，改为显示 {standard} 全文。使用 AI 撰写笔记时，请采用内容包可解析的引用格式。",
     toastCitationNotFound: "未找到引用：{citation}",
@@ -559,19 +557,6 @@ export function tf(
   return t(locale, key).replace(/\{(\w+)\}/g, (_, name: string) =>
     String(vars[name] ?? `{${name}}`),
   );
-}
-
-export function standardsBreadcrumb(
-  locale: Locale,
-  primary: string,
-  secondary: string,
-  tertiary: string,
-): string {
-  const parts = [navLabel(locale, primary), navLabel(locale, secondary)];
-  if (primary === "accounting-standards") {
-    parts.push(navLabel(locale, tertiary));
-  }
-  return parts.join(" › ");
 }
 
 export function navLabel(locale: Locale, id: string): string {

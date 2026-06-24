@@ -37,6 +37,7 @@ export function SearchBar({ onSelectHit }: SearchBarProps) {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={tr("searchStandardsPlaceholder")}
+        aria-label={tr("searchStandardsPlaceholder")}
         className="ui-input ui-focus-ring w-full rounded-2xl px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-brand-accent"
       />
       {loading && (

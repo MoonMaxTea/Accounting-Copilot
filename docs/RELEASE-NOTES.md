@@ -70,6 +70,56 @@ Continue pre-AI debug phases in `ai-debug.log`:
 
 ---
 
+## app-v0.1.17 (2026-06-24)
+
+**Tag:** [`app-v0.1.17`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.17)
+
+### Summary
+
+ASC amendment citation resolution fix, matched excerpt panel removal, and project audit cleanup.
+
+### Bug fixes
+
+- **ASC citation fix:** `resolve_from_index` now filters out amendment-metadata entries (e.g., "Added by ASU 2016-02") before selecting by `char_start`. Prevents AI from reading amendment records instead of substantive standard text when citing ASC paragraphs.
+- **Matched excerpt panel removed:** Redundant `matchedExcerpt` display block removed from `EvidenceStandardPanel`. The standard body is already scrolled to the cited paragraph.
+
+### Refactoring
+
+- Removed dead chat-completion functions (`call_openai` in `ai.rs`, `request_chat_plain` in `ai_agent.rs`) and unused `retrieval.rs` module (~140 lines deleted).
+- Removed 8 dead TypeScript exports in `citations.ts`, `standards-navigation.ts`, `i18n.ts`.
+- Extracted shared `now_secs()` utility to reduce inline `SystemTime` duplication.
+
+### Security
+
+- Enabled Content Security Policy (`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'`) — previously `csp: null`.
+
+### Docs
+
+- Version references synced to 0.1.17 across `AGENTS.md`, `DESIGN.md`, `ARCHITECTURE.md`.
+
+---
+
+## app-v0.1.16 (2026-06-23)
+
+**Tag:** [`app-v0.1.16`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.16)
+
+### Summary
+
+Content pack CDN acceleration with dual-URL racing and unified app update check/download UI.
+
+### Features
+
+- **Dual-URL racing for manifest fetch:** `raw.githubusercontent.com` and `cdn.jsdelivr.net` raced with `futures_util::future::select`. Mainland China users see significantly faster update checks.
+- **Pack CDN download:** Pack ZIP downloads also race GitHub API vs direct URL.
+- **App version check/download:** Single "Check for updates" button checks both content pack and app versions. Separate download buttons for content and app updates. Settings page shows each independently.
+- **Dual-URL app installer download:** App `.exe`/`.deb` downloads race GitHub Release, GitHub API, and jsDelivr CDN.
+
+### Bug fixes
+
+- Fixed `release-app.yml` CI `download-artifact` path nesting — CDN mirror installer copy was broken.
+
+---
+
 ## app-v0.1.13 (2026-06-21)
 
 **Tag:** [`app-v0.1.13`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.13)

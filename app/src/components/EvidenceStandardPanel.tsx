@@ -5,7 +5,6 @@ import { useBodySearch } from "../hooks/useBodySearch";
 import { usePreferences } from "../context/PreferencesContext";
 import { HighlightedBody } from "./HighlightedBody";
 import { MarkdownPreview } from "./MarkdownPreview";
-import { IconChevronDown } from "./icons";
 import type { CitationHighlight, CitationTarget, StandardDetail } from "../types";
 
 interface EvidenceStandardPanelProps {
@@ -27,17 +26,10 @@ export function EvidenceStandardPanel({
   const [detail, setDetail] = useState<StandardDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [excerptExpanded, setExcerptExpanded] = useState(true);
   const bodySearch = useBodySearch(detail?.body);
 
   const standardId = target?.standard_id || null;
   const citationKey = target ? `${target.citation}:${target.char_start}:${target.char_end}` : null;
-
-  useEffect(() => {
-    if (citationKey) {
-      setExcerptExpanded(true);
-    }
-  }, [citationKey]);
 
   useEffect(() => {
     if (!standardId || !target?.resolved) {
@@ -201,31 +193,6 @@ export function EvidenceStandardPanel({
               </button>
             )}
           </div>
-        )}
-
-        {activeHighlight.snippet_en && !isStandardFallback && (
-          compact ? (
-            <div className="mt-3 rounded-lg bg-brand-paper">
-              <button
-                type="button"
-                onClick={() => setExcerptExpanded((prev) => !prev)}
-                className="ui-focus-ring flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-brand-ink hover:bg-brand-hover/50"
-                aria-label={excerptExpanded ? "Collapse excerpt" : "Expand excerpt"}
-                aria-expanded={excerptExpanded}
-              >
-                <IconChevronDown
-                  className={`h-4 w-4 shrink-0 text-brand-muted transition-transform ${excerptExpanded ? "rotate-180" : ""}`}
-                />
-                {excerptExpanded
-                  ? trf("matchedExcerpt", { snippet: activeHighlight.snippet_en })
-                  : activeHighlight.snippet_en.slice(0, 80).replace(/\n/g, " ") + "…"}
-              </button>
-            </div>
-          ) : (
-            <p className="mt-3 rounded-lg bg-brand-paper px-4 py-3 text-sm text-brand-ink">
-              {trf("matchedExcerpt", { snippet: activeHighlight.snippet_en })}
-            </p>
-          )
         )}
       </header>
 

@@ -955,10 +955,7 @@ fn find_exact_heading(content: &str, heading: &str) -> Option<usize> {
 fn extract_turns_from_log_section(content: &str) -> Vec<crate::models::AiConversationTurn> {
     use crate::models::AiConversationTurn;
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
+    let now = crate::now_secs();
     let mut turns = Vec::new();
 
     let Some(log_start) = find_exact_heading(content, "## 日志") else {
@@ -999,10 +996,7 @@ fn extract_turns_from_log_section(content: &str) -> Vec<crate::models::AiConvers
 fn extract_turns_from_question_section(content: &str) -> Vec<crate::models::AiConversationTurn> {
     use crate::models::AiConversationTurn;
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
+    let now = crate::now_secs();
     let mut turns = Vec::new();
 
     let Some(question_start) = find_exact_heading(content, "## 问题") else {
@@ -1207,10 +1201,7 @@ pub fn conversation_activity_from_agent_session(
     use crate::models::AiConversationTurn;
 
     let mut turns = Vec::new();
-    let timestamp_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
+    let timestamp_secs = crate::now_secs();
 
     for message in session.iter() {
         match message.role.as_str() {
@@ -1326,10 +1317,7 @@ pub fn conversation_turns_from_agent_session(
     use crate::models::AiConversationTurn;
 
     let mut turns = Vec::new();
-    let timestamp_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
+    let timestamp_secs = crate::now_secs();
 
     for message in session.iter() {
         if message.role != "user" {

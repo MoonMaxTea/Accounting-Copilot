@@ -35,6 +35,7 @@ export function parseCitation(text: string): CitationRef | null {
   return null;
 }
 
+/** @deprecated Used only by tests. Frontend resolves citations via Tauri backend (`api.ts`). */
 export function resolveCitation(
   citation: string,
   paragraphsIndex: ParagraphIndexEntry[],
@@ -95,6 +96,7 @@ export function injectCitationLinks(content: string): string {
   return result;
 }
 
+/** @deprecated Used only by tests. Citation scanning is handled by Rust backend (`citations.rs`). */
 export function scanCitations(content: string): string[] {
   const found: string[] = [];
 

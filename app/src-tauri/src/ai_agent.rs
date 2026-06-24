@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -13,6 +12,7 @@ use crate::ai::{
 use crate::citations::{load_paragraphs, resolve_citation};
 use crate::config::AiConfig;
 use crate::db;
+use crate::now_secs;
 use crate::pack;
 use tauri::{Emitter, Manager};
 
@@ -103,13 +103,6 @@ struct ChatCompletionResponse {
 #[derive(Debug, Deserialize)]
 struct ChatCompletionChoice {
     message: ApiChatMessage,
-}
-
-pub(crate) fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0)
 }
 
 pub(crate) fn ai_provider_model(ai: &AiConfig) -> (Option<String>, Option<String>) {
@@ -922,50 +915,6 @@ fn chat_endpoint_and_model(ai: &AiConfig) -> Result<(String, String, String), St
         .to_string();
 
     Ok((format!("{base_url}/chat/completions"), api_key, model))
-}
-
-/// Pipeline 专用：保证 payload 永不包含 tools / tool_choice
-pub async fn request_chat_plain(
-    ai: &AiConfig,
-    messages: &[ApiChatMessage],
-) -> Result<ApiChatMessage, String> {
-    let provider = ai
-        .provider
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("openai");
-
-    let (endpoint, api_key, model) = chat_endpoint_and_model(ai)?;
-    let payload = build_plain_chat_payload(&model, messages);
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let response = client
-        .post(&endpoint)
-        .bearer_auth(api_key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
-
-    if !response.status().is_success() {
-        let status_code = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-        return Err(classify_provider_error(provider, status_code, &body));
-    }
-
-    let body: ChatCompletionResponse = response
-        .json()
-        .await
-        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
-
-    body.choices
-        .first()
-        .map(|choice| choice.message.clone())
-        .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
 /// Single OpenAI-compatible `/chat/completions` request.  `tool_choice` is only

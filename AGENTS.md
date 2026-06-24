@@ -10,7 +10,7 @@ Guide for AI coding agents working in this repository. Read this before making c
 | **Repo** | `MoonMaxTea/Accounting-Copilot` (often **private**) |
 | **Stack** | Tauri 2 + Rust + React 19 + TypeScript + Vite + Tailwind 4 |
 | **Package manager** | pnpm 9 (monorepo) |
-| **Current app version** | **0.1.15** (`app-v0.1.15`) — see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) |
+| **Current app version** | **0.1.17** (`app-v0.1.17`) — see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) |
 | **Content pack** | Built from upstream standards vault via `tools/pack-builder` |
 
 **Purpose:** Offline IFRS / IAS / ASC standards browser + listing rules (HK / SEC) + tax law (CN / DE / US / INTL) — workbench for project notes, AI-assisted document writing, citation resolution, and GitHub-based content/app updates.
@@ -161,7 +161,7 @@ Alt (jsDelivr CDN — faster from mainland China):
 https://cdn.jsdelivr.net/gh/MoonMaxTea/Accounting-Copilot@main/updates/manifest.json
 ```
 
-Both URLs are raced simultaneously (`tokio::select!`); the fastest successful response wins.
+Both URLs are raced simultaneously (`futures_util::future::select`); the fastest successful response wins.
 
 **Private repo / mainland China users:**
 

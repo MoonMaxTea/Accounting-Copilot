@@ -96,6 +96,18 @@ fn slice_utf16(body: &str, start: usize, len: usize) -> String {
     String::from_utf16_lossy(&units[start..end])
 }
 
+fn is_amendment_snippet(snippet: &str) -> bool {
+    let lower = snippet.to_ascii_lowercase();
+    const KEYWORDS: &[&str] = &[
+        "added by asu",
+        "amended by",
+        "accounting standards update",
+        "superseded by",
+        "paragraph superseded",
+    ];
+    KEYWORDS.iter().any(|kw| lower.contains(kw))
+}
+
 fn resolve_from_index(
     content_dir: &Path,
     citation: &str,
@@ -121,9 +133,33 @@ fn resolve_from_index(
         .filter(|entry| {
             entry.standard_id.eq_ignore_ascii_case(standard_id)
                 && entry.paragraph == paragraph
+                && !is_amendment_snippet(&entry.snippet_en)
         })
         .max_by_key(|entry| entry.char_start)
         .or_else(|| {
+            // Fallback: all exact matches are amendment entries
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && entry.paragraph == paragraph
+                })
+                .max_by_key(|entry| entry.char_start)
+        })
+        .or_else(|| {
+            // Fallback to normalized matching, prefer non-amendment
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && (entry.paragraph_normalized == normalized
+                            || entry.paragraph_normalized == paragraph)
+                        && !is_amendment_snippet(&entry.snippet_en)
+                })
+                .max_by_key(|entry| entry.char_start)
+        })
+        .or_else(|| {
+            // Last fallback: normalized match, all amendment entries
             entries
                 .iter()
                 .filter(|entry| {
@@ -433,5 +469,73 @@ mod tests {
         assert!(resolved.resolved);
         assert!(!resolved.paragraph_resolved);
         assert_eq!(resolved.char_start, 0);
+    }
+
+    #[test]
+    fn prefers_substantive_over_amendment_entry() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(temp.path().join("index")).expect("mkdir");
+        fs::create_dir_all(temp.path().join("current/ASC")).expect("mkdir standards");
+
+        // Amendment entry has HIGHER char_start (8000) than substantive (5000).
+        // The bug: old max_by_key would pick 8000 = amendment boilerplate.
+        // The fix: keyword filter skips the amendment entry, returning the substantive one.
+        fs::write(
+            temp.path().join("index/paragraphs.json"),
+            r#"{"entries":[
+                {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":8000,"char_end":8200,"snippet_en":"842-20-25-1 Added by ASU 2016-02 Lease. Amendments to Subtopic 842-20","status":"current"},
+                {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":5000,"char_end":5200,"snippet_en":"842-20-25-1 A lessee shall recognize a right-of-use asset and a lease liability at commencement date","status":"current"}
+            ]}"#,
+        )
+        .expect("write paragraphs");
+        fs::write(
+            temp.path().join("registry.json"),
+            r#"{"schema_version":1,"content_version":"test","standards":[{"id":"ASC 842","title":"Leases","framework":"US GAAP","status":"current","official_url":"https://example.com","pack_path":"current/ASC/asc842.md"}]}"#,
+        )
+        .expect("write registry");
+        fs::write(
+            temp.path().join("current/ASC/asc842.md"),
+            "Amendment:\n842-20-25-1 Added by ASU 2016-02\n\nContent:\n842-20-25-1 A lessee shall recognize a right-of-use asset and a lease liability at commencement date.",
+        )
+        .expect("write body");
+
+        let resolved = resolve_citation(temp.path(), "ASC 842-20-25-1")
+            .expect("resolve")
+            .expect("target");
+        assert!(resolved.snippet_en.contains("right-of-use"));
+        assert!(!resolved.snippet_en.contains("Added by ASU"));
+        assert_eq!(resolved.char_start, 5000);
+    }
+
+    #[test]
+    fn falls_back_when_all_entries_are_amendments() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(temp.path().join("index")).expect("mkdir");
+        fs::create_dir_all(temp.path().join("current/ASC")).expect("mkdir standards");
+
+        fs::write(
+            temp.path().join("index/paragraphs.json"),
+            r#"{"entries":[
+                {"standard_id":"ASC 842","paragraph":"842-20-25-1","paragraph_normalized":"842","pack_path":"current/ASC/asc842.md","char_start":100,"char_end":200,"snippet_en":"842-20-25-1 Added by ASU 2016-02 Lease","status":"current"}
+            ]}"#,
+        )
+        .expect("write paragraphs");
+        fs::write(
+            temp.path().join("registry.json"),
+            r#"{"schema_version":1,"content_version":"test","standards":[{"id":"ASC 842","title":"Leases","framework":"US GAAP","status":"current","official_url":"https://example.com","pack_path":"current/ASC/asc842.md"}]}"#,
+        )
+        .expect("write registry");
+        fs::write(
+            temp.path().join("current/ASC/asc842.md"),
+            "842-20-25-1 Added by ASU 2016-02 Lease.",
+        )
+        .expect("write body");
+
+        let resolved = resolve_citation(temp.path(), "ASC 842-20-25-1")
+            .expect("resolve")
+            .expect("target");
+        // Should fallback to the only entry (amendment), rather than return None
+        assert!(resolved.resolved);
+        assert!(resolved.paragraph_resolved);
     }
 }

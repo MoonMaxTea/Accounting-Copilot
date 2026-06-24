@@ -1,8 +1,5 @@
 use std::path::Path;
 
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-
 use crate::citations::{resolve_citation, scan_citations};
 use crate::config::AiConfig;
 use crate::ai_agent::{
@@ -18,34 +15,6 @@ pub(crate) const PROJECT_NAME_START: &str = "<<<PROJECT_NAME>>>";
 pub(crate) const PROJECT_NAME_END: &str = "<<<END_PROJECT_NAME>>>";
 pub(crate) const MARKDOWN_START: &str = "<<<MARKDOWN>>>";
 pub(crate) const MARKDOWN_END: &str = "<<<END_MARKDOWN>>>";
-
-#[derive(Debug, Deserialize)]
-struct OpenAiResponse {
-    choices: Vec<OpenAiChoice>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChoice {
-    message: OpenAiMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiMessage {
-    content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiRequest<'a> {
-    model: &'a str,
-    messages: Vec<OpenAiChatMessage<'a>>,
-    temperature: f32,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChatMessage<'a> {
-    role: &'a str,
-    content: &'a str,
-}
 
 fn extract_citation_from_quote_header(line: &str) -> Option<String> {
     let start = line.find("**")? + 2;
@@ -257,86 +226,6 @@ fn extract_block(raw: &str, start: &str, end: &str) -> Option<String> {
     let start_index = raw.find(start)? + start.len();
     let end_index = raw[start_index..].find(end)? + start_index;
     Some(raw[start_index..end_index].trim().to_string())
-}
-
-pub async fn call_openai(
-    ai: &AiConfig,
-    system_prompt: &str,
-    user_prompt: &str,
-) -> Result<String, String> {
-    let provider = ai
-        .provider
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("openai");
-
-    let api_key = ai
-        .api_key
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("请先在「设置 → AI 写作」中配置 {provider} 的 API Key。"))?;
-
-    let model = ai
-        .model
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .unwrap_or("gpt-4o");
-
-    let base_url = ai
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("https://api.openai.com/v1")
-        .trim_end_matches('/');
-
-    let endpoint = format!("{base_url}/chat/completions");
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let request = OpenAiRequest {
-        model,
-        messages: vec![
-            OpenAiChatMessage {
-                role: "system",
-                content: system_prompt,
-            },
-            OpenAiChatMessage {
-                role: "user",
-                content: user_prompt,
-            },
-        ],
-        temperature: 0.3,
-    };
-
-    let response = client
-        .post(&endpoint)
-        .bearer_auth(api_key)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|error| format!("{provider} 请求失败: {error}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("{provider} 返回错误 ({status}): {body}"));
-    }
-
-    let payload: OpenAiResponse = response
-        .json()
-        .await
-        .map_err(|error| format!("无法解析 {provider} 响应: {error}"))?;
-
-    payload
-        .choices
-        .first()
-        .map(|choice| choice.message.content.clone())
-        .ok_or_else(|| format!("{provider} 响应为空"))
 }
 
 pub fn validate_project_content(

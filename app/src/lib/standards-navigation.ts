@@ -23,10 +23,7 @@ export function secondaryOptionsForCategory(
   return (cat?.frameworks ?? []).map((fw) => ({ id: fw, label: fw }));
 }
 
-export function secondaryFieldLabel(primary: string): string {
-  return primary === "listing-rules" ? "Market" : "Standards System";
-}
-
+/** @deprecated Used only by tests. Component builds breadcrumbs inline. */
 export function secondaryLabel(
   primary: string,
   secondary: string,
@@ -55,6 +52,7 @@ export function tertiaryOptions(
   return [{ id: secondary, label: secondary }];
 }
 
+/** @deprecated Used only by tests via standardsBreadcrumb. */
 export function tertiaryLabel(tertiary: FrameworkFilter): string {
   if (tertiary === "ALL") {
     return "All";
@@ -64,6 +62,7 @@ export function tertiaryLabel(tertiary: FrameworkFilter): string {
 
 // ── Breadcrumb ──
 
+/** @deprecated Used only by tests. Component builds breadcrumbs inline. */
 export function standardsBreadcrumb(
   primary: string,
   secondary: string,
@@ -155,13 +154,4 @@ export function navigationForStandard(
   }
   // Unknown framework: use as secondary, default tertiary
   return { primary: category, secondary: standard.framework, tertiary: "ALL" };
-}
-
-// ── Empty state messages ──
-
-export function emptyStandardsMessage(primary: string, secondary: string): string {
-  if (primary !== "accounting-standards") {
-    return `Content for ${secondary} is coming soon. Browse Accounting Standards in the meantime.`;
-  }
-  return "No standards match the current filters. Try another series or enable legacy standards.";
 }

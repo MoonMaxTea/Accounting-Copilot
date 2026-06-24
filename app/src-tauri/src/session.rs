@@ -6,6 +6,8 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
 use crate::config::{self, ProjectsUiState};
+
+pub(crate) const DRAFT_AGENT_SESSION_KEY: &str = "__draft__";
 use crate::models::{
     AiAgentMessage, AiConversationIndexEntry, AiConversationTurn, StoredAiSession,
 };
@@ -115,7 +117,7 @@ pub fn list_session_activity_index(
         let raw = fs::read_to_string(&path).map_err(|error| error.to_string())?;
         let stored: StoredAiSession =
             serde_json::from_str(&raw).map_err(|error| format!("Invalid session file: {error}"))?;
-        if stored.project_relative_path == "__draft__" {
+        if stored.project_relative_path == DRAFT_AGENT_SESSION_KEY {
             continue;
         }
         entries.push(AiConversationIndexEntry {
@@ -227,7 +229,7 @@ pub fn conversation_index_with_legacy(
     }
 
     for (relative_path, turns) in &projects_ui.ai_threads {
-        if relative_path == "__draft__" || turns.is_empty() {
+        if relative_path == DRAFT_AGENT_SESSION_KEY || turns.is_empty() {
             continue;
         }
         let latest = latest_activity_timestamp(turns);

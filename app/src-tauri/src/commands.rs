@@ -4,10 +4,12 @@ use tauri::AppHandle;
 use tauri::Emitter;
 
 use crate::ai;
-use crate::ai_agent::{self, now_secs};
+use crate::ai_agent::{self};
 use crate::citations::{count_paragraphs, resolve_citation as resolve_in_pack, scan_citations};
 use crate::config::{self, AiConfig};
 use crate::db;
+use crate::models;
+use crate::now_secs;
 use crate::models::{
     AppConfigResponse, CitationScanResult, CitationTarget, DeleteFolderResult,
     GenerateProjectResult, PackInfo, ProjectFileEntry, ProjectTreeNode, SearchHit,
@@ -19,7 +21,7 @@ use crate::trash::{TrashEntry, TrashStore};
 use crate::session;
 use crate::update;
 
-const DRAFT_AGENT_SESSION_KEY: &str = "__draft__";
+use crate::session::DRAFT_AGENT_SESSION_KEY;
 
 fn persist_agent_run(
     app: &AppHandle,

@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -103,10 +102,7 @@ impl TrashStore {
             .to_string();
         let title = projects::extract_title_for_entry(&content, &fallback);
 
-        let deleted_at_secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|value| value.as_secs())
-            .unwrap_or(0);
+        let deleted_at_secs = crate::now_secs();
 
         let trash_filename = allocate_trash_filename(app, &relative, deleted_at_secs)?;
         let trash_path = Self::trash_dir(app)?.join(&trash_filename);

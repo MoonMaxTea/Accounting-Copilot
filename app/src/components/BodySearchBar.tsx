@@ -35,6 +35,7 @@ export function BodySearchBar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={tr("findInStandardPlaceholder")}
+        aria-label={tr("findInStandardPlaceholder")}
         className={[
           "ui-input ui-focus-ring min-w-0 flex-1 rounded-md px-2 text-sm",
           compact ? "py-1" : "py-1.5",

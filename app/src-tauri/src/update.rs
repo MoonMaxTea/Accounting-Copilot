@@ -1,7 +1,6 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(unused_imports)]
 use futures_util::{pin_mut, StreamExt};
@@ -797,10 +796,7 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         None
     };
     let running_app_version = app_version(app);
-    let checked_at_secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_secs())
-        .unwrap_or(0);
+    let checked_at_secs = crate::now_secs();
 
     let access_token = config
         .update
@@ -831,8 +827,7 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
     let mut available: Option<ContentUpdateInfo> = None;
 
     if manifest.content.is_none() {
-        status = "error".to_string();
-        message = Some("更新清单中尚未发布准则库版本，请稍后再试或联系管理员。".to_string());
+        message = Some("更新清单中暂无准则库发布。".to_string());
     } else if let Some(content) = manifest.content {
         if is_content_version_newer(&content.latest_version, effective_current) {
             if app_meets_min_version(&running_app_version, content.min_app_version.as_deref()) {
