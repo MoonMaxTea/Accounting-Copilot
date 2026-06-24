@@ -279,6 +279,7 @@ export function browserMockInvoke<T>(
         status: "up_to_date",
         current_content_version: MOCK_PACK_INFO.content_version,
         available_content: null,
+        available_app: null,
         message: null,
         checked_at_secs: MOCK_NOW_SECS,
       } satisfies UpdateCheckResult as T);

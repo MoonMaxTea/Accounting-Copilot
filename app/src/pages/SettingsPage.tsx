@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   checkContentUpdates,
   downloadAndApplyContentUpdate,
+  downloadAppUpdate,
   getAppVersion,
   getConfig,
   pickProjectsDir,
@@ -11,7 +12,13 @@ import {
 import { ContentDownloadProgressBar } from "../components/ContentDownloadProgressBar";
 import { useToast } from "../components/Toast";
 import { usePreferences } from "../context/PreferencesContext";
-import type { AiConfig, ContentDownloadProgress, PackInfo, UpdateCheckResult, UpdateConfig } from "../types";
+import type {
+  AiConfig,
+  ContentDownloadProgress,
+  PackInfo,
+  UpdateCheckResult,
+  UpdateConfig,
+} from "../types";
 
 interface SettingsPageProps {
   packInfo: PackInfo;
@@ -44,6 +51,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const [savingAi, setSavingAi] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [applyingAppUpdate, setApplyingAppUpdate] = useState(false);
   const [savingUpdateConfig, setSavingUpdateConfig] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<ContentDownloadProgress | null>(null);
@@ -80,6 +88,8 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
         return tr("updateAvailable");
       case "app_update_required":
         return tr("updateAppRequired");
+      case "app_available":
+        return tr("updateAppAvailable");
       case "error":
         return tr("updateCheckFailed");
       default:
@@ -90,6 +100,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   const updateStatusClass = (status: string): string => {
     switch (status) {
       case "content_available":
+      case "app_available":
         return "ui-alert-success";
       case "error":
       case "app_update_required":
@@ -179,6 +190,19 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
     }
   };
 
+  const handleApplyAppUpdate = async () => {
+    setApplyingAppUpdate(true);
+    setNotice(null);
+    try {
+      const filePath = await downloadAppUpdate();
+      setNotice(trf("appUpdateDownloaded", { path: filePath }));
+    } catch (caught: unknown) {
+      setNotice(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setApplyingAppUpdate(false);
+    }
+  };
+
   const handleSaveUpdateConfig = async () => {
     setSavingUpdateConfig(true);
     setNotice(null);
@@ -195,6 +219,7 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
   };
 
   const availableUpdate = updateStatus?.available_content ?? null;
+  const availableAppUpdate = updateStatus?.available_app ?? null;
   const statusText = updateStatusLabel(updateStatus);
 
   return (
@@ -241,12 +266,13 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
           </div>
         </dl>
 
-        {updateStatus && statusText && (
+        {updateStatus && statusText && availableUpdate && (
           <div className={`mt-4 rounded-lg text-sm ${updateStatusClass(updateStatus.status)}`}>
             <p className="font-medium">{statusText}</p>
           </div>
         )}
 
+        {/* Content update card */}
         {availableUpdate && (
           <div className="ui-alert-success mt-4 rounded-lg p-4 text-sm">
             <p className="font-medium">
@@ -265,10 +291,27 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
           </div>
         )}
 
+        {/* App update card */}
+        {availableAppUpdate && (
+          <div className="ui-alert-success mt-4 rounded-lg p-4 text-sm">
+            <p className="font-medium">
+              {trf("appUpdateAvailable", {
+                current: appVersion,
+                latest: availableAppUpdate.latest_version,
+              })}
+            </p>
+            {availableAppUpdate.release_notes && (
+              <pre className="mt-2 whitespace-pre-wrap font-sans opacity-90">
+                {availableAppUpdate.release_notes}
+              </pre>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={checkingUpdates || applyingUpdate}
+            disabled={checkingUpdates || applyingUpdate || applyingAppUpdate}
             onClick={() => void handleCheckUpdates()}
             className="ui-btn-primary ui-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed"
           >
@@ -281,7 +324,17 @@ export function SettingsPage({ packInfo, onPackUpdated }: SettingsPageProps) {
               onClick={() => void handleApplyUpdate()}
               className="ui-focus-ring rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
             >
-              {applyingUpdate ? tr("downloading") : tr("downloadAndInstall")}
+              {applyingUpdate ? tr("downloading") : tr("downloadStandardsPack")}
+            </button>
+          )}
+          {availableAppUpdate && (
+            <button
+              type="button"
+              disabled={applyingAppUpdate || checkingUpdates}
+              onClick={() => void handleApplyAppUpdate()}
+              className="ui-focus-ring rounded-lg bg-brand-burgundy px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-50"
+            >
+              {applyingAppUpdate ? tr("downloading") : tr("downloadAppUpdate")}
             </button>
           )}
         </div>

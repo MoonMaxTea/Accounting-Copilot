@@ -571,6 +571,8 @@ pub struct UpdatesManifest {
     #[allow(dead_code)]
     pub schema_version: u32,
     pub content: Option<ContentUpdateInfo>,
+    #[serde(default)]
+    pub app: Option<crate::models::AppUpdateInfo>,
 }
 
 pub fn parse_semver_triplet(version: &str) -> Option<(u32, u32, u32)> {
@@ -817,6 +819,7 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
                 status: "error".to_string(),
                 current_content_version: current,
                 available_content: None,
+                available_app: None,
                 message: Some(error),
                 checked_at_secs,
             });
@@ -868,10 +871,32 @@ pub async fn check_updates(app: &AppHandle) -> Result<UpdateCheckResult, String>
         saved.update.last_update_check_secs = Some(checked_at_secs);
     });
 
+    // Check app version
+    let available_app = manifest.app.and_then(|app_info| {
+        if is_content_version_newer(&app_info.latest_version, Some(&running_app_version)) {
+            Some(app_info)
+        } else {
+            None
+        }
+    });
+
+    // Adjust status if app-only or combined
+    if available_app.is_some() && available.is_none() && status == "up_to_date" {
+        status = "app_available".to_string();
+        if message.is_none() {
+            message = Some(format!(
+                "发现新 App 版本 {}（当前 {}）。",
+                available_app.as_ref().map(|a| &a.latest_version).unwrap_or(&"".to_string()),
+                running_app_version
+            ));
+        }
+    }
+
     Ok(UpdateCheckResult {
         status,
         current_content_version: current,
         available_content: available,
+        available_app,
         message,
         checked_at_secs,
     })
@@ -1075,6 +1100,208 @@ pub fn save_update_settings(app: &AppHandle, update: UpdateConfig) -> Result<cra
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
     })
+}
+
+fn current_platform_key() -> &'static str {
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        "windows-x86_64"
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        "linux-x86_64"
+    }
+    #[cfg(not(any(
+        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "x86_64"),
+    )))]
+    {
+        "unknown"
+    }
+}
+
+pub async fn download_app_installer(
+    app: &AppHandle,
+    app_info: &crate::models::AppUpdateInfo,
+) -> Result<PathBuf, String> {
+    let platform_key = current_platform_key();
+    let asset = app_info
+        .platforms
+        .get(platform_key)
+        .ok_or_else(|| format!("当前平台 {} 没有可用的安装包", platform_key))?;
+
+    let client = build_http_client()?;
+    let config = config::load_config(app)?;
+    let access_token = config
+        .update
+        .access_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let downloads = downloads_dir(app)?;
+    fs::create_dir_all(&downloads).map_err(|error| error.to_string())?;
+
+    let ext = match platform_key {
+        "windows-x86_64" => ".exe",
+        "linux-x86_64" => ".deb",
+        _ => "",
+    };
+    let filename = format!(
+        "Accounting-Copilot-{}-{}{}",
+        app_info.latest_version, platform_key, ext
+    );
+    let destination = downloads.join(&filename);
+
+    // Build download future: GitHub release URL + GitHub API (public) racing
+    let parsed_release = parse_release_download_url(&asset.url);
+    let alt_url = asset.url_alt.clone().filter(|u| !u.trim().is_empty());
+
+    let mut response = if let Some((owner, repo, tag, asset_name)) = parsed_release.as_ref() {
+        let owner = owner.clone();
+        let repo = repo.clone();
+        let tag = tag.clone();
+        let asset_name = asset_name.clone();
+        let direct_url = asset.url.clone();
+        let token_copy = access_token;
+
+        let github_fut = async {
+            let api_fut = download_release_asset_via_github_api_public(
+                &client, &owner, &repo, &tag, &asset_name,
+            );
+            let direct_fut = async {
+                authorized_get(&client, &direct_url, token_copy)
+                    .send()
+                    .await
+                    .map_err(|error| network_error_hint("下载安装包失败", &error))
+            };
+
+            futures_util::pin_mut!(api_fut);
+            futures_util::pin_mut!(direct_fut);
+
+            match futures_util::future::select(api_fut, direct_fut).await {
+                futures_util::future::Either::Left((Ok(resp), _)) => Ok(resp),
+                futures_util::future::Either::Right((Ok(resp), _)) => Ok(resp),
+                futures_util::future::Either::Left((Err(api_err), direct_fut)) => {
+                    match direct_fut.await {
+                        Ok(resp) if resp.status().is_success() => Ok(resp),
+                        Ok(resp) => Err(format!("下载安装包失败: {}", resp.status())),
+                        Err(direct_err) => Err(format!(
+                            "下载安装包失败。GitHub API 错误: {api_err}；直接下载错误: {direct_err}"
+                        )),
+                    }
+                }
+                futures_util::future::Either::Right((Err(direct_err), api_fut)) => {
+                    match api_fut.await {
+                        Ok(resp) => Ok(resp),
+                        Err(api_err) => Err(format!(
+                            "下载安装包失败。直接下载错误: {direct_err}；GitHub API 错误: {api_err}"
+                        )),
+                    }
+                }
+            }
+        };
+
+        // Race against CDN mirror if available
+        if let Some(alt) = alt_url {
+            let alt_fut = async {
+                authorized_get(&client, &alt, access_token)
+                    .send()
+                    .await
+                    .map_err(|error| network_error_hint("从镜像下载安装包失败", &error))
+            };
+
+            futures_util::pin_mut!(github_fut);
+            futures_util::pin_mut!(alt_fut);
+
+            match futures_util::future::select(github_fut, alt_fut).await {
+                futures_util::future::Either::Left((Ok(resp), _)) => resp,
+                futures_util::future::Either::Right((Ok(resp), _)) => resp,
+                futures_util::future::Either::Left((Err(github_err), alt_fut)) => {
+                    match alt_fut.await {
+                        Ok(resp) => resp,
+                        Err(alt_err) => {
+                            return Err(format!(
+                                "下载安装包失败。GitHub 错误: {github_err}；镜像错误: {alt_err}"
+                            ));
+                        }
+                    }
+                }
+                futures_util::future::Either::Right((Err(alt_err), github_fut)) => {
+                    match github_fut.await {
+                        Ok(resp) => resp,
+                        Err(github_err) => {
+                            return Err(format!(
+                                "下载安装包失败。镜像错误: {alt_err}；GitHub 错误: {github_err}"
+                            ));
+                        }
+                    }
+                }
+            }
+        } else {
+            github_fut.await?
+        }
+    } else if let Some(alt) = alt_url {
+        // Non-GitHub URL: race primary vs alt
+        let primary_fut = async {
+            authorized_get(&client, &asset.url, access_token)
+                .send()
+                .await
+                .map_err(|error| network_error_hint("下载安装包失败", &error))
+        };
+        let alt_fut = async {
+            authorized_get(&client, &alt, access_token)
+                .send()
+                .await
+                .map_err(|error| network_error_hint("从镜像下载安装包失败", &error))
+        };
+
+        futures_util::pin_mut!(primary_fut);
+        futures_util::pin_mut!(alt_fut);
+
+        match futures_util::future::select(primary_fut, alt_fut).await {
+            futures_util::future::Either::Left((Ok(resp), _)) => resp,
+            futures_util::future::Either::Right((Ok(resp), _)) => resp,
+            futures_util::future::Either::Left((Err(primary_err), alt_fut)) => {
+                match alt_fut.await {
+                    Ok(resp) => resp,
+                    Err(alt_err) => {
+                        return Err(format!(
+                            "下载安装包失败。主 URL 错误: {primary_err}；镜像错误: {alt_err}"
+                        ));
+                    }
+                }
+            }
+            futures_util::future::Either::Right((Err(alt_err), primary_fut)) => {
+                match primary_fut.await {
+                    Ok(resp) => resp,
+                    Err(primary_err) => {
+                        return Err(format!(
+                            "下载安装包失败。镜像错误: {alt_err}；主 URL 错误: {primary_err}"
+                        ));
+                    }
+                }
+            }
+        }
+    } else {
+        authorized_get(&client, &asset.url, access_token)
+            .send()
+            .await
+            .map_err(|error| network_error_hint("下载安装包失败", &error))?
+    };
+
+    if !response.status().is_success() {
+        return Err(format!("下载安装包失败: {}", response.status()));
+    }
+
+    let mut file = File::create(&destination).map_err(|error| error.to_string())?;
+    let mut stream = std::pin::pin!(response.bytes_stream());
+    while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
+        let chunk = chunk.map_err(|error| format!("读取下载内容失败: {error}"))?;
+        file.write_all(&chunk).map_err(|error| error.to_string())?;
+    }
+
+    Ok(destination)
 }
 
 #[cfg(test)]

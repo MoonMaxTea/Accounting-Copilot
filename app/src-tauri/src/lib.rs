@@ -58,6 +58,7 @@ pub fn run() {
             commands::get_app_version,
             commands::check_content_updates,
             commands::download_and_apply_content_update,
+            commands::download_and_apply_app_update,
             commands::save_update_config,
             commands::paragraphs_index_loaded,
         ])

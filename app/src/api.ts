@@ -261,3 +261,7 @@ export function downloadAndApplyContentUpdate(
 export function saveUpdateConfig(update: UpdateConfig): Promise<AppConfigResponse> {
   return tauriInvoke<AppConfigResponse>("save_update_config", { update });
 }
+
+export function downloadAppUpdate(): Promise<string> {
+  return tauriInvoke<string>("download_and_apply_app_update");
+}
