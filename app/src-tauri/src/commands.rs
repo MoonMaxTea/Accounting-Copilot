@@ -763,6 +763,31 @@ pub fn save_update_config(
 }
 
 #[tauri::command]
+pub async fn download_and_apply_app_update(app: AppHandle) -> Result<String, String> {
+    let settings = config::load_config(&app)?;
+    let access_token = settings
+        .update
+        .access_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let manifest = update::fetch_manifest(
+        &settings.update.manifest_url,
+        &settings.update.manifest_url_alt,
+        access_token,
+    )
+    .await?;
+
+    let app_info = manifest
+        .app
+        .ok_or("更新清单中没有 App 版本信息".to_string())?;
+
+    let destination = update::download_app_installer(&app, &app_info).await?;
+    Ok(destination.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn paragraphs_index_loaded(app: AppHandle) -> Result<usize, String> {
     let dir = content_dir(&app)?;
     Ok(count_paragraphs(&dir)?)

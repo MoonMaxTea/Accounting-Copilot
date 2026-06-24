@@ -33,6 +33,7 @@ manifest.content = {
   latest_version: version,
   release_tag: tag,
   pack_url: `https://github.com/${repo}/releases/download/${tag}/standards-pack-${version}.zip`,
+  pack_url_alt: `https://cdn.jsdelivr.net/gh/${repo}@main/updates/packs/standards-pack-latest.zip`,
   pack_sha256: sha256,
   pack_size_bytes: size,
   min_app_version: "0.1.0",

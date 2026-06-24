@@ -122,11 +122,30 @@ pub struct ContentUpdateInfo {
     pub vault_commit: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppPlatformAsset {
+    pub url: String,
+    #[serde(default)]
+    pub url_alt: Option<String>,
+    #[serde(default)]
+    pub signature: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppUpdateInfo {
+    pub latest_version: String,
+    pub release_tag: String,
+    pub platforms: std::collections::HashMap<String, AppPlatformAsset>,
+    #[serde(default)]
+    pub release_notes: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateCheckResult {
     pub status: String,
     pub current_content_version: Option<String>,
     pub available_content: Option<ContentUpdateInfo>,
+    pub available_app: Option<AppUpdateInfo>,
     pub message: Option<String>,
     pub checked_at_secs: u64,
 }

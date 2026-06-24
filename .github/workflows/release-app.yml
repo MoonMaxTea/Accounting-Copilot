@@ -49,6 +49,14 @@ jobs:
             app/src-tauri/target/release/bundle/deb/*.deb
             app/src-tauri/target/release/bundle/appimage/*.AppImage
 
+      - name: Upload Linux installer for CDN mirror
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: |
+            app/src-tauri/target/release/bundle/deb/*.deb
+            app/src-tauri/target/release/bundle/appimage/*.AppImage
+
   build-windows:
     runs-on: windows-latest
     permissions:
@@ -88,3 +96,61 @@ jobs:
           files: |
             app/src-tauri/target/release/bundle/nsis/*-setup.exe
             app/src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Upload Windows installer for CDN mirror
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            app/src-tauri/target/release/bundle/nsis/*-setup.exe
+            app/src-tauri/target/release/bundle/msi/*.msi
+
+  update-cdn-mirror:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: app/src-tauri/target/release/bundle/nsis/
+
+      - name: Download Linux installer
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-installer
+          path: app/src-tauri/target/release/bundle/deb/
+
+      - name: Commit installers and update app manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          TAG="${{ github.ref_name }}"
+          mkdir -p updates/installers
+
+          # Windows
+          cp app/src-tauri/target/release/bundle/nsis/*-setup.exe updates/installers/windows-x86_64-latest.exe || true
+
+          # Linux
+          cp app/src-tauri/target/release/bundle/deb/*.deb updates/installers/linux-x86_64-latest.deb || true
+
+          # Update manifest
+          node scripts/update-app-manifest.mjs --version "$TAG" --tag "$TAG"
+
+          git add updates/installers/ updates/manifest.json
+          git diff --cached --quiet || git commit -m "chore: update app CDN mirror and manifest for $TAG"
+          git push

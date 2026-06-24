@@ -80,3 +80,13 @@ jobs:
           git add updates/manifest.json
           git diff --cached --quiet || git commit -m "chore: update content manifest to ${{ steps.build.outputs.version }}"
           git push
+
+      - name: Commit pack ZIP for CDN mirror
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p updates/packs
+          cp "build/standards-pack-${{ steps.build.outputs.version }}.zip" updates/packs/standards-pack-latest.zip
+          git add updates/packs/standards-pack-latest.zip
+          git diff --cached --quiet || git commit -m "chore: update pack CDN mirror to ${{ steps.build.outputs.version }}"
+          git push

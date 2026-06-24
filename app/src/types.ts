@@ -123,10 +123,24 @@ export interface ContentDownloadProgress {
   message: string | null;
 }
 
+export interface AppPlatformAsset {
+  url: string;
+  url_alt: string | null;
+  signature: string | null;
+}
+
+export interface AppUpdateInfo {
+  latest_version: string;
+  release_tag: string;
+  platforms: Record<string, AppPlatformAsset>;
+  release_notes: string | null;
+}
+
 export interface UpdateCheckResult {
-  status: "up_to_date" | "content_available" | "error" | string;
+  status: "up_to_date" | "content_available" | "app_available" | "error" | string;
   current_content_version: string | null;
   available_content: ContentUpdateInfo | null;
+  available_app: AppUpdateInfo | null;
   message: string | null;
   checked_at_secs: number;
 }
