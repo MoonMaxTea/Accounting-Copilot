@@ -1,5 +1,33 @@
 # Release notes
 
+## app-v0.1.18 (2026-06-24)
+
+**Tag:** [`app-v0.1.18`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.18)
+
+### Summary
+
+Design system overhaul (single AppBar, Settings layout, responsive workbench/standards) and release CDN mirror CI fix.
+
+### UI / UX
+
+- **Scheme A AppBar:** Merged title bar and main navigation into one 40px row; Settings is a first-class tab with `aria-current`.
+- **Design tokens:** Unified primary button (`brand-navy`), radius scale, success banner tokens, citation link colors with dark-mode support.
+- **Settings:** Left-nav layout on desktop (Updates / Projects / AI); version metadata moved to footer.
+- **Standards:** List selection uses left accent bar instead of full accent fill; mobile list/detail panes below 1024px.
+- **Workbench:** Narrow-screen segment control (Files / Note / Panel); fixed-width side panel on desktop.
+
+### Accessibility
+
+- Dialog: Escape to close, initial focus, `aria-labelledby`.
+- SearchBar: combobox keyboard navigation (arrow keys, Enter, Escape).
+- Toast: `aria-live` announcements.
+
+### CI
+
+- **CDN mirror:** Fix `upload-artifact` path handling and `git push origin HEAD:main` on tag-triggered releases.
+
+---
+
 ## app-v0.1.15 (2026-06-24)
 
 **Tag:** [`app-v0.1.15`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.15)
