@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-24T01:39:25.885Z",
+  "generated_at": "2026-06-24T07:12:20.123Z",
   "content": {
     "latest_version": "2026.06.24",
     "release_tag": "content-2026.06.24",
     "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.24/standards-pack-2026.06.24.zip",
-    "pack_sha256": "854a9dfe32274ed423c5e77e616c7528ad3fde445292a70561d63b9d4767b5b5",
-    "pack_size_bytes": 7061958,
+    "pack_sha256": "ce6a479a73ade85293d6ac4f89cc8dd26e6dfe206b4291c1cfa0e7d7656b5bc0",
+    "pack_size_bytes": 16993073,
     "min_app_version": "0.1.0",
     "release_notes": "- Content pack 2026.06.24\n- Built by CI",
     "vault_commit": null
