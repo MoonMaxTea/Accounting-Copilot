@@ -13,7 +13,7 @@ src-tauri/target/
 # Content pack build artifacts
 build/
 .output/
-standards-pack-*.zip
+/standards-pack-*.zip
 
 # Vault clone (pack-builder, repo root only)
 /vault/
