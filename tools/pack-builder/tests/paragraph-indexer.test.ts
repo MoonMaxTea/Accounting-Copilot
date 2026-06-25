@@ -45,4 +45,55 @@ describe('indexParagraphs', () => {
 
     expect(entries.some((entry) => entry.paragraph_normalized === '7')).toBe(true);
   });
+
+  it('extracts IFRS bold-number paragraphs (new format)', () => {
+    const content = [
+      '## Objective',
+      '',
+      '**1.** This Standard sets out the principles for the recognition.',
+      '',
+      '**2.** An entity shall consider the terms and conditions of contracts.',
+      '',
+      '## Scope',
+      '',
+      '**3.** An entity shall apply this Standard to all leases.',
+    ].join('\n');
+
+    const entries = indexParagraphs({
+      standardId: 'IFRS 16',
+      packPath: 'current/IFRS/x.md',
+      content,
+      status: 'current',
+    });
+
+    expect(entries.some((entry) => entry.paragraph === '1')).toBe(true);
+    expect(entries.some((entry) => entry.paragraph === '2')).toBe(true);
+    expect(entries.some((entry) => entry.paragraph === '3')).toBe(true);
+  });
+
+  it('extracts IFRS bold-number appendix paragraphs with letter suffixes', () => {
+    const content = [
+      '## Appendix B',
+      '',
+      '**B1.** A lessee shall apply this guidance.',
+      '',
+      '## Appendix C',
+      '',
+      '**C20E.** Transition for rent concessions.',
+      '**C20BA.** First multi-letter suffix.',
+      '**C20BB.** Second multi-letter suffix.',
+    ].join('\n');
+
+    const entries = indexParagraphs({
+      standardId: 'IFRS 16',
+      packPath: 'current/IFRS/x.md',
+      content,
+      status: 'current',
+    });
+
+    expect(entries.some((entry) => entry.paragraph === 'B1')).toBe(true);
+    expect(entries.some((entry) => entry.paragraph === 'C20E')).toBe(true);
+    expect(entries.some((entry) => entry.paragraph === 'C20BA')).toBe(true);
+    expect(entries.some((entry) => entry.paragraph === 'C20BB')).toBe(true);
+  });
 });

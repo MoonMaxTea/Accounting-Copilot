@@ -1,6 +1,7 @@
 import type { ParagraphEntry, Status } from '@asd/shared-types';
 
 const IFRS_IAS_HEADING_RE = /^(?:#{1,6}\s*)?(?:Paragraph|§)\s*(\d+(?:[–-]\d+)?)/gim;
+const IFRS_IAS_BOLD_PARAGRAPH_RE = /^\*\*([A-Z]?\d+[A-Z]*(?:[–-]\d+[A-Z]*)?)\.\*\*/gim;
 const ASC_CODIFICATION_RE = /\b(\d{3}-\d{2}-\d{2}-\d+)\b/g;
 const TOC_LINE_RE = /^([A-Za-z][^\n\d]{2,80}?)\s+(\d{1,3}[A-Za-z]?)\s*$/gm;
 
@@ -92,6 +93,16 @@ export function indexParagraphs(options: IndexParagraphsOptions): ParagraphEntry
   const { content } = options;
 
   for (const match of content.matchAll(IFRS_IAS_HEADING_RE)) {
+    const paragraph = match[1];
+    if (!paragraph) {
+      continue;
+    }
+    const charStart = match.index ?? 0;
+    const charEnd = charStart + match[0].length;
+    pushEntry(entries, seen, options, paragraph, charStart, charEnd);
+  }
+
+  for (const match of content.matchAll(IFRS_IAS_BOLD_PARAGRAPH_RE)) {
     const paragraph = match[1];
     if (!paragraph) {
       continue;

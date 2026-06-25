@@ -41,7 +41,7 @@ pub fn parse_citation(raw: &str) -> Option<(String, String)> {
     let text = raw.trim();
 
     let ifrs_ias = Regex::new(
-        r"(?i)(IFRS|IAS)\s+(\d+[A-Za-z]?)\s*(?:§|Paragraph)\s*(\d+(?:[–-]\d+)?)",
+        r"(?i)(IFRS|IAS)\s+(\d+[A-Za-z]?)\s*(?:§|Paragraph)\s*([A-Z]?\d+[A-Z]*(?:[–-]\d+[A-Z]*)?)",
     )
     .ok()?;
     if let Some(caps) = ifrs_ias.captures(text) {
@@ -269,10 +269,28 @@ fn resolve_standard_fallback(
 }
 
 fn find_paragraph_in_body(body: &str, paragraph: &str) -> Option<(u64, u64, String)> {
+    // Step 1: bold-number format (new IFRS: **N.**, **B1.**, **C20BA.**)
+    let bold_heading = Regex::new(&format!(
+        r"(?im)^\*\*{}\.\*\*",
+        regex::escape(paragraph)
+    ))
+    .ok()?;
+    if let Some(matched) = bold_heading.find(body) {
+        let start = matched.start() as u64;
+        let end = body[matched.start()..]
+            .find("\n\n")
+            .map(|offset| matched.start() as u64 + offset as u64)
+            .unwrap_or((matched.end() + 120).min(body.len()) as u64);
+        let snippet = snippet_from(body, start as usize);
+        return Some((start, end, snippet));
+    }
+
+    // Step 2: TOC-based lookup (old-format IFRS with CONTENTS table)
     if let Some(found) = find_paragraph_via_toc(body, paragraph) {
         return Some(found);
     }
 
+    // Step 3: Paragraph|§ heading (old-format IFRS)
     let heading = Regex::new(&format!(
         r"(?im)^(?:Paragraph|§)\s*{}\b",
         regex::escape(paragraph)
@@ -328,7 +346,7 @@ fn snippet_from(body: &str, start: usize) -> String {
 pub fn scan_citations(content: &str) -> Vec<String> {
     let mut found = Vec::new();
     let patterns = [
-        Regex::new(r"(?i)(IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*\d+(?:[–-]\d+)?").unwrap(),
+        Regex::new(r"(?i)(IFRS|IAS)\s+\d+[A-Za-z]?\s*(?:§|Paragraph)\s*[A-Z]?\d+[A-Z]*(?:[–-]\d+[A-Z]*)?").unwrap(),
         Regex::new(r"(?i)ASC\s+(?:\d+\s*(?:§|Paragraph)?\s*)?\d{3}-\d{2}-\d{2}-\d+").unwrap(),
         // Also match bare ASC topic references (e.g. "ASC 842")
         Regex::new(r"(?i)ASC\s+\d{3}\b").unwrap(),
@@ -552,5 +570,54 @@ mod tests {
         // Should fallback to the only entry (amendment), rather than return None
         assert!(resolved.resolved);
         assert!(resolved.paragraph_resolved);
+    }
+
+    #[test]
+    fn resolves_new_format_ifrs_via_bold_number_body_search() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(temp.path().join("index")).expect("mkdir");
+        fs::create_dir_all(temp.path().join("current/IFRS")).expect("mkdir standards");
+        fs::write(temp.path().join("index/paragraphs.json"), r#"{"entries":[]}"#)
+            .expect("write paragraphs");
+        fs::write(
+            temp.path().join("registry.json"),
+            r#"{"schema_version":1,"content_version":"test","standards":[{"id":"IFRS 16","title":"Leases","framework":"IFRS","status":"current","official_url":"https://example.com","pack_path":"current/IFRS/ifrs16.md"}]}"#,
+        )
+        .expect("write registry");
+        fs::write(
+            temp.path().join("current/IFRS/ifrs16.md"),
+            "## Objective\n\n**26.** At the commencement date, a lessee shall measure the lease liability at the present value of the lease payments.\n\n**27.** At the commencement date, the lease payments comprise various components.",
+        )
+        .expect("write body");
+
+        let resolved = resolve_citation(temp.path(), "IFRS 16 §26")
+            .expect("resolve")
+            .expect("target");
+        assert_eq!(resolved.standard_id, "IFRS 16");
+        assert!(resolved.snippet_en.contains("lease liability"));
+        assert!(resolved.paragraph_resolved);
+    }
+
+    #[test]
+    fn parses_ifrs_appendix_paragraphs() {
+        let parsed = parse_citation("IFRS 16 §B1").expect("parsed");
+        assert_eq!(parsed.0, "IFRS 16");
+        assert_eq!(parsed.1, "B1");
+
+        let parsed = parse_citation("IFRS 16 §C20BA").expect("parsed");
+        assert_eq!(parsed.0, "IFRS 16");
+        assert_eq!(parsed.1, "C20BA");
+
+        let parsed = parse_citation("IFRS 16 §46A").expect("parsed");
+        assert_eq!(parsed.0, "IFRS 16");
+        assert_eq!(parsed.1, "46A");
+    }
+
+    #[test]
+    fn scans_appendix_citations() {
+        let content = "See IFRS 16 §C20BA for transition and IFRS 16 §B1 for application guidance.";
+        let citations = scan_citations(content);
+        assert!(citations.iter().any(|c| c.contains("C20BA")));
+        assert!(citations.iter().any(|c| c.contains("B1")));
     }
 }
