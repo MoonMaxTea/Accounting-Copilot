@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-24T07:12:20.123Z",
+  "generated_at": "2026-06-25T02:51:37.252Z",
   "content": {
-    "latest_version": "2026.06.24",
-    "release_tag": "content-2026.06.24",
-    "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.24/standards-pack-2026.06.24.zip",
-    "pack_url_alt": null,
-    "pack_sha256": "ce6a479a73ade85293d6ac4f89cc8dd26e6dfe206b4291c1cfa0e7d7656b5bc0",
-    "pack_size_bytes": 16993073,
+    "latest_version": "2026.06.25",
+    "release_tag": "content-2026.06.25",
+    "pack_url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/content-2026.06.25/standards-pack-2026.06.25.zip",
+    "pack_url_alt": "https://cdn.jsdelivr.net/gh/MoonMaxTea/Accounting-Copilot@main/updates/packs/standards-pack-latest.zip",
+    "pack_sha256": "7af72722b16aeb7d064704c3b2142e9ae97b0348793135e9273c825909af7029",
+    "pack_size_bytes": 16993143,
     "min_app_version": "0.1.0",
-    "release_notes": "- Content pack 2026.06.24\n- Built by CI",
+    "release_notes": "- Content pack 2026.06.25\n- Built by CI",
     "vault_commit": null
   },
   "app": {
