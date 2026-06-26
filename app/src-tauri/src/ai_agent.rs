@@ -713,11 +713,12 @@ pub fn execute_pack_tool(
                             .next()
                             .unwrap_or(citation)
                             .trim();
-                            let hint = paragraph_format_hint(citation);
-                            format!(
-                                "未找到段落「{citation}」。{hint} 请先调用 list_standard_paragraphs \
-                                 查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
-                            )
+                        let hint = paragraph_format_hint(citation);
+                        format!(
+                            "未找到段落「{citation}」。{hint} 请先调用 list_standard_paragraphs \
+                             查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
+                        )
+                    })?
             };
             if target.status == "legacy" && !allow_legacy {
                 return Err(format!(
