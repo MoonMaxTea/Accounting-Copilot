@@ -200,6 +200,7 @@ pub fn log_continue_pre_ai(
             platform: Some(debug_platform()),
             detail: detail.map(str::to_string),
             run_id: run_id.map(str::to_string),
+            ..Default::default()
         },
     );
 }
