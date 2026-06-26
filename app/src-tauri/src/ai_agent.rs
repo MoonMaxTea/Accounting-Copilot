@@ -1131,6 +1131,11 @@ pub async fn run_standards_agent(
     let mut final_raw = String::new();
     let mut phase = AgentPhase::Retrieving;
     let mut recent_tool_calls: Vec<(String, String)> = Vec::new();
+    // P2-3: agent metrics counters
+    let mut tool_rounds: u32 = 0;
+    let mut tools_called_list: Vec<String> = Vec::new();
+    let mut synthesis_triggered: bool = false;
+    let mut early_stop: bool = false;
 
     let log_chat_error = |phase: &str, messages: &[ApiChatMessage], error: String| {
         append_ai_debug_event(
@@ -1153,6 +1158,7 @@ pub async fn run_standards_agent(
     };
 
     for _round in 0..MAX_TOOL_ROUNDS {
+        tool_rounds = _round as u32 + 1;
         let assistant = call_chat_with_tools(ai, &api_messages, &tools)
             .await
             .map_err(|error| log_chat_error("chat", &api_messages, error))?;
@@ -1231,6 +1237,9 @@ pub async fn run_standards_agent(
                         let overflow = recent_tool_calls.len() - TOOL_STORM_WINDOW;
                         recent_tool_calls.drain(0..overflow);
                     }
+                    if !tools_called_list.contains(&tool_name) {
+                        tools_called_list.push(tool_name.clone());
+                    }
                     match execute_pack_tool(
                         content_dir,
                         ai.allow_legacy_citations,
@@ -1279,6 +1288,7 @@ pub async fn run_standards_agent(
 
     if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
         phase = AgentPhase::Synthesizing;
+        synthesis_triggered = true;
         debug_assert_eq!(phase, AgentPhase::Synthesizing);
         append_ai_debug_event(
             app_handle,
@@ -1369,6 +1379,10 @@ pub async fn run_standards_agent(
             completion_chars: Some(final_raw.len() as u64),
             tool_name: None,
             error_class: None,
+            tool_rounds: Some(tool_rounds),
+            tools_called: Some(tools_called_list.join(",")),
+            synthesis_triggered: Some(synthesis_triggered),
+            early_stop: Some(early_stop),
             ..Default::default()
         },
     );
