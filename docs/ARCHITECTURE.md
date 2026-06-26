@@ -2,7 +2,7 @@
 
 Concise map for developers and agents. Full product spec: [DESIGN.md](./DESIGN.md).
 
-**Current app release:** [`app-v0.1.17`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.17) — see [RELEASE-NOTES.md](./RELEASE-NOTES.md).
+**Current app release:** [`app-v0.1.19`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.19) — see [RELEASE-NOTES.md](./RELEASE-NOTES.md).
 
 ## System context
 

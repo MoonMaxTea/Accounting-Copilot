@@ -1,5 +1,46 @@
 # Release notes
 
+## app-v0.1.19 (2026-06-26)
+
+**Tag:** [`app-v0.1.19`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.19)
+
+### Summary
+
+AI pipeline optimization — 12 improvements across performance, prompt quality, tool guidance, and paragraph resolution. No UI changes.
+
+### Performance
+
+- **P0-1: Paragraph cache** — `load_paragraphs` once per agent run via `Arc<Vec<ParagraphRecord>>`, passed to `execute_pack_tool` instead of re-reading disk per tool call.
+- **P0-2: Synthesis context trim** — `trim_synthesis_messages` drops empty/nudge tool blocks before the final synthesis call to reduce context bloat.
+
+### Prompt overhaul
+
+- **Compressed persona:** 20-line partner persona condensed to 3 lines of core actionable value.
+- **Chinese writing quality standard:** Concrete do/don't examples; demands subject+judgment per sentence, specific paragraph numbers, no vague hedging.
+- **Few-shot example:** Full reference output structure (`<<<PROJECT_NAME>>>` / `<<<MARKDOWN>>>`) demonstrating mandatory chapter structure.
+- **Mandatory chapter template:** YAML frontmatter → TL;DR → A-准则分析 → B-实务决策 → C-结论 → 日志. Chapter titles must match exactly.
+
+### Tool guidance
+
+- **P1-10: Precise tool workflow** — 6-step ordered workflow in system prompt; forbids common mistakes (guessing paragraphs, endless search without reading).
+- **P3-2: Enhanced `get_pack_paragraph` error** — `paragraph_format_hint` provides correct citation format sample when lookup fails.
+
+### Continue mode
+
+- **P1-9: 8 precise rules** — Topic-switch detection, chapter preservation, new subsection insertion, deep-dive vs. correction handling, term clarification shortcut.
+
+### Citation resolution (IFRS new format)
+
+- **Bold-number paragraph lookup:** `find_paragraph_in_body` now matches `**N.**` / `**B1.**` / `**C20BA.**` headings (new IFRS format) before falling back to TOC and `Paragraph §` patterns.
+- **IFRS/IAS regex extended:** `parse_citation` and `scan_citations` now capture appendix paragraphs (e.g., `IFRS 16 §B1`, `§C20BA`, `§46A`).
+- **3 new tests:** `resolves_new_format_ifrs_via_bold_number_body_search`, `parses_ifrs_appendix_paragraphs`, `scans_appendix_citations`.
+
+### Observability
+
+- **P2-3: Agent metrics** — `AiDebugEvent` now records `tool_rounds`, `tools_called`, `synthesis_triggered`, `early_stop` in `ai-debug.log`.
+
+---
+
 ## app-v0.1.18 (2026-06-24)
 
 **Tag:** [`app-v0.1.18`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.18)
