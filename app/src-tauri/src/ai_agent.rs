@@ -1316,7 +1316,80 @@ pub async fn run_standards_agent(
         api_messages.push(to_api_message(&nudge));
     }
 
-    if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
+/// Trim api_messages before synthesis nudge to reduce context bloat.
+/// Keeps: system prompt, user question, and tool-call blocks with substantive results.
+/// Drops: empty/error tool blocks and static nudge messages.
+fn trim_synthesis_messages(messages: &[ApiChatMessage]) -> Vec<ApiChatMessage> {
+    if messages.len() < 5 {
+        return messages.to_vec();
+    }
+
+    let mut out: Vec<ApiChatMessage> = Vec::new();
+    // Always keep system prompt (index 0) and original user question (index 1)
+    out.push(messages[0].clone());
+    if messages.len() > 1 {
+        out.push(messages[1].clone());
+    }
+
+    // Process remaining messages as tool-call blocks
+    let mut i = 2usize;
+    while i < messages.len() {
+        let msg = &messages[i];
+
+        // Skip static nudge messages
+        if msg.role == "user"
+            && msg
+                .content
+                .as_ref()
+                .map(|c| c.contains("请继续调用工具补全"))
+                .unwrap_or(false)
+        {
+            i += 1;
+            continue;
+        }
+
+        // If this is an assistant message with tool_calls, find its tool result block
+        if msg.role == "assistant" && msg.tool_calls.as_ref().map(|tc| !tc.is_empty()).unwrap_or(false) {
+            let tool_call_count = msg.tool_calls.as_ref().unwrap().len();
+            let block_end = i + 1 + tool_call_count;
+
+            // Check if any tool result in this block is substantive
+            let has_substantive = (i + 1..block_end.min(messages.len())).any(|j| {
+                let tool_msg = &messages[j];
+                tool_msg.role == "tool"
+                    && tool_msg.name.as_deref() == Some("list_standard_paragraphs")
+                    || tool_msg
+                        .content
+                        .as_ref()
+                        .map(|c| {
+                            // Count snippet_en content as substantive if > 50 chars
+                            c.contains("\"snippet_en\"")
+                                && c.matches("\"snippet_en\"").count() > 0
+                                && c.len() > 200
+                        })
+                        .unwrap_or(false)
+            });
+
+            if has_substantive {
+                out.push(msg.clone());
+                for j in i + 1..block_end.min(messages.len()) {
+                    out.push(messages[j].clone());
+                }
+            }
+            i = block_end;
+        } else {
+            // Non-tool-call messages: skip (they're usually text nudge responses)
+            i += 1;
+        }
+    }
+
+    // Safety: if we trimmed too aggressively, fall back to full messages
+    if out.len() < 5 {
+        messages.to_vec()
+    } else {
+        out
+    }
+}
         phase = AgentPhase::Synthesizing;
         synthesis_triggered = true;
         debug_assert_eq!(phase, AgentPhase::Synthesizing);
@@ -1359,9 +1432,12 @@ pub async fn run_standards_agent(
         };
         api_messages.push(to_api_message(&synthesis_user));
 
+        // P0-2: trim context before synthesis to reduce bloat
+        let synthesis_messages = trim_synthesis_messages(&api_messages);
+
         // Use tool_choice: "none" rather than empty tools array —
         // some API providers reject mixed tool-call history without tool defs.
-        let assistant = call_chat_with_tools_synthesis(ai, &api_messages, &tools)
+        let assistant = call_chat_with_tools_synthesis(ai, &synthesis_messages, &tools)
             .await
             .map_err(|error| log_chat_error("synthesis", &api_messages, error))?;
         api_messages.push(assistant.clone());
