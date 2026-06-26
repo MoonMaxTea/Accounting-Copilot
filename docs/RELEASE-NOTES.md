@@ -1,5 +1,27 @@
 # Release notes
 
+## app-v0.1.20 (2026-06-26)
+
+**Tag:** [`app-v0.1.20`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.20)
+
+### Summary
+
+AI pipeline optimization (Round 2) — expanded chapter structure, quantitative few-shot example, refined tool stop rule, and `standards` field constraint. No UI changes.
+
+### Prompt refinement
+
+- **Chapter expansion:** Added `D-计算演示` (mandatory quantitative chapter with full worked example) and `E-附注模板` (optional disclosure template). `B-实务决策` expanded with "准则更新" and "实务陷阱" sub-sections.
+- **Few-shot swap:** Qualitative IFRS 16 lease identification example replaced with complete ASC 260 EPS calculation example covering all mandatory chapters including numerical walkthrough and footnotes template.
+- **`standards` constraint:** Frontmatter `standards` limited to ≤3 primary standards; auxiliary standards from incidental tool results must not be listed.
+- **Tool stop rule:** Rule 5 now requires both (a) sufficient paragraphs retrieved *and* (b) content converted to concrete output (calculation flow or specific rationale) — not just text lookup.
+- **Prompt compression:** Chinese writing quality examples compressed from 2 long paragraphs to a concise Do/Don't pair (~120 chars saved).
+
+### Documentation
+
+- `RELEASE-NOTES.md`, `AGENTS.md`, `completed-work-summary.md` updated with prompt v2 refinement details.
+
+---
+
 ## app-v0.1.19 (2026-06-26)
 
 **Tag:** [`app-v0.1.19`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.19)
@@ -38,16 +60,6 @@ AI pipeline optimization — 12 improvements across performance, prompt quality,
 ### Observability
 
 - **P2-3: Agent metrics** — `AiDebugEvent` now records `tool_rounds`, `tools_called`, `synthesis_triggered`, `early_stop` in `ai-debug.log`.
-
-### Prompt v2 refinement (2026-06-26)
-
-Root cause analysis of v0.1.19 vs v0.1.18 output comparison (ASC 260 EPS calculation) identified several regressions; the following fixes were applied:
-
-- **Chapter structure expansion:** Added `D-计算演示` (mandatory when quantitative, with full worked example), `E-附注模板` (optional disclosure template). `B-实务决策` expanded with "准则更新" and "实务陷阱" sub-sections.
-- **Few-shot replacement:** Qualitative IFRS 16 lease example replaced with complete ASC 260 EPS calculation example covering all mandatory chapters including numerical walkthrough and footnotes template.
-- **`standards` field constraint:** Frontmatter `standards` limited to ≤3 primary standards; auxiliary standards from incidental tool results must not be listed.
-- **Tool stop condition:** Rule 5 now requires *both* (a) sufficient paragraphs retrieved *and* (b) content converted to concrete output (calculation flow or specific rationale) — not just text lookup.
-- **Prompt compression:** Chinese writing quality examples compressed from 2 long paragraphs to a concise Do/Don't pair (~120 chars saved).
 
 ---
 

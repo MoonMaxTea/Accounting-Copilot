@@ -2,9 +2,9 @@
 
 > All items below are shipped. Original plan/spec documents deleted as stale.
 
-## AI Pipeline Optimization (v0.1.19)
+## AI Pipeline Optimization (v0.1.19–v0.1.20)
 
-12 initial improvements + 4 prompt refinements across performance, prompt quality, tool guidance, and paragraph resolution. See [RELEASE-NOTES.md](../RELEASE-NOTES.md#app-v0119-2026-06-26) for full details.
+12 initial improvements + 4 prompt refinements across performance, prompt quality, tool guidance, and paragraph resolution. See [RELEASE-NOTES.md](../RELEASE-NOTES.md#app-v0120-2026-06-26) for full details.
 
 ### Round 1 — infrastructure + prompt overhaul
 
