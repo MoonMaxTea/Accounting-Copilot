@@ -350,12 +350,25 @@ pub fn build_agent_system_prompt(content_dir: &Path, _allow_legacy: bool) -> Res
          - 准则内容必须通过 search_local_pack / list_standard_paragraphs / get_pack_paragraph 获取\n\
          - 工具未返回的段落不得引用；pack 未覆盖则如实写「当前本地准则库未收录该段落」\n\
          - 禁止凭模型记忆、禁止联网、禁止编造\n\n\
-         ## 工作流程\n\
-         1. 理解客户问题 → 诊断交易实质\n\
-         2. search_local_pack 定位准则\n\
-         3. list_standard_paragraphs 查看段落结构\n\
-         4. get_pack_paragraph 逐个读取关键段落（每次返回数千字符，完整阅读后在脑内精炼）\n\
-         5. 信息足够后输出最终笔记\n\n\
+         ## 工具使用规则\n\
+         
+         你只有三个工具可用。正确使用它们的流程是：\n\
+         
+         1. 先用 search_local_pack 定位准则（1-2 次搜索即可，不要反复搜） → 诊断交易实质\n\
+         2. 对找到的每个准则，用 list_standard_paragraphs 查看可用段落结构\n\
+         3. 用 get_pack_paragraph 读取你判断为最关键的 3-5 个段落\n\
+         4. 如果返回段落编号错误，重新调用，使用 list 中看到的实际编号\n\
+         5. 停止搜索的首要条件：你确信已有信息足以回答客户问题。
+            辅助参考（非强制）：
+            - 通常 3-5 个关键段落即可覆盖一个准则主题
+            - 如果已经读取了足够多的实质性段落，不必继续搜索
+            - 如果信息确实不足，再调用工具补充（最多再调 1-2 次）
+         6. 然后直接输出 final blocks
+         
+         常见错误（禁止）：
+         - 不调 list 就直接 get（猜段落编号）
+         - 一直 search 不读原文（search snippet 不够写分析）
+         - 一个准则读 10+ 段（过度搜索）\n\n\
          ## 输出前自检（补充）\n\
          - [ ] 所有准则引用是否都来自工具返回的内容？"
     ))
@@ -370,7 +383,17 @@ fn build_user_turn(input: &AgentRunInput<'_>) -> String {
     let mut text = match input.mode {
         AgentMode::Create => format!("用户问题：\n{}", input.question.trim()),
         AgentMode::Continue => format!(
-            "用户追问（请更新项目笔记，输出完整新版 Markdown）：\n{}",
+            "用户对以下项目笔记提出追问。请基于追问更新文档：\n\
+             规则：\n\
+             0. 如果追问与原文档主题完全无关（如从租赁跳到收入确认），视为独立新问题——在文档末尾 ## 补充分析 章节追加，保留原文档内容不变\n\
+             1. 保持文档原有章节结构不变（A-准则分析 / B-实务决策 / C-结论 / 日志）\n\
+             2. 如果追问涉及新准则，在 A-准则分析 中新增子节\n\
+             3. 如果追问深化了已有分析，在原子节中补充 TL;DR 或实务含义\n\
+             4. 如果追问推翻或修正了原有结论，用新内容替换旧内容。如果修正涉及结论性判断，在 C-结论 中简要说明修正理由（1 句话）\n\
+             5. 日志节追加本次追问记录\n\
+             6. 输出完整的更新后文档（不是 diff，不是局部修改）\n\
+             7. 如果追问仅为术语澄清，直接在 C-结论 后以 ### 术语澄清 小节补充，不修改 A-准则分析 / B-实务决策 节\n\n\
+             追问内容：\n{}",
             input.question.trim()
         ),
     };
