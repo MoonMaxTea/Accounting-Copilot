@@ -1,7 +1,7 @@
 [package]
 name = "accounting-copilot"
 version = "0.1.19"
-description = "Accounting Copilot â€?IFRS & US GAAP offline standards browser"
+description = "Accounting Copilot ðŸ“‹IFRS & US GAAP offline standards browser"
 authors = ["MoonMaxTea"]
 edition = "2021"
 
