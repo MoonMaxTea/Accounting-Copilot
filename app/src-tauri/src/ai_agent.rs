@@ -655,8 +655,9 @@ pub fn execute_pack_tool(
                         .next()
                         .unwrap_or(citation)
                         .trim();
+                    let hint = paragraph_format_hint(citation);
                     format!(
-                        "未找到段落「{citation}」。请先调用 list_standard_paragraphs \
+                        "未找到段落「{citation}」。{hint} 请先调用 list_standard_paragraphs \
                          查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
                     )
                 })?
@@ -668,11 +669,11 @@ pub fn execute_pack_tool(
                             .next()
                             .unwrap_or(citation)
                             .trim();
-                        format!(
-                            "未找到段落「{citation}」。请先调用 list_standard_paragraphs \
-                             查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
-                        )
-                    })?
+                            let hint = paragraph_format_hint(citation);
+                            format!(
+                                "未找到段落「{citation}」。{hint} 请先调用 list_standard_paragraphs \
+                                 查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
+                            )
             };
             if target.status == "legacy" && !allow_legacy {
                 return Err(format!(
@@ -723,10 +724,14 @@ pub fn execute_pack_tool(
                 .collect();
             let sample_count = 4usize;
             let samples: Vec<_> = if substantive.len() > sample_count {
-                let step = substantive.len() / sample_count;
+                // P3-1: skip first 25% of entries (common header areas), up to 10
+                let skip_start = (substantive.len() / 4).min(10);
+                let available = substantive.len().saturating_sub(skip_start);
+                let step = (available / sample_count).max(1);
                 (0..sample_count)
                     .map(|i| {
-                        let e = substantive[i * step];
+                        let idx = (skip_start + i * step).min(substantive.len() - 1);
+                        let e = substantive[idx];
                         json!({
                             "citation": format!("{} §{}", e.standard_id, e.paragraph),
                             "snippet_en": e.snippet_en,
@@ -1080,6 +1085,19 @@ async fn call_chat_with_tools(
 /// Like call_chat_with_tools but forces tool_choice: "none" so the model
 /// must produce a text response without calling any tools.  Used for the
 /// final synthesis nudge after the agent loop.
+/// Build a format-specific hint for paragraph-not-found errors.
+fn paragraph_format_hint(citation: &str) -> String {
+    let upper = citation.to_uppercase();
+    if upper.starts_with("ASC") {
+        "（ASC 段落格式示例：718-10-25-2）".to_string()
+    } else if upper.starts_with("IFRS") || upper.starts_with("IAS") {
+        let prefix = &citation[..citation.find(' ').unwrap_or(citation.len())];
+        format!("（{prefix} 段落格式示例：{prefix} 16 §7）")
+    } else {
+        "请使用 list_standard_paragraphs 查看实际可用编号，复制粘贴以确保格式准确。".to_string()
+    }
+}
+
 async fn call_chat_with_tools_synthesis(
     ai: &AiConfig,
     messages: &[ApiChatMessage],
