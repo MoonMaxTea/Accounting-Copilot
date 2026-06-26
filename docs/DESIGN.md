@@ -1,6 +1,6 @@
 # 多分类准则桌面 App — 设计说明
 
-> **状态**：设计稿 v1 — **已落地**（当前 App **v0.1.17**，[`app-v0.1.17`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.17)）  
+> **状态**：设计稿 v1 — **已落地**（当前 App **v0.1.19**，[`app-v0.1.19`](https://github.com/MoonMaxTea/Accounting-Copilot/releases/tag/app-v0.1.19)）  
 > **内容源**：[AccoutingStandards-IFRS-USGaap](https://github.com/MoonMaxTea/AccoutingStandards-IFRS-USGaap) 的 `03 - 知识库/`  
 > **实现细节**：见 [ARCHITECTURE.md](./ARCHITECTURE.md)、[RELEASE-NOTES.md](./RELEASE-NOTES.md)、[AGENTS.md](../AGENTS.md)
 
