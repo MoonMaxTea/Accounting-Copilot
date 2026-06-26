@@ -4,7 +4,9 @@
 
 ## AI Pipeline Optimization (v0.1.19)
 
-12 improvements across performance, prompt quality, tool guidance, and paragraph resolution. See [RELEASE-NOTES.md](../RELEASE-NOTES.md#app-v0119-2026-06-26) for full details.
+12 initial improvements + 4 prompt refinements across performance, prompt quality, tool guidance, and paragraph resolution. See [RELEASE-NOTES.md](../RELEASE-NOTES.md#app-v0119-2026-06-26) for full details.
+
+### Round 1 — infrastructure + prompt overhaul
 
 - **P0-1:** Paragraph cache — `load_paragraphs` once per agent run via `Arc`
 - **P0-2:** Synthesis context trim — `trim_synthesis_messages` before final call
@@ -14,6 +16,16 @@
 - **P1-10:** Tool usage — ordered 6-step workflow in system prompt
 - **P1-3/P3-4/P1-7/P1-8/P2-4:** Prompt overhaul — compressed persona, Chinese writing standard, few-shot example, mandatory chapter structure
 - **IFRS new format:** Bold-number paragraph lookup (`**N.**`), appendix paragraph regex (`B1`, `C20BA`), 3 new tests
+
+### Round 2 — prompt refinement (post-release quality fix)
+
+Root cause analysis of v0.1.19 vs v0.1.18 output found regressions (missing numerical examples, duplicate frontmatter, dropped practical tips).
+
+- **Chapter expansion:** Added `D-计算演示` (mandatory quantitative chapter) + `E-附注模板` (optional disclosure template); expanded `B-实务决策` with 准则更新 + 实务陷阱 sub-sections
+- **Few-shot swap:** IFRS 16 qualitative example → complete ASC 260 EPS example (numerical walkthrough + footnotes template)
+- **`standards` constraint:** ≤3 primary standards in frontmatter; auxiliary standards excluded
+- **Tool stop rule:** Now requires both (a) paragraphs ready + (b) content converted to concrete output (not just text lookup)
+- **Prompt compression:** Chinese writing quality Do/Don't examples compressed ~120 chars
 
 ## UX Fixes (v0.1.14 → v0.1.15, commit `e72bd8a`)
 

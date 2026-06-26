@@ -282,6 +282,10 @@ If Send follow-up produces **no new log line**, failure is before Rust (`continu
 
 - Built by `build_agent_system_prompt` (ai_agent.rs) — loads writing spec from content pack
 - Agent runs max 12 tool rounds (`MAX_TOOL_ROUNDS`), then forced synthesis (`tool_choice: "none"`)
+- **Mandatory chapter structure:** YAML frontmatter → TL;DR → A-准则分析 → `D-计算演示` (when quantitative) → B-实务决策 → `E-附注模板` (when disclosure applies) → C-结论 → 日志
+- **Few-shot example:** ASC 260 EPS calculation with complete numerical walkthrough
+- **Tool stop rule:** requires both (a) paragraphs ready + (b) content converted to concrete output
+- **`standards` field:** ≤3 primary standards; auxiliary standards excluded
 
 ### Generation lifecycle
 
