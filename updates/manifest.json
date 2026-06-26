@@ -13,21 +13,21 @@
     "vault_commit": null
   },
   "app": {
-    "latest_version": "0.1.19",
-    "release_tag": "app-v0.1.19",
+    "latest_version": "0.1.20",
+    "release_tag": "app-v0.1.20",
     "platforms": {
       "windows-x86_64": {
-        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v0.1.19/Accounting.Copilot_0.1.19_x64-setup.exe",
+        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v0.1.20/Accounting.Copilot_0.1.20_x64-setup.exe",
         "url_alt": "https://cdn.jsdelivr.net/gh/MoonMaxTea/Accounting-Copilot@main/updates/installers/windows-x86_64-latest.exe",
         "signature": null
       },
       "linux-x86_64": {
-        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v0.1.19/accounting-copilot_0.1.19_amd64.deb",
+        "url": "https://github.com/MoonMaxTea/Accounting-Copilot/releases/download/app-v0.1.20/accounting-copilot_0.1.20_amd64.deb",
         "url_alt": "https://cdn.jsdelivr.net/gh/MoonMaxTea/Accounting-Copilot@main/updates/installers/linux-x86_64-latest.deb",
         "signature": null
       }
     },
-    "release_notes": "- App 0.1.19\n- Built by CI"
+    "release_notes": "- App 0.1.20\n- Built by CI"
   },
   "_comment": "pack_url_alt 可设为国内镜像/代理地址以加速下载。示例见 examples/updates-manifest.example.json"
 }
