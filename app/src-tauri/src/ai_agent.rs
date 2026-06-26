@@ -1130,18 +1130,24 @@ async fn call_chat_with_tools(
 /// must produce a text response without calling any tools.  Used for the
 /// final synthesis nudge after the agent loop.
 /// Build a format-specific hint for paragraph-not-found errors.
+///
+/// Provides framework-specific format examples to help the AI
+/// correct citation format when a paragraph lookup fails.
 fn paragraph_format_hint(citation: &str) -> String {
     let upper = citation.to_uppercase();
     if upper.starts_with("ASC") {
         "（ASC 段落格式示例：718-10-25-2）".to_string()
     } else if upper.starts_with("IFRS") || upper.starts_with("IAS") {
         let prefix = &citation[..citation.find(' ').unwrap_or(citation.len())];
-        format!("（{prefix} 段落格式示例：{prefix} 16 §7）")
+        format!("（{prefix} 段落格式示例：{citation_std_id} §7）", citation_std_id = citation.trim())
     } else {
         "请使用 list_standard_paragraphs 查看实际可用编号，复制粘贴以确保格式准确。".to_string()
     }
 }
 
+/// Call chat with tool_choice: "none" so the model must produce
+/// a text response without calling any tools. Used for the final
+/// synthesis nudge after the agent loop.
 async fn call_chat_with_tools_synthesis(
     ai: &AiConfig,
     messages: &[ApiChatMessage],
@@ -1418,18 +1424,20 @@ fn trim_synthesis_messages(messages: &[ApiChatMessage]) -> Vec<ApiChatMessage> {
             // Check if any tool result in this block is substantive
             let has_substantive = (i + 1..block_end.min(messages.len())).any(|j| {
                 let tool_msg = &messages[j];
-                tool_msg.role == "tool"
-                    && tool_msg.name.as_deref() == Some("list_standard_paragraphs")
-                    || tool_msg
-                        .content
-                        .as_ref()
-                        .map(|c| {
-                            // Count snippet_en content as substantive if > 50 chars
-                            c.contains("\"snippet_en\"")
-                                && c.matches("\"snippet_en\"").count() > 0
-                                && c.len() > 200
-                        })
-                        .unwrap_or(false)
+                if tool_msg.role != "tool" {
+                    return false;
+                }
+                if tool_msg.name.as_deref() == Some("list_standard_paragraphs") {
+                    return true;
+                }
+                tool_msg
+                    .content
+                    .as_ref()
+                    .map(|c| {
+                        (c.contains("snippet_en") || c.contains("snippet"))
+                            && c.len() > 150
+                    })
+                    .unwrap_or(false)
             });
 
             if has_substantive {
@@ -1452,6 +1460,7 @@ fn trim_synthesis_messages(messages: &[ApiChatMessage]) -> Vec<ApiChatMessage> {
         out
     }
 }
+    if final_raw.trim().is_empty() || !response_has_final_blocks(&final_raw) {
         phase = AgentPhase::Synthesizing;
         synthesis_triggered = true;
         debug_assert_eq!(phase, AgentPhase::Synthesizing);
