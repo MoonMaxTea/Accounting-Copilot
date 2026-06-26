@@ -254,14 +254,6 @@ pub struct AiDebugEvent {
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_rounds: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools_called: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub synthesis_triggered: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub early_stop: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
