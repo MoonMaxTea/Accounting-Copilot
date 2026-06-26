@@ -203,6 +203,75 @@ fn resolve_from_index(
     }))
 }
 
+/// Cached variant of resolve_from_index — avoids re-reading paragraphs.json
+/// by accepting pre-loaded entries.  Still reads the standard body file for
+/// extended snippet context.
+pub(crate) fn resolve_from_index_cached(
+    entries: &[ParagraphRecord],
+    content_dir: &Path,
+    citation: &str,
+    standard_id: &str,
+    paragraph: &str,
+) -> Option<CitationTarget> {
+    let normalized = paragraph.split('-').next().unwrap_or(paragraph);
+
+    let matched = entries
+        .iter()
+        .filter(|entry| {
+            entry.standard_id.eq_ignore_ascii_case(standard_id)
+                && entry.paragraph == paragraph
+                && !is_amendment_snippet(&entry.snippet_en)
+        })
+        .max_by_key(|entry| entry.char_start)
+        .or_else(|| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && entry.paragraph == paragraph
+                })
+                .max_by_key(|entry| entry.char_start)
+        })
+        .or_else(|| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && (entry.paragraph_normalized == normalized
+                            || entry.paragraph_normalized == paragraph)
+                        && !is_amendment_snippet(&entry.snippet_en)
+                })
+                .max_by_key(|entry| entry.char_start)
+        })
+        .or_else(|| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.standard_id.eq_ignore_ascii_case(standard_id)
+                        && (entry.paragraph_normalized == normalized
+                            || entry.paragraph_normalized == paragraph)
+                })
+                .max_by_key(|entry| entry.char_start)
+        })?;
+
+    let extended_snippet = read_standard_body(content_dir, &matched.pack_path)
+        .map(|body| slice_utf16(&body, matched.char_start as usize, 4_000))
+        .unwrap_or_else(|_| matched.snippet_en.clone());
+
+    Some(CitationTarget {
+        citation: citation.trim().to_string(),
+        standard_id: matched.standard_id.clone(),
+        paragraph: matched.paragraph.clone(),
+        pack_path: matched.pack_path.clone(),
+        char_start: matched.char_start,
+        char_end: matched.char_end,
+        snippet_en: extended_snippet,
+        status: matched.status.clone(),
+        resolved: true,
+        paragraph_resolved: true,
+    })
+}
+
 fn resolve_via_body_search(
     content_dir: &Path,
     citation: &str,
