@@ -553,6 +553,7 @@ pub fn execute_pack_tool(
     allow_legacy: bool,
     tool_name: &str,
     arguments: &str,
+    cached_entries: Option<&[crate::citations::ParagraphRecord]>,
 ) -> Result<String, String> {
     match tool_name {
         "search_local_pack" => {
@@ -583,7 +584,11 @@ pub fn execute_pack_tool(
             //    FTS5 has standard_id UNINDEXED; this catches exact ID
             //    searches (e.g. "ASC 718") and enriches sparse FTS5 results.
             if results.len() < limit as usize {
-                let entries = load_paragraphs(content_dir).unwrap_or_default();
+                let entries = if let Some(cached) = cached_entries {
+                    cached.to_vec()
+                } else {
+                    load_paragraphs(content_dir).unwrap_or_default()
+                };
                 if let Ok(registry) = pack::load_registry(content_dir) {
                     let query_lower = query.to_lowercase();
                     for std in &registry.standards {
@@ -636,10 +641,15 @@ pub fn execute_pack_tool(
         "get_pack_paragraph" => {
             let args: GetPackParagraphArgs = parse_tool_args_with_repair(arguments)?;
             let citation = args.citation.trim();
-            let target = resolve_citation(content_dir, citation)?
+            let target = if let Some(entries) = cached_entries {
+                crate::citations::resolve_from_index_cached(
+                    entries,
+                    content_dir,
+                    citation,
+                    &citation.split('§').next().unwrap_or(citation).trim(),
+                    &citation.split('§').nth(1).unwrap_or("").trim(),
+                )
                 .ok_or_else(|| {
-                    // Guide the AI: try list_standard_paragraphs to discover
-                    // the exact paragraph numbers available for this standard.
                     let std_id = citation
                         .split('§')
                         .next()
@@ -649,7 +659,21 @@ pub fn execute_pack_tool(
                         "未找到段落「{citation}」。请先调用 list_standard_paragraphs \
                          查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
                     )
-                })?;
+                })?
+            } else {
+                resolve_citation(content_dir, citation)?
+                    .ok_or_else(|| {
+                        let std_id = citation
+                            .split('§')
+                            .next()
+                            .unwrap_or(citation)
+                            .trim();
+                        format!(
+                            "未找到段落「{citation}」。请先调用 list_standard_paragraphs \
+                             查看 {std_id} 下实际可用的段落编号，再用正确编号调用 get_pack_paragraph。"
+                        )
+                    })?
+            };
             if target.status == "legacy" && !allow_legacy {
                 return Err(format!(
                     "段落 {} 为 legacy，默认不允许（可在设置中开启 legacy 引用）",
@@ -668,7 +692,11 @@ pub fn execute_pack_tool(
         }
         "list_standard_paragraphs" => {
             let args: ListStandardParagraphsArgs = parse_tool_args_with_repair(arguments)?;
-            let entries = load_paragraphs(content_dir)?;
+            let entries = if let Some(cached) = cached_entries {
+                cached.to_vec()
+            } else {
+                load_paragraphs(content_dir)?
+            };
             let mut citations: Vec<&crate::citations::ParagraphRecord> = entries
                 .iter()
                 .filter(|entry| entry.standard_id.eq_ignore_ascii_case(&args.standard_id))
@@ -1109,6 +1137,7 @@ pub async fn run_standards_agent(
         Some("retrieval"),
         None,
     );
+    let cached_entries = std::sync::Arc::new(load_paragraphs(content_dir).unwrap_or_default());
     let _writing_spec = load_writing_spec(content_dir)?;
     let system_prompt = build_agent_system_prompt(content_dir, ai.allow_legacy_citations)?;
     let tools = pack_agent_tools();
@@ -1245,6 +1274,7 @@ pub async fn run_standards_agent(
                         ai.allow_legacy_citations,
                         &tool_name,
                         &tool_args,
+                        Some(&*cached_entries),
                     ) {
                         Ok(result) => result,
                         Err(error) => json!({ "error": error }).to_string(),
@@ -1577,6 +1607,7 @@ mod tests {
             false,
             "list_standard_paragraphs",
             r#"{"standard_id":"IFRS 11"}"#,
+            None,
         )
         .expect("tool");
         assert!(result.contains("IFRS 11 §7"));
